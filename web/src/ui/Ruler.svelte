@@ -142,7 +142,7 @@
   .ruler {
     display: block;
     width: 100%;
-    height: 104px;
+    height: 96px;
     border-radius: 18px;
     background: var(--panel);
     touch-action: none;

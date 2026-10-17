@@ -3,7 +3,7 @@
   // o fantasma e solta-se; movendo, o mapa inteiro vira Parar.
   import { onDestroy, onMount } from 'svelte';
   import type { Vec3 } from '@rlight/core';
-  import { MapView, destinationText, type Point, type TableLimits } from '../lib/map-view';
+  import { MapView, destinationText, mapPad, type Point, type TableLimits } from '../lib/map-view';
 
   interface Props {
     limits: TableLimits;
@@ -56,7 +56,7 @@
     view?.setLimits(limits);
   });
 
-  const aspect = $derived((limits.x.max - limits.x.min) / Math.max(1, limits.y.max - limits.y.min));
+  const aspect = $derived((limits.x.max - limits.x.min + 2 * mapPad(limits)) / Math.max(1, limits.y.max - limits.y.min + 2 * mapPad(limits)));
 </script>
 
 <section class="map" class:active={ghost && !stop} aria-label="A mesa vista de cima">
@@ -66,29 +66,29 @@
       <span>{stopPending ? 'Parando…' : 'Parar'}</span>
     </button>
   {/if}
-  <p class="caption">
-    {#if dest}
-      <strong>{destinationText(dest, offset)}</strong>
-    {:else if hint}
-      {hint}
-    {:else if ghost && !stop}
-      Arraste o ponto e solte para ir até lá
-    {:else}
-      &nbsp;
-    {/if}
-  </p>
+  {#if !stop && (dest || hint || ghost)}
+    <p class="caption" class:dest={!!dest}>
+      {#if dest}
+        {destinationText(dest, offset)}
+      {:else if hint}
+        {hint}
+      {:else}
+        Arraste o ponto e solte para ir até lá
+      {/if}
+    </p>
+  {/if}
 </section>
 
 <style>
-  .map { position: relative; display: flex; flex-direction: column; gap: 6px; }
+  .map { position: relative; }
   svg {
     display: block;
     width: 100%;
     border-radius: 18px;
     background: var(--panel);
     touch-action: none;
-    overflow: visible;
   }
+  .map :global(.bed) { fill: rgba(255, 255, 255, 0.025); stroke: var(--line-2); stroke-width: 1; vector-effect: non-scaling-stroke; }
   .map :global(.grid line) { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
   .map :global(.real) { fill: var(--fg); }
   .map :global(.halo) { fill: var(--acc); opacity: 0.16; }
@@ -98,7 +98,7 @@
   .stop {
     position: absolute;
     inset: 0 0 auto 0;
-    height: calc(100% - 26px);
+    height: 100%;
     border: 0;
     border-radius: 18px;
     background: rgba(10, 26, 51, 0.55);
@@ -110,6 +110,10 @@
     backdrop-filter: blur(2px);
   }
   .stop span { padding: 14px 30px; border-radius: 999px; background: var(--fg); color: var(--moving); }
-  .caption { margin: 0; min-height: 20px; font-size: 13px; color: var(--fg-3); text-align: center; }
-  .caption strong { font: 600 15px var(--mono); color: var(--acc); }
+  /* A legenda mora dentro do mapa, embaixo: não empurra a tela. */
+  .caption {
+    position: absolute; left: 0; right: 0; bottom: 8px; margin: 0; pointer-events: none;
+    font-size: 12px; color: var(--fg-3); text-align: center;
+  }
+  .caption.dest { font: 600 15px var(--mono); color: var(--acc); }
 </style>

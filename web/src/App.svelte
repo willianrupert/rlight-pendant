@@ -328,7 +328,7 @@
       </div>
     {/each}
     <p class="caption">
-      {#if canZero}Toque para a régua · segure para zerar · {/if}{usingWork ? 'Coordenadas da peça' : 'Coordenadas da máquina'}
+      {#if canZero}Segure um eixo para zerar · {/if}{usingWork ? 'Coordenadas da peça' : 'Coordenadas da máquina'}
     </p>
   </section>
 
@@ -357,7 +357,7 @@
 
   {#if hands}
     <section class="bar" aria-label="Ações">
-      {#if profile?.spindle || (machine && machine.spindle > 0)}
+      {#if (profile?.spindle && (may('spindleOn') || may('spindleOff') || may('spindleSpeed'))) || (machine && machine.spindle > 0)}
         <button class="chip" class:on={!!machine && machine.spindle > 0} disabled={!profile?.spindle} onclick={() => (sheet = true)} aria-label="Spindle">
           <small>Spindle{#if ov && ov.spindle !== 100} · {ov.spindle} %{/if}</small>
           <span>{spindlePending ?? (machine && machine.spindle > 0 ? `${formatRpm(machine.spindle)} rpm` : 'Parado')}</span>
@@ -517,10 +517,14 @@
   .chip:disabled { cursor: default; }
 
   .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
-  .bar > :global(button) { flex: 1 1 0; }
+  .bar > :global(button) { flex: 1 1 0; min-width: 96px; }
+  /* A ação principal do estado tem a linha inteira; Resetar fica longe dela. */
+  .bar > :global(button.primary) { flex-basis: 100%; order: -1; }
   .bar .gap { flex: 0 0 18px; }
 
   footer { margin-top: auto; display: flex; flex-direction: column; align-items: center; gap: 8px; min-height: 44px; }
+  main.hands footer { min-height: 0; }
+  main.hands footer:empty { display: none; }
   .link {
     border: 0; background: var(--panel); color: var(--fg-2); font: 500 14px var(--sans);
     padding: 10px 16px; border-radius: 999px; min-height: 44px; cursor: pointer;

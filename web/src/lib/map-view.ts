@@ -86,6 +86,11 @@ export class GhostModel {
 
 const NS = 'http://www.w3.org/2000/svg';
 
+/** A margem em volta da mesa, em mm, para o ponto na borda caber inteiro. */
+export function mapPad(limits: TableLimits): number {
+  return Math.max(limits.x.max - limits.x.min, limits.y.max - limits.y.min) * 0.04;
+}
+
 /**
  * Desenha a mesa num SVG cujo viewBox é a própria mesa em mm (Y para cima: o
  * fundo da mesa fica no alto da tela). O ponto real desliza entre relatórios
@@ -143,9 +148,18 @@ export class MapView {
     const { x, y } = limits;
     const w = x.max - x.min;
     const h = y.max - y.min;
-    this.#svg.setAttribute('viewBox', `${x.min} ${-y.max} ${w} ${h}`);
+    const pad = mapPad(limits);
+    this.#svg.setAttribute('viewBox', `${x.min - pad} ${-y.max - pad} ${w + 2 * pad} ${h + 2 * pad}`);
     const grid = this.#svg.querySelector('.grid')!;
     grid.textContent = '';
+    // A mesa é um retângulo dentro da vista: o ponto na borda do curso não é cortado.
+    const bed = document.createElementNS(NS, 'rect');
+    bed.setAttribute('class', 'bed');
+    bed.setAttribute('x', String(x.min));
+    bed.setAttribute('y', String(-y.max));
+    bed.setAttribute('width', String(w));
+    bed.setAttribute('height', String(h));
+    grid.append(bed);
     const every = w > 600 ? 100 : w > 200 ? 50 : 10;
     for (let gx = Math.ceil(x.min / every) * every; gx <= x.max; gx += every) {
       const l = document.createElementNS(NS, 'line');
@@ -195,15 +209,17 @@ export class MapView {
   #mmPerPx(): Point {
     const r = this.#svg.getBoundingClientRect();
     const { x, y } = this.#limits;
-    return { x: (x.max - x.min) / Math.max(1, r.width), y: (y.max - y.min) / Math.max(1, r.height) };
+    const pad = 2 * mapPad(this.#limits);
+    return { x: (x.max - x.min + pad) / Math.max(1, r.width), y: (y.max - y.min + pad) / Math.max(1, r.height) };
   }
 
   #toTable(e: PointerEvent): Point {
     const r = this.#svg.getBoundingClientRect();
     const { x, y } = this.#limits;
+    const pad = mapPad(this.#limits);
     return {
-      x: x.min + ((e.clientX - r.left) / Math.max(1, r.width)) * (x.max - x.min),
-      y: y.max - ((e.clientY - r.top) / Math.max(1, r.height)) * (y.max - y.min),
+      x: x.min - pad + ((e.clientX - r.left) / Math.max(1, r.width)) * (x.max - x.min + 2 * pad),
+      y: y.max + pad - ((e.clientY - r.top) / Math.max(1, r.height)) * (y.max - y.min + 2 * pad),
     };
   }
 
