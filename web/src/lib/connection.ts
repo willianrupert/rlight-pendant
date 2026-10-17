@@ -8,6 +8,7 @@ import {
   initialLink,
   onReport,
   viewLink,
+  type Axis,
   type AxisValues,
   type CombinedLink,
   type LinkState,
@@ -24,12 +25,29 @@ export interface ServerState {
   control: { inControl: boolean; controlled: boolean };
 }
 
+/** Os comandos que a tela manda (server/PROTOCOL.md, incluindo os da v1). */
+export type CommandRequest =
+  | { command: 'nudge'; axis: Axis; delta: number }
+  | { command: 'jogTo'; x: number; y: number }
+  | { command: 'jogAxisTo'; axis: Axis; value: number }
+  | { command: 'zero'; axis: Axis | 'all' }
+  | { command: 'spindleOn' | 'spindleSpeed'; rpm: number }
+  | { command: 'cancelJog' | 'unlock' | 'home' | 'softReset' | 'feedHold' | 'resume' | 'undoZero' | 'spindleOff' };
+
+export type CommandName = CommandRequest['command'];
+
+export type CommandResult =
+  | { ok: true; hitLimit?: boolean | undefined; undoable?: boolean | undefined }
+  | { ok: false; reason: string };
+
 type ServerMessage =
   | { type: 'welcome'; protocol: number; clientId: string }
   | { type: 'profile'; profile: MachineProfile; limits: MachineLimits }
   | ({ type: 'state' } & ServerState)
   | { type: 'alarm'; code: number }
-  | { type: string };
+  | { type: 'control'; inControl: boolean; reason?: string }
+  | { type: 'result'; id?: string; ok: boolean; reason?: string; hitLimit?: boolean; undoable?: boolean }
+  | { type: 'invalid'; reason?: string };
 
 const BACKOFF_MS = [500, 1_000, 2_000, 5_000];
 
@@ -41,6 +59,16 @@ export class Connection {
 
   onState: ((s: ServerState, receivedAt: number) => void) | null = null;
   onProfile: ((p: MachineProfile) => void) | null = null;
+  /** Ganhou ou perdeu o controle; `reason` quando outra tela tirou. */
+  onControl: ((inControl: boolean, reason: string | null) => void) | null = null;
+  /** Resposta a um comando, pelo id que `command` devolveu. */
+  onResult: ((id: string, command: CommandName, result: CommandResult) => void) | null = null;
+  /** O servidor fechou: os comandos sem resposta não vão ter resposta. */
+  onClose: (() => void) | null = null;
+
+  #seq = 0;
+  /** Pedidos sem resposta, em ordem de envio (o servidor responde em ordem). */
+  #waiting: { id: string; command: CommandName }[] = [];
 
   #ws: WebSocket | null = null;
   #toServer: LinkState = initialLink();
@@ -57,6 +85,46 @@ export class Connection {
   stop(): void {
     this.#stopped = true;
     this.#ws?.close();
+  }
+
+  get open(): boolean {
+    return this.#ws?.readyState === WebSocket.OPEN;
+  }
+
+  takeControl(): boolean {
+    return this.#send({ type: 'takeControl' });
+  }
+
+  releaseControl(): boolean {
+    return this.#send({ type: 'releaseControl' });
+  }
+
+  /**
+   * Manda um comando e devolve o id que volta no `result`, ou null se o
+   * servidor não está ao alcance. Nada fica guardado para depois (ADR-0007).
+   */
+  command(req: CommandRequest): string | null {
+    const id = `r${++this.#seq}`;
+    if (!this.#send({ type: 'command', id, ...req })) return null;
+    this.#waiting.push({ id, command: req.command });
+    if (this.#waiting.length > 64) this.#waiting.shift();
+    return id;
+  }
+
+  #send(msg: object): boolean {
+    const ws = this.#ws;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    ws.send(JSON.stringify(msg));
+    return true;
+  }
+
+  #resolve(id: string | undefined, result: CommandResult): void {
+    // Sem id (um `invalid`), a resposta é do pedido mais antigo ainda sem resposta.
+    const k = id === undefined ? 0 : this.#waiting.findIndex((w) => w.id === id);
+    const w = k >= 0 ? this.#waiting[k] : undefined;
+    if (!w) return;
+    this.#waiting.splice(k, 1);
+    this.onResult?.(w.id, w.command, result);
   }
 
   /** O estado de conexão que a tela mostra, agora. */
@@ -93,10 +161,26 @@ export class Connection {
         this.onProfile?.(p.profile);
       } else if (msg.type === 'alarm') {
         this.alarmCode = (msg as { code: number }).code;
+      } else if (msg.type === 'control') {
+        const c = msg as { inControl: boolean; reason?: string };
+        this.onControl?.(c.inControl, c.reason ?? null);
+      } else if (msg.type === 'result') {
+        const r = msg as { id?: string; ok: boolean; reason?: string; hitLimit?: boolean; undoable?: boolean };
+        this.#resolve(
+          r.id,
+          r.ok ? { ok: true, hitLimit: r.hitLimit, undoable: r.undoable } : { ok: false, reason: r.reason ?? 'A máquina recusou' },
+        );
+      } else if (msg.type === 'invalid') {
+        // Um comando que este servidor ainda não conhece: o motivo vem como texto.
+        this.#resolve(undefined, { ok: false, reason: (msg as { reason?: string }).reason ?? 'O servidor não entendeu' });
       }
     };
     ws.onclose = () => {
       this.#ws = null;
+      const lost = this.#waiting;
+      this.#waiting = [];
+      for (const w of lost) this.onResult?.(w.id, w.command, { ok: false, reason: 'Sem sinal do servidor' });
+      this.onClose?.();
       if (this.#stopped) return;
       const wait = BACKOFF_MS[Math.min(this.#attempt, BACKOFF_MS.length - 1)]!;
       this.#attempt++;
