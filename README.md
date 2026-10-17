@@ -1,5 +1,11 @@
 # RLight
 
+> **Como se a Apple tivesse feito um app para CNC.**
+>
+> As interfaces de CNC open source são painéis com todo parâmetro na tela e todo
+> erro em código. O RLight decide o que importa agora e esconde o resto atrás de
+> bons padrões.
+
 Um servidor na rede da oficina que nunca tira os olhos da fresadora CNC RLight
 (FluidNC num ESP32), e um PWA para **ver, mexer e confiar** na máquina de
 qualquer tela: iPhone, Android, tablet ou Mac. É grátis, não passa por loja e
@@ -14,6 +20,7 @@ roda só na rede local, em `https://cnc.rlight.com.br`.
 ## Documentos
 
 - **[docs/VISION.md](docs/VISION.md)**: o que é e por que é diferente. Comece por aqui.
+- **[docs/DESIGN.md](docs/DESIGN.md)**: os princípios e o ofício. O critério de cada tela, gesto e palavra.
 - **[docs/PRODUCT.md](docs/PRODUCT.md)**: escopo por fase, segurança, spikes e métricas.
 - **Decisões (ADRs):**
   - [0001 · Um servidor no Proxmox é o único que fala com a placa](docs/adr/0001-servidor-no-proxmox.md)
