@@ -58,9 +58,14 @@ describe('profileFromConfig: a máquina de referência', () => {
     expect(p.spindle).toEqual({ type: '10V', minRpm: 0, maxRpm: 18000, spinupMs: 5000, spindownMs: 10000 });
   });
 
-  it('apalpador e cartão SD presentes', () => {
+  it('apalpador e cartão SD configurados', () => {
+    // Configurado não quer dizer presente: em 2026-10-17 a placa não tinha cartão.
     expect(p.hasProbe).toBe(true);
     expect(p.hasSd).toBe(true);
+  });
+
+  it('a tolerância de quina do planejador', () => {
+    expect(p.junctionDeviationMm).toBe(0.01);
   });
 
   it('vira limites para o movimento', () => {

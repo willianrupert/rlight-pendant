@@ -39,6 +39,9 @@ npm run typecheck # TypeScript estrito
 | [`core/src/ruler.ts`](core/src/ruler.ts) | Arrasto, peteleco, destino anunciado, passo mínimo honesto, cliques | [ADR-0010](docs/adr/0010-a-regua.md) |
 | [`core/src/policy.ts`](core/src/policy.ts) | O que cada estado da máquina permite, e por quê | [ADR-0005](docs/adr/0005-seguranca-o-celular-nao-e-e-stop.md) |
 | [`core/src/interpolate.ts`](core/src/interpolate.ts) | O valor desenhado, um relatório atrás, sem nunca prever | [ADR-0009](docs/adr/0009-fluidez-sem-mentir.md) |
+| [`core/src/protocol.ts`](core/src/protocol.ts) | As linhas da placa viram mensagens tipadas; o estado vivo junta relatórios que chegam em pedaços | [ADR-0003](docs/adr/0003-arquitetura-em-camadas-e-testes-primeiro.md) |
+| [`core/src/profile.ts`](core/src/profile.ts) | O perfil da máquina a partir da configuração da placa | [ADR-0008](docs/adr/0008-qualquer-maquina-fluidnc.md) |
+| [`core/src/gcode.ts`](core/src/gcode.ts) | Percurso, limites, conferência contra a máquina, tempo estimado e progresso pelo SD | [ADR-0006](docs/adr/0006-trabalhos-rodam-do-sd.md) |
 
 ## Documentos
 

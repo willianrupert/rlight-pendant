@@ -79,6 +79,8 @@ export interface MachineProfile {
   spindle: SpindleProfile | null;
   hasProbe: boolean;
   hasSd: boolean;
+  /** Tolerância de quina do planejador, usada na estimativa de tempo. */
+  junctionDeviationMm: number;
 }
 
 const SPINDLE_SECTIONS = ['10V', 'PWM', 'Relay', 'Laser', 'BESC', 'DAC', 'Huanyang', 'H2A', 'H100', 'YL620', 'NowForever'];
@@ -162,6 +164,7 @@ export function profileFromConfig(text: string): MachineProfile {
     spindle: spindleProfile(cfg),
     hasProbe: hasPin(probe?.pin),
     hasSd: hasPin(sd?.cs_pin),
+    junctionDeviationMm: numOr(cfg.junction_deviation_mm, 0.01),
   };
 }
 
