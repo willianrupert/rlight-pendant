@@ -10,6 +10,11 @@
   --fg-2: #a3acb8;
   --fg-3: #67707c;
   --panel: rgba(255, 255, 255, 0.06);
+  --panel-2: rgba(255, 255, 255, 0.1);
+  --line-2: rgba(255, 255, 255, 0.16);
+  --sheet: #1a1e25;
+  --acc-ink: #0b1a33;
+  --danger: #ff8a80;
   --line: rgba(255, 255, 255, 0.1);
   --acc: #7fb0ff;
   --ok: #7fd6a2;
@@ -22,8 +27,7 @@
 
 html, body {
   margin: 0;
-  height: 100%;
-  background: var(--idle);
+  min-height: 100%;
   color: var(--fg);
   font-family: var(--sans);
   -webkit-font-smoothing: antialiased;
@@ -32,10 +36,13 @@ html, body {
   overscroll-behavior: none;
 }
 
-body { transition: background-color 0.6s ease; }
-body[data-tone='moving'] { background: var(--moving); }
-body[data-tone='hold'] { background: var(--hold); }
-body[data-tone='alarm'] { background: var(--alarm); }
+/* O estado pinta a raiz, não só o body: no iPhone instalado (PWA), a faixa sob a
+   barra de gestos mostra o fundo do html, e ela ficava preta com o fundo azul. */
+html { background: var(--idle); transition: background-color 0.6s ease; }
+body { background: transparent; }
+html[data-tone='moving'] { background: var(--moving); }
+html[data-tone='hold'] { background: var(--hold); }
+html[data-tone='alarm'] { background: var(--alarm); }
 
 /* Os dígitos que rolam (lib/dro.ts) */
 .digits {
@@ -56,5 +63,5 @@ body[data-tone='alarm'] { background: var(--alarm); }
 .digits.fast .strip { transition: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  body, .digits .strip { transition: none; }
+  html, .digits .strip { transition: none; }
 }
