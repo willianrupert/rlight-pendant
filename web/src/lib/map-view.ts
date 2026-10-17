@@ -30,6 +30,11 @@ export class GhostModel {
   dragging = false;
   /** Onde o fantasma está desenhado (com o elástico fora da mesa). */
   ghost: Point | null = null;
+  /**
+   * Um toque na mesa põe o fantasma lá e espera o "Ir": um toque sozinho nunca
+   * move a máquina pela mesa (ADR-0005). Arrastar e soltar continua indo direto.
+   */
+  preview: Point | null = null;
   #from: Point = { x: 0, y: 0 };
   #grab: Point = { x: 0, y: 0 };
 
@@ -44,6 +49,7 @@ export class GhostModel {
   down(finger: Point, real: Point, grabRadiusMm: number): boolean {
     if (Math.hypot(finger.x - real.x, finger.y - real.y) > grabRadiusMm) return false;
     this.dragging = true;
+    this.preview = null;
     this.#from = { ...real };
     this.#grab = { ...finger };
     this.ghost = { ...real };
@@ -81,6 +87,29 @@ export class GhostModel {
   cancel(): void {
     this.dragging = false;
     this.ghost = null;
+    this.preview = null;
+  }
+
+  /**
+   * Um toque na mesa: sem prévia, põe o fantasma no ponto tocado (dentro da
+   * mesa); com prévia, um toque fora do "Ir" a desfaz.
+   */
+  tap(finger: Point, real: Point): Point | null {
+    if (this.preview) {
+      this.preview = null;
+      return null;
+    }
+    const dest = goTo(finger, this.limits).target;
+    if (Math.hypot(dest.x - real.x, dest.y - real.y) < MIN_MOVE_MM) return null;
+    this.preview = dest;
+    return dest;
+  }
+
+  /** "Ir": o destino da prévia, uma vez. */
+  go(): Point | null {
+    const dest = this.preview;
+    this.preview = null;
+    return dest;
   }
 }
 
