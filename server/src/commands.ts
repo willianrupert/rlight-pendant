@@ -4,6 +4,7 @@
 
 import {
   allowed,
+  clampToLimits,
   formatJog,
   goTo,
   limitsOf,
@@ -36,12 +37,34 @@ export interface CommandContext {
   /** Alvo comandado; eixo ausente segue a posição reportada. */
   commanded: AxisValues;
   motion: MotionSettings;
+  /** Relógio injetado, para o prazo do desfazer. */
+  now: number;
+  /** O último zero, para desfazer. */
+  lastZero: ZeroMemory | null;
 }
+
+/** O offset anterior de cada eixo zerado, e quando o zero foi feito. */
+export interface ZeroMemory {
+  wco: AxisValues;
+  at: number;
+}
+
+/** O desfazer do zero vale por esse tempo, e uma vez só. */
+export const UNDO_ZERO_MS = 30_000;
 
 export type BoardWrite = { line: string } | { realtime: number };
 
 export type Plan =
-  | { ok: true; writes: BoardWrite[]; commanded: AxisValues; hitLimit: boolean; moves: boolean }
+  | {
+      ok: true;
+      writes: BoardWrite[];
+      commanded: AxisValues;
+      hitLimit: boolean;
+      moves: boolean;
+      undoable?: boolean;
+      /** Ausente: a memória do zero fica como está. */
+      lastZero?: ZeroMemory | null;
+    }
   | { ok: false; reason: string };
 
 const refuse = (reason: string): Plan => ({ ok: false, reason });
@@ -64,7 +87,7 @@ export function planCommand(req: CommandRequest, ctx: CommandContext): Plan {
   });
   if (!decision.ok) return refuse(decision.reason);
 
-  const simple = (write: BoardWrite, resync: boolean): Plan => ({
+  const simple = (write: BoardWrite, resync: boolean): Extract<Plan, { ok: true }> => ({
     ok: true,
     writes: [write],
     commanded: resync ? {} : ctx.commanded,
@@ -86,8 +109,44 @@ export function planCommand(req: CommandRequest, ctx: CommandContext): Plan {
       return simple({ realtime: '!'.charCodeAt(0) }, false);
     case 'resume':
       return simple({ realtime: '~'.charCodeAt(0) }, false);
+    case 'spindleOff':
+      return simple({ line: 'M5' }, false);
+    case 'zero': {
+      const wco = ctx.snapshot.wco;
+      if (!wco) return refuse('Ainda não sei o zero atual da peça; tente de novo em instantes');
+      const axes: Axis[] = req.axis === 'all' ? ['x', 'y', 'z'] : [req.axis];
+      const previous: AxisValues = {};
+      for (const a of axes) previous[a] = wco[a];
+      return {
+        ...simple({ line: `G10 L20 P0 ${axes.map((a) => `${a.toUpperCase()}0`).join(' ')}` }, false),
+        undoable: true,
+        lastZero: { wco: previous, at: ctx.now },
+      };
+    }
+    case 'undoZero': {
+      const last = ctx.lastZero;
+      if (!last || ctx.now - last.at > UNDO_ZERO_MS) return refuse('Nada para desfazer');
+      const words = (Object.entries(last.wco) as [Axis, number][]).map(
+        ([a, v]) => `${a.toUpperCase()}${(Object.is(v, -0) ? 0 : v).toFixed(3)}`,
+      );
+      return { ...simple({ line: `G10 L2 P0 ${words.join(' ')}` }, false), lastZero: null };
+    }
+    case 'spindleOn':
+    case 'spindleSpeed': {
+      if (!ctx.profile) return refuse('Lendo a configuração da máquina');
+      const spindle = ctx.profile.spindle;
+      if (!spindle) return refuse('Esta máquina não tem spindle configurado');
+      let rpm = Math.round(req.rpm);
+      const max = spindle.maxRpm > spindle.minRpm ? spindle.maxRpm : Infinity;
+      const clamped = Math.min(Math.max(rpm, spindle.minRpm, 0), max);
+      const hitLimit = clamped !== rpm;
+      rpm = clamped;
+      const line = req.command === 'spindleOn' ? `M3 S${rpm}` : `S${rpm}`;
+      return { ...simple({ line }, false), hitLimit };
+    }
     case 'nudge':
     case 'jogTo':
+    case 'jogAxisTo':
       break;
   }
 
@@ -104,6 +163,19 @@ export function planCommand(req: CommandRequest, ctx: CommandContext): Plan {
       ok: true,
       writes: [{ line: formatJog(target, feed) }],
       commanded: { ...ctx.commanded, ...target },
+      hitLimit,
+      moves: true,
+    };
+  }
+
+  if (req.command === 'jogAxisTo') {
+    // O destino foi mostrado antes (ADR-0010): só o curso recorta, sem o limite à frente.
+    const { value, hitLimit } = clampToLimits(limits, req.axis, req.value);
+    const feed = feedFor(profile, [req.axis], ctx.motion.jogToFeedMmPerMin);
+    return {
+      ok: true,
+      writes: [{ line: formatJog({ [req.axis]: value }, feed) }],
+      commanded: { ...ctx.commanded, [req.axis]: value },
       hitLimit,
       moves: true,
     };
