@@ -111,7 +111,8 @@
     if (!ruler || !m?.mpos) return;
     ruler.update({
       reported: m.mpos[axis],
-      commanded: st?.commanded[axis] ?? null,
+      // Parada, a máquina está onde diz; movendo, a régua segue o alvo comandado.
+      commanded: m.state === 'Idle' ? null : (st?.commanded[axis] ?? null),
       limits: conn.limits[axis] ?? null,
       offset: m.wco?.[axis] ?? 0,
       canGlide: st?.homed ?? false,
@@ -238,7 +239,11 @@
   });
 
   $effect(() => {
-    document.body.dataset.tone = live ? pres.tone : 'idle';
+    const tone = live ? pres.tone : 'idle';
+    document.documentElement.dataset.tone = tone;
+    // A barra de status acompanha o estado quando o tema dela é usado.
+    const color = getComputedStyle(document.documentElement).getPropertyValue(`--${tone}`).trim();
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', color || '#0d0f12');
     telemetry.freeze(!live);
   });
 
@@ -257,8 +262,16 @@
 
 <main class:stale={!live} class:hands>
   <header>
-    <span class="name">{profile?.name ?? 'RLight'}</span>
-    <h1>{live || !machine ? pres.label : 'Sem sinal'}</h1>
+    <div class="title">
+      <span class="name">{profile?.name ?? 'RLight'}</span>
+      <h1>{live || !machine ? pres.label : 'Sem sinal'}</h1>
+    </div>
+    {#if hands}
+      <div class="quiet-row">
+        <button class="quiet" aria-pressed={sound} onclick={() => (sound = clicker.sound = !sound)}>{sound ? 'Som' : 'Mudo'}</button>
+        <button class="quiet" onclick={() => conn.releaseControl()}>Só assistir</button>
+      </div>
+    {/if}
     {#if pres.detail && live}<p class="detail">{pres.detail}</p>{/if}
   </header>
 
@@ -323,32 +336,33 @@
     <Ruler bind:this={ruler} {axis} minStep={profile.axes[axis]?.minStepMm ?? 0.01} {send} {clicker} />
   {/if}
 
-  <section class="meters">
-    <div class="meter">
-      <small>Avanço</small>
-      <strong>{machine ? formatFeed(machine.feed) : '–'}<span>mm/min</span></strong>
-      {#if ov && ov.feed !== 100}<em>{ov.feed} %</em>{/if}
-    </div>
-    <svelte:element
-      this={hands && profile?.spindle ? 'button' : 'div'}
-      class="meter spindle"
-      class:tappable={hands && !!profile?.spindle}
-      onclick={() => hands && profile?.spindle && (sheet = true)}
-      aria-label={hands && profile?.spindle ? 'Abrir o spindle' : undefined}
-      role={hands && profile?.spindle ? 'button' : undefined}
-    >
-      <small>Spindle{#if spindlePending} · {spindlePending}{/if}</small>
-      {#if machine && machine.spindle > 0}
-        <strong>{formatRpm(machine.spindle)}<span>rpm</span></strong>
-      {:else}
-        <strong class="off">Parado</strong>
-      {/if}
-      {#if ov && ov.spindle !== 100}<em>{ov.spindle} %</em>{/if}
-    </svelte:element>
-  </section>
+  {#if !hands}
+    <section class="meters">
+      <div class="meter">
+        <small>Avanço</small>
+        <strong>{machine ? formatFeed(machine.feed) : '–'}<span>mm/min</span></strong>
+        {#if ov && ov.feed !== 100}<em>{ov.feed} %</em>{/if}
+      </div>
+      <div class="meter">
+        <small>Spindle</small>
+        {#if machine && machine.spindle > 0}
+          <strong>{formatRpm(machine.spindle)}<span>rpm</span></strong>
+        {:else}
+          <strong class="off">Parado</strong>
+        {/if}
+        {#if ov && ov.spindle !== 100}<em>{ov.spindle} %</em>{/if}
+      </div>
+    </section>
+  {/if}
 
-  {#if actions.length || canZero}
+  {#if hands}
     <section class="bar" aria-label="Ações">
+      {#if profile?.spindle || (machine && machine.spindle > 0)}
+        <button class="chip" class:on={!!machine && machine.spindle > 0} disabled={!profile?.spindle} onclick={() => (sheet = true)} aria-label="Spindle">
+          <small>Spindle{#if ov && ov.spindle !== 100} · {ov.spindle} %{/if}</small>
+          <span>{spindlePending ?? (machine && machine.spindle > 0 ? `${formatRpm(machine.spindle)} rpm` : 'Parado')}</span>
+        </button>
+      {/if}
       {#each actions.filter((x) => x.command !== 'softReset') as a (a.command)}
         <HoldButton
           label={a.label}
@@ -395,11 +409,6 @@
     {#if offerControl}
       {#if otherControls}<p class="note">Outra tela está no controle</p>{/if}
       <button class="take" onclick={() => conn.takeControl() || flash('Sem sinal do servidor')}>Assumir o controle</button>
-    {:else if hands}
-      <div class="quiet-row">
-        <button class="quiet" onclick={() => (sound = clicker.sound = !sound)}>{sound ? 'Som ligado' : 'Som desligado'}</button>
-        <button class="quiet" onclick={() => conn.releaseControl()}>Só assistir</button>
-      </div>
     {/if}
   </footer>
 </main>
@@ -445,7 +454,9 @@
       calc(env(safe-area-inset-bottom) + 18px) calc(env(safe-area-inset-left) + 22px);
   }
   main.hands { gap: 14px; padding-top: calc(env(safe-area-inset-top) + 14px); padding-left: calc(env(safe-area-inset-left) + 16px); padding-right: calc(env(safe-area-inset-right) + 16px); }
-  header { display: flex; flex-direction: column; gap: 4px; }
+  header { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px; }
+  .title { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+  .detail { flex-basis: 100%; }
   .name { font-size: 13px; color: var(--fg-3); letter-spacing: 0.02em; }
   h1 { margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -0.02em; }
   main.hands h1 { font-size: 28px; }
@@ -462,6 +473,7 @@
   }
 
   .dro { display: flex; flex-direction: column; gap: 6px; }
+  main.hands .dro { gap: 2px; }
   .axis { position: relative; display: grid; grid-template-columns: 28px 1fr auto; align-items: baseline; gap: 8px; border-radius: 14px; }
   .axis.hidden { display: none; }
   .axis.touchable { cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; padding: 0 10px 0 6px; min-height: 60px; align-items: center; }
@@ -489,15 +501,20 @@
 
   .meters { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .meter { background: var(--panel); border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; transition: opacity 0.4s; border: 0; color: inherit; text-align: left; font: inherit; }
-  .meter.tappable { cursor: pointer; min-height: 60px; touch-action: manipulation; }
-  .meter.tappable small::after { content: ' ›'; color: var(--acc); }
   main.stale .meter { opacity: 0.35; }
   .meter small { font-size: 12px; color: var(--fg-3); }
   .meter strong { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 24px; font-weight: 600; }
   .meter strong span { font-family: var(--sans); font-size: 12px; font-weight: 500; color: var(--fg-3); margin-left: 6px; }
   .meter strong.off { font-family: var(--sans); color: var(--fg-2); font-size: 20px; }
   .meter em { font-style: normal; font-size: 12px; color: var(--acc); }
-  main.hands .meter { padding: 10px 14px; }
+  .chip {
+    border: 0; border-radius: 18px; background: var(--panel); color: var(--fg); min-height: 60px; padding: 0 14px;
+    display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px; cursor: pointer;
+    font: 600 16px var(--sans); touch-action: manipulation; text-align: left;
+  }
+  .chip small { font-size: 11px; font-weight: 500; color: var(--fg-3); }
+  .chip.on span { color: var(--acc); font-family: var(--mono); }
+  .chip:disabled { cursor: default; }
 
   .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
   .bar > :global(button) { flex: 1 1 0; }
@@ -517,7 +534,7 @@
     padding: 0 22px; min-height: 60px; border-radius: 999px; cursor: pointer; touch-action: manipulation;
   }
   .quiet-row { display: flex; gap: 6px; }
-  .quiet { border: 0; background: transparent; color: var(--fg-3); font: 500 13px var(--sans); min-height: 44px; padding: 0 12px; cursor: pointer; }
+  .quiet { border: 0; background: transparent; color: var(--fg-3); font: 500 14px var(--sans); min-height: 44px; padding: 0 10px; cursor: pointer; }
 
   .toast {
     position: fixed;
