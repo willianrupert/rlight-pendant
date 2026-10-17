@@ -107,6 +107,11 @@
     }
   }
 
+  function take() {
+    clicker.wake();
+    clicker.play('confirm');
+    if (!conn.takeControl()) flash('Sem sinal do servidor');
+  }
   function zeroLabel(target: Axis | 'all') {
     return target === 'all' ? 'Todos os eixos zerados' : `${target.toUpperCase()} zerado`;
   }
@@ -443,7 +448,23 @@
     {/if}
     {#if offerControl}
       {#if otherControls}<p class="note">Outra tela está no controle</p>{/if}
-      <button class="take" onclick={() => conn.takeControl() || flash('Sem sinal do servidor')}>Assumir o controle</button>
+      <span class="take-wrap">
+        <button class="take" onclick={take}>Assumir o controle</button>
+        <!-- No iPhone, página nenhuma vibra por código (ADR-0009); só o dedo num switch
+             nativo dispara a háptica do sistema. Um switch invisível sobre o botão faz o
+             próprio toque de assumir vibrar. Em outros navegadores é só um alvo de toque. -->
+        <input
+          class="take-haptic"
+          type="checkbox"
+          {...{ switch: true }}
+          tabindex="-1"
+          aria-hidden="true"
+          onchange={(e) => {
+            (e.currentTarget as HTMLInputElement).checked = false;
+            take();
+          }}
+        />
+      </span>
     {/if}
   </footer>
 </main>
@@ -584,6 +605,11 @@
   .take {
     border: 1px solid var(--line); background: transparent; color: var(--fg-2); font: 500 15px var(--sans);
     padding: 0 22px; min-height: 60px; border-radius: 999px; cursor: pointer; touch-action: manipulation;
+  }
+  .take-wrap { position: relative; display: inline-flex; }
+  .take-haptic {
+    position: absolute; inset: 0; width: 100%; height: 100%; margin: 0;
+    opacity: 0.011; cursor: pointer; /* sem appearance: none, que tiraria o switch nativo e a háptica junto */
   }
   .quiet-row { display: flex; gap: 6px; }
   .quiet { border: 0; background: transparent; color: var(--fg-3); font: 500 14px var(--sans); min-height: 44px; padding: 0 10px; cursor: pointer; }

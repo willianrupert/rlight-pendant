@@ -83,6 +83,11 @@ A háptica faz o vidro parecer mecanismo, e merece engenharia, não um detalhe:
   tentativas em quatro variantes do truque, e nenhuma vibrou. O truque que
   funcionava no iOS 18 foi fechado. No iPhone, a sensação mecânica vem do **som e
   do movimento**, desenhados para isso (abaixo).
+- **O que sobra no iPhone é o dedo no switch.** Para ações de toque (Assumir o
+  controle), um switch nativo invisível fica sobre o botão: o próprio toque o
+  aciona e a háptica é a do sistema, sem chamada por código. Segurar (homing) e
+  arrastar (a parede da régua) não passam por um toque no switch, e ficam com som
+  no iPhone e vibração no Android. Em teste no aparelho (17/10/2026).
 - **A forma do ajuste fino foi decidida no teste:** uma régua linear com
   inércia de destino anunciado ([ADR-0010](0010-a-regua.md)). A catraca, que
   prendia o controle no dente, perdeu a fluidez e saiu.
