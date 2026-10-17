@@ -7,9 +7,10 @@
 // assentou pela última vez; valor de máquina = base + traços × passo.
 
 import {
-  DEFAULT_MAX_LEAD_MM,
   OVERSCROLL_RESISTANCE,
+  ReportBuffer,
   clickFor,
+  displayValue,
   dragDelta,
   glidePosition,
   planRelease,
@@ -21,8 +22,9 @@ import {
 import type { CommandRequest } from './connection';
 import { NudgeBatcher } from './nudges';
 import { formatMm } from './present';
+import { BASE_PX_PER_TICK, approach, labelEvery, pxPerTick, reachOf, tickReachable, travelBand } from './ruler-geometry';
 
-export const PX_PER_TICK = 22;
+export const PX_PER_TICK = BASE_PX_PER_TICK;
 const SETTLE_MS = 55;
 /** Um toque, não um arrasto: anda menos que isto e dura menos que aquilo. */
 const TAP_SLOP_PX = 8;
@@ -38,15 +40,6 @@ export interface RulerDeps {
 }
 
 const r6 = (v: number) => Math.round(v * 1e6) / 1e6;
-
-/**
- * Quanto a régua pode ficar à frente da máquina: 2 mm, ou dois traços nos passos
- * grandes (senão a 10 mm por traço ela nem andaria). O servidor usa a mesma regra
- * com o `step` que vai em cada nudge.
- */
-export function leadMm(step: number): number {
-  return Math.max(DEFAULT_MAX_LEAD_MM, 2 * step);
-}
 
 export class RulerModel {
   axis: Axis;
@@ -68,6 +61,8 @@ export class RulerModel {
   barrier: number | null = null;
   /** A máquina está andando: um toque na régua, sem arrastar, é o Parar dela. */
   machineMoving = false;
+  /** Px por traço agora; a vista o ajusta ao passo (ruler-geometry). */
+  spacing = PX_PER_TICK;
 
   #glideFrom = 0;
   #glideStart = 0;
@@ -168,7 +163,7 @@ export class RulerModel {
 
   move(x: number, t: number): void {
     if (this.mode !== 'drag') return;
-    const d = dragDelta({ dxPx: x - this.#lastX, pxPerTick: PX_PER_TICK, pos: this.pos, minTick: this.minTick, maxTick: this.maxTick });
+    const d = dragDelta({ dxPx: x - this.#lastX, pxPerTick: this.spacing, pos: this.pos, minTick: this.minTick, maxTick: this.maxTick });
     this.#lastX = x;
     this.pos = this.#barrierClamp(this.pos + this.#leadResist(d));
     this.#samples.push({ t, x });
@@ -189,7 +184,7 @@ export class RulerModel {
       return;
     }
     const pxPerMs = velocityFromSamples(this.#samples);
-    const velocity = this.canGlide ? -pxPerMs / PX_PER_TICK : 0;
+    const velocity = this.canGlide ? -pxPerMs / this.spacing : 0;
     const bt = this.#startAbove ? this.barrierTick : null;
     const plan = planRelease({ pos: this.pos, velocity, minTick: bt === null ? this.minTick : Math.max(this.minTick, bt), maxTick: this.maxTick });
     this.target = plan.target;
@@ -268,16 +263,18 @@ export class RulerModel {
   }
 
   /**
-   * A régua não fica mais de 2 mm à frente da máquina (ADR-0002): além disso ela
-   * pesa, com o elástico do iOS, e só o que está dentro dos 2 mm vai para a placa.
-   * Conforme a máquina anda, a janela anda junto. Voltar em direção à máquina
-   * sempre pode.
+   * O alcance, em traços: a posição real mais ou menos leadForStep (core, a mesma
+   * regra do servidor), dentro do curso. Além dele a régua pesa, com o elástico do
+   * iOS, e nada vai para a placa. Conforme a máquina anda, o alcance anda junto.
    */
-  #leadWindow(): { lo: number; hi: number } | null {
+  reachTicks(): { lo: number; hi: number } | null {
     if (this.reported === null) return null;
-    const lead = r6(leadMm(this.step) / this.step);
-    const here = r6((this.reported - this.base) / this.step);
-    return { lo: Math.ceil(here - lead - 1e-9), hi: Math.floor(here + lead + 1e-9) };
+    const r = reachOf(this.reported, this.step, this.limits);
+    return { lo: Math.ceil(r6((r.lo - this.base) / this.step) - 1e-9), hi: Math.floor(r6((r.hi - this.base) / this.step) + 1e-9) };
+  }
+
+  #leadWindow(): { lo: number; hi: number } | null {
+    return this.reachTicks();
   }
 
   #leadResist(d: number): number {
@@ -344,6 +341,11 @@ export class RulerView {
   #ro: ResizeObserver;
   /** Offset do zero da peça: os números da régua são os mesmos do DRO. */
   offset = 0;
+  /** A posição real, deslizando entre relatórios como o DRO (ADR-0009). */
+  readonly #machine = new ReportBuffer();
+  #sp = PX_PER_TICK;
+  #lastNow = 0;
+  frozen = false;
   enabled = true;
   onFrame: ((model: RulerModel) => void) | null = null;
 
@@ -362,11 +364,30 @@ export class RulerView {
     canvas.addEventListener('pointercancel', this.#up);
   }
 
+  pushReported(value: number, at: number): void {
+    this.#machine.push({ at, value });
+    this.#dirty = true;
+  }
+
+  clearReported(): void {
+    this.#machine.clear();
+  }
+
   start(): void {
     const frame = (now: number) => {
+      // O espaçamento vai ao do passo com uma mola; o valor sob a linha não muda.
+      const target = pxPerTick(this.model.step, this.#w / 2);
+      if (this.#sp !== target) {
+        this.#sp = approach(this.#sp, target, Math.min(64, now - this.#lastNow));
+        this.model.spacing = this.#sp;
+        this.#dirty = true;
+      }
+      this.#lastNow = now;
+      // Enquanto a máquina anda, o marcador dela anda.
+      if (this.model.machineMoving) this.#dirty = true;
       if (this.model.frame(now)) this.#dirty = true;
       if (this.#dirty) {
-        this.#draw();
+        this.#draw(now);
         this.#dirty = false;
         this.onFrame?.(this.model);
       }
@@ -421,12 +442,15 @@ export class RulerView {
     this.#dirty = true;
   }
 
-  #draw(): void {
+  #draw(now: number): void {
     const g = this.#g;
     const m = this.model;
     const W = this.#w;
     const H = this.#h;
-    const SP = PX_PER_TICK;
+    const SP = this.#sp;
+    const fine = SP <= PX_PER_TICK + 0.5;
+    const every = fine ? 10 : labelEvery(SP, 80);
+    const reachT = m.reachTicks();
     g.clearRect(0, 0, W, H);
     g.font = '600 13px ui-monospace, "SF Mono", monospace';
     g.textAlign = 'center';
@@ -436,14 +460,23 @@ export class RulerView {
     const last = Math.ceil(m.pos + cx / SP) + 1;
     const minT = m.minTick;
     const maxT = m.maxTick;
+    // O que falta andar: uma faixa entre a linha azul (o alvo) e a máquina.
+    const items = this.#machine.items;
+    const machine = this.frozen ? (items[items.length - 1]?.value ?? null) : displayValue(items, now, 120);
+    const band = machine === null ? null : travelBand({ target: m.value, machine, step: m.step, spacing: SP });
+    if (band) {
+      g.fillStyle = 'rgba(127,176,255,.14)';
+      g.fillRect(cx + band.from, base - 50, band.to - band.from, 56);
+    }
     for (let i = first; i <= last; i++) {
       const x = cx + (i - m.pos) * SP;
-      const outside = i < minT || i > maxT;
+      // Fora do curso ou fora do alcance agora: o traço aparece, apagado, e não se usa.
+      const outside = i < minT || i > maxT || (reachT !== null && !tickReachable(i, reachT));
       const dist = Math.abs(x - cx) / cx;
       const a = Math.max(0, 1 - dist * dist);
-      const major = i % 10 === 0;
-      const mid = i % 5 === 0;
-      g.globalAlpha = (outside ? 0.1 : 0.22) + (outside ? 0.15 : 0.78) * a;
+      const major = i % every === 0;
+      const mid = fine && i % 5 === 0;
+      g.globalAlpha = (outside ? 0.08 : 0.22) + (outside ? 0.12 : 0.78) * a;
       g.fillStyle = major ? '#d4dbe4' : '#6b7480';
       const h = major ? 44 : mid ? 30 : 18;
       const w = major ? 2.5 : 2;
@@ -469,6 +502,17 @@ export class RulerView {
     }
     g.fillStyle = '#7fb0ff';
     g.fillRect(cx - 1.5, base - 58, 3, 66);
+    // A máquina de verdade: um marcador branco, menor, que alcança a linha azul.
+    if (machine !== null) {
+      const mx = cx + ((machine - m.base) / m.step - m.pos) * SP;
+      if (mx > -6 && mx < W + 6) {
+        g.fillStyle = '#f2f4f7';
+        g.fillRect(mx - 1, base - 34, 2, 40);
+        g.beginPath();
+        g.arc(mx, base - 38, 3.5, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
     if (m.mode === 'glide' && m.target !== null) {
       // O destino anunciado, como número, preso à borda quando está fora da tela.
       const tx = cx + (m.target - m.pos) * SP;
