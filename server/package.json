@@ -1,0 +1,19 @@
+{
+  "name": "@rlight/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Servidor do RLight: o único cliente da placa, e o portão dos navegadores (ADR-0001).",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "start": "vite-node src/main.ts"
+  },
+  "dependencies": {
+    "@rlight/core": "0.0.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/ws": "^8.5.13"
+  }
+}

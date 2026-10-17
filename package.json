@@ -2,11 +2,14 @@
   "name": "rlight",
   "private": true,
   "type": "module",
-  "workspaces": ["core"],
+  "workspaces": [
+    "core",
+    "server"
+  ],
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p core --noEmit"
+    "typecheck": "tsc -p core --noEmit && tsc -p server --noEmit"
   },
   "devDependencies": {
     "typescript": "^5.6.3",
