@@ -185,7 +185,15 @@
 
   let tick: ReturnType<typeof setInterval>;
 
+  // Nas superfícies de gesto, segurar nunca abre menu nem começa seleção.
+  const GESTURE = '.map, .ruler-box, .dro, .dial, .bar, .sheet, .toast';
+  function noSelect(e: Event) {
+    if ((e.target as Element | null)?.closest?.(GESTURE)) e.preventDefault();
+  }
+
   onMount(() => {
+    document.addEventListener('contextmenu', noSelect);
+    document.addEventListener('selectstart', noSelect);
     for (const a of axes) if (roots[a]) telemetry.attach(a, roots[a]!);
     conn.onState = (s, at) => {
       st = s;
@@ -251,6 +259,8 @@
   });
 
   onDestroy(() => {
+    document.removeEventListener('contextmenu', noSelect);
+    document.removeEventListener('selectstart', noSelect);
     clearInterval(tick);
     conn.stop();
     telemetry.stop();
@@ -501,7 +511,7 @@
   main.hands .dro { gap: 2px; }
   .axis { position: relative; display: grid; grid-template-columns: 28px 1fr auto; align-items: baseline; gap: 8px; border-radius: 14px; }
   .axis.hidden { display: none; }
-  .axis.touchable { cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; padding: 0 10px 0 6px; min-height: 60px; align-items: center; }
+  .axis.touchable { cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; padding: 0 10px 0 6px; min-height: 60px; align-items: center; }
   .axis.selected { background: var(--panel); }
   .axis.selected .letter { color: var(--acc); }
   .zbar {

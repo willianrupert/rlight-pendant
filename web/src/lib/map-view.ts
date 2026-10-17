@@ -143,6 +143,7 @@ export class MapView {
   #limits: TableLimits;
   #raf = 0;
   #shownReal: Point | null = null;
+  #pointLow: boolean | null = null;
   model: GhostModel;
   /** Pode arrastar (com controle, com sinal, com homing, em repouso). */
   enabled = false;
@@ -319,6 +320,12 @@ export class MapView {
     const k = Math.max(this.#mmPerPx().x, this.#mmPerPx().y);
     if (rx != null && ry != null) {
       this.#shownReal = { x: rx, y: ry };
+      // A legenda fica do lado oposto ao ponto, para nunca ficar atrás dele.
+      const low = ry < (this.#limits.y.min + this.#limits.y.max) / 2;
+      if (low !== this.#pointLow) {
+        this.#pointLow = low;
+        this.#svg.parentElement?.parentElement?.classList.toggle('point-low', low);
+      }
       for (const el of [this.#real, this.#halo]) {
         el.setAttribute('cx', String(rx));
         el.setAttribute('cy', String(-ry));
