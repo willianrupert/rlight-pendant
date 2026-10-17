@@ -1,0 +1,60 @@
+/* DESIGN.md: escuro por padrão, o estado é a cor do fundo, fonte do sistema,
+   números de largura fixa. Vermelho só em alarme. */
+:root {
+  color-scheme: dark;
+  --idle: #0d0f12;
+  --moving: #0a1a33;
+  --hold: #2a1d05;
+  --alarm: #300c0e;
+  --fg: #f2f4f7;
+  --fg-2: #a3acb8;
+  --fg-3: #67707c;
+  --panel: rgba(255, 255, 255, 0.06);
+  --line: rgba(255, 255, 255, 0.1);
+  --acc: #7fb0ff;
+  --ok: #7fd6a2;
+  --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, monospace;
+  --spring: cubic-bezier(0.2, 0.9, 0.25, 1.06);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--idle);
+  color: var(--fg);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior: none;
+}
+
+body { transition: background-color 0.6s ease; }
+body[data-tone='moving'] { background: var(--moving); }
+body[data-tone='hold'] { background: var(--hold); }
+body[data-tone='alarm'] { background: var(--alarm); }
+
+/* Os dígitos que rolam (lib/dro.ts) */
+.digits {
+  display: inline-flex;
+  align-items: baseline;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.digits .sign { display: inline-block; width: 0.6em; text-align: right; }
+.digits .slot { display: inline-block; height: 1.1em; overflow: hidden; width: 0.62em; text-align: center; }
+.digits .comma { display: inline-block; width: 0.32em; text-align: center; color: var(--fg-2); }
+.digits .dec { color: var(--fg-2); }
+.digits .strip { display: flex; flex-direction: column; transition: transform 380ms var(--spring); will-change: transform; }
+.digits .strip > span { display: block; height: 1.1em; }
+.digits.fast .strip { transition: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  body, .digits .strip { transition: none; }
+}

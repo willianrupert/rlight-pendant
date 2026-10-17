@@ -86,7 +86,7 @@ mostrar ao operador, vindos da policy do core ou do servidor:
 
 | Motivo | Quando |
 |---|---|
-| `Sem sinal da máquina` | Placa sem relatório há mais de 1 s, ou desconectada. **Nada fica guardado** |
+| `Sem sinal da máquina` | Placa sem relatório há mais de 2,5 s (limiar medido no spike S1), ou desconectada. **Nada fica guardado** |
 | `Outra tela está no controle` | Quem pediu não tem o controle |
 | `Desbloqueie a máquina primeiro`, `Espere o movimento terminar`, ... | O estado da máquina não permite ([ADR-0005](../docs/adr/0005-seguranca-o-celular-nao-e-e-stop.md)) |
 | `Faça o homing para mover pelo mapa` | `jogTo` sem homing |

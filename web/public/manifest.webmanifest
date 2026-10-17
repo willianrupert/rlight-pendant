@@ -1,0 +1,10 @@
+{
+  "name": "RLight",
+  "short_name": "RLight",
+  "description": "A máquina, ao vivo.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d0f12",
+  "theme_color": "#0d0f12",
+  "lang": "pt-BR"
+}

@@ -32,6 +32,21 @@ npm test          # Vitest
 npm run typecheck # TypeScript estrito
 ```
 
+**Ver a tela no celular, contra o simulador:** em dois terminais,
+
+```bash
+npm run sim   # FluidNC falso + servidor do RLight na porta 8787
+npm run dev   # o app em http://<ip-do-computador>:5180
+```
+
+**Contra uma máquina de verdade:** troque o simulador pelo servidor apontado para a placa.
+O servidor só lê sozinho (`$CD`, `$I`, `$G`, `$#`, `?`); a v0 não manda comando nenhum.
+
+```bash
+RLIGHT_BOARD_HOST=<ip-da-placa> npm run server
+npm run dev
+```
+
 | Módulo | O que decide | Decisão |
 |---|---|---|
 | [`core/src/link.ts`](core/src/link.ts) | Ao vivo ou sem sinal, há quanto tempo, qual trecho caiu | [ADR-0007](docs/adr/0007-a-conexao-vai-cair.md) |

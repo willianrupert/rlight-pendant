@@ -4,12 +4,16 @@
   "type": "module",
   "workspaces": [
     "core",
-    "server"
+    "server",
+    "web"
   ],
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p core --noEmit && tsc -p server --noEmit"
+    "typecheck": "tsc -p core --noEmit && tsc -p server --noEmit && tsc -p web --noEmit",
+    "sim": "npm run sim -w server",
+    "dev": "npm run dev -w web",
+    "server": "npm run start -w server"
   },
   "devDependencies": {
     "typescript": "^5.6.3",
