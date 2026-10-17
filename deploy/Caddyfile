@@ -1,0 +1,25 @@
+# Caddy do RLight (ADR-0001): TLS de cnc.rlight.com.br por desafio DNS-01, sem
+# nada exposto na internet. O app estático e o WebSocket do servidor no mesmo
+# endereço.
+{$RLIGHT_DOMAIN} {
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+	}
+	encode zstd gzip
+
+	handle /ws {
+		reverse_proxy 127.0.0.1:8787
+	}
+
+	handle {
+		root * /opt/rlight/app/web/dist
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+	}
+}

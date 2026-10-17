@@ -1,0 +1,20 @@
+[Unit]
+Description=RLight: servidor (único cliente da placa FluidNC)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=rlight
+WorkingDirectory=/opt/rlight/app/server
+EnvironmentFile=/etc/rlight/rlight.env
+ExecStart=/opt/rlight/app/node_modules/.bin/vite-node src/main.ts
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/rlight/app
+
+[Install]
+WantedBy=multi-user.target

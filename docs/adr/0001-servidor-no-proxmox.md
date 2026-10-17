@@ -107,6 +107,18 @@ programa".
 - Quem está na LAN alcança o app. A v1 aceita isso, mas a rede de visitantes
   precisa estar isolada. Um PIN para assumir o controle fica previsto.
 
+## Revisão de 2026-10-17: Caddy no próprio container, não o Nginx Proxy Manager
+
+Cogitou-se reaproveitar o Nginx Proxy Manager que já existe no Proxmox. Ficou o
+Caddy dentro do container do RLight porque o NPM da instalação de referência
+está com IP dinâmico (a mesma armadilha que já derrubou outro serviço da casa) e
+se configura por cliques, não por arquivo. Assim o RLight fica inteiro num
+container, reproduzível pelo [`deploy/install.sh`](../../deploy/install.sh).
+
+Os outros serviços da casa saem pela Cloudflare Tunnel, acessíveis pela internet.
+**O RLight não:** o domínio só existe no DNS do roteador, e o certificado vem por
+DNS-01, que não exige exposição.
+
 ## Decisão futura: tirar a WebUI do ESP32
 
 O spike S1 (2026-10-17) mostrou que cada pedido da WebUI do FluidNC trava a placa

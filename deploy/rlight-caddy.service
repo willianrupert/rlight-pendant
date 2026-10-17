@@ -1,0 +1,20 @@
+[Unit]
+Description=RLight: Caddy (HTTPS do app e do WebSocket)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=caddy
+EnvironmentFile=/etc/rlight/rlight.env
+EnvironmentFile=/etc/rlight/cloudflare.env
+ExecStart=/usr/local/bin/caddy run --config /etc/rlight/Caddyfile --adapter caddyfile
+ExecReload=/usr/local/bin/caddy reload --config /etc/rlight/Caddyfile --adapter caddyfile
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
