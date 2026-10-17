@@ -276,6 +276,13 @@ describe('planCommand: zerar a peça e desfazer', () => {
 });
 
 describe('planCommand: spindle', () => {
+  it('desligar durante o spin-up passa na frente: reset de tempo real, não um M5 na fila', () => {
+    // O FluidNC espera o spinup_ms depois do M3 antes de ler a próxima linha: um M5
+    // ficava ~5 s na fila com o spindle acelerando (visto na máquina real).
+    expect(planCommand({ command: 'spindleOff' }, ctx({ spindleDwelling: true }))).toMatchObject({ ok: true, writes: [{ realtime: 0x18 }] });
+    expect(planCommand({ command: 'spindleOff' }, ctx())).toMatchObject({ ok: true, writes: [{ line: 'M5' }] });
+  });
+
   it('liga no sentido horário com a rotação pedida', () => {
     const p = planCommand({ command: 'spindleOn', rpm: 12000 }, ctx());
     expect(p).toEqual({ ok: true, writes: [{ line: 'M3 S12000' }], commanded: {}, hitLimit: false, moves: false });

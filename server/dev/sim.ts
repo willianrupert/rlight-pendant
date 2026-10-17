@@ -9,7 +9,13 @@ import { fileControlMemory } from '../src/control';
 import { Gateway } from '../src/gateway';
 import { FakeFluidNC } from '../test/fake-fluidnc';
 
-const fake = new FakeFluidNC({ state: 'Idle', mpos: { x: 412.3, y: 118.05, z: -3.2 }, homingMs: 3_000 });
+// O spin-up de 5 s é o da máquina de referência (spinup_ms): o M3 só responde depois dele.
+const fake = new FakeFluidNC({
+  state: 'Idle',
+  mpos: { x: 412.3, y: 118.05, z: -3.2 },
+  homingMs: 3_000,
+  spinupMs: Number(process.env.RLIGHT_SIM_SPINUP_MS ?? 5_000),
+});
 const boardPort = await fake.listen(Number(process.env.RLIGHT_SIM_PORT ?? 0));
 
 const board = new Board({ host: '127.0.0.1', port: boardPort });

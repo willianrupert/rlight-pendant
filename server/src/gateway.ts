@@ -57,6 +57,8 @@ export class Gateway {
   private nextId = 1;
   private commanded: AxisValues = {};
   private lastZero: ZeroMemory | null = null;
+  /** A linha do último M3, enquanto a placa não responde a ela (a espera do spin-up). */
+  private spinupLine: number | null = null;
   private lastJogAt = -Infinity;
   private sawHoming = false;
   private firstReport = true;
@@ -86,6 +88,7 @@ export class Gateway {
       b.on('connected', () => {
         // Conexão nova: nada do que se mandou antes vale (ADR-0007).
         this.commanded = {};
+        this.spinupLine = null;
         this.firstReport = true;
         this.prevState = null;
       }),
@@ -231,6 +234,7 @@ export class Gateway {
       motion: this.motion,
       now: this.board.now(),
       lastZero: this.lastZero,
+      spindleDwelling: this.spinupLine !== null && !this.board.answered(this.spinupLine),
     });
     if (!plan.ok) {
       this.send(client, { type: 'result', ...ids, ok: false, reason: plan.reason });
@@ -243,6 +247,7 @@ export class Gateway {
         this.send(client, { type: 'result', ...ids, ok: false, reason: 'Sem sinal da máquina' });
         return;
       }
+      if ('line' in w && /^M3\b/.test(w.line)) this.spinupLine = this.board.lastLine;
     }
     this.commanded = plan.commanded;
     if (plan.lastZero !== undefined) this.lastZero = plan.lastZero;

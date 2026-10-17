@@ -122,17 +122,17 @@ describe('FakeFluidNC: zero da peça e spindle', () => {
     expect(fake.spindleOn).toBe(false);
   });
 
-  it('M3, S e M5 aparecem em FS e em A:', async () => {
+  it('M3, S e M5 aparecem em FS e em A:; mudar o spindle traz o Ov no relatório seguinte, como no Grbl', async () => {
     fake.state = 'Idle';
     client.send('M3 S12000\n?');
     await until(() => statusLines().length === 1);
-    expect(statusLines()[0]).toBe('<Idle|MPos:0.000,0.000,0.000|FS:0,12000|A:S>');
+    expect(statusLines()[0]).toBe('<Idle|MPos:0.000,0.000,0.000|FS:0,12000|Ov:100,100,100|A:S>');
     client.send('S9000\n?');
     await until(() => statusLines().length === 2);
     expect(statusLines()[1]).toContain('FS:0,9000|A:S');
     client.send('M5\n?');
     await until(() => statusLines().length === 3);
-    expect(statusLines()[2]).toBe('<Idle|MPos:0.000,0.000,0.000|FS:0,0>');
+    expect(statusLines()[2]).toBe('<Idle|MPos:0.000,0.000,0.000|FS:0,0|Ov:100,100,100>');
     for (const l of statusLines()) expect(parseLine(l).kind).toBe('status');
   });
 });

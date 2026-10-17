@@ -328,6 +328,36 @@ describe('gateway: mexer na máquina, de ponta a ponta', () => {
     ]);
   }, 10_000);
 
+  it('desligar no meio do spin-up para na hora, sem esperar o spinup_ms', async () => {
+    await setup({ state: 'Idle', mpos: { x: 100, y: 200, z: -10 }, spinupMs: 3_000 });
+    const b = await browser();
+    await until(() => live(b.state()) && b.of('profile')[0]);
+    b.send({ type: 'takeControl' });
+    await until(() => b.state()?.control.inControl);
+    expect(await b.command({ command: 'spindleOn', rpm: 9000 })).toMatchObject({ ok: true });
+    await until(() => fake.spindleOn, { what: 'o spindle acelerando' });
+    const t = Date.now();
+    expect(await b.command({ command: 'spindleOff' })).toMatchObject({ ok: true });
+    await until(() => !fake.spindleOn, { what: 'o spindle parado', timeoutMs: 1_000 });
+    expect(Date.now() - t).toBeLessThan(1_000);
+    expect(fake.received).toContain('0x18');
+    expect(fake.received).not.toContain('M5');
+  });
+
+  it('depois do spin-up, desligar volta a ser um M5', async () => {
+    await setup({ state: 'Idle', mpos: { x: 100, y: 200, z: -10 }, spinupMs: 200 });
+    const b = await browser();
+    await until(() => live(b.state()) && b.of('profile')[0]);
+    b.send({ type: 'takeControl' });
+    await until(() => b.state()?.control.inControl);
+    await b.command({ command: 'spindleOn', rpm: 9000 });
+    await sleep(500);
+    await b.command({ command: 'spindleOff' });
+    await until(() => !fake.spindleOn, { what: 'o spindle parado' });
+    expect(fake.received).toContain('M5');
+    expect(fake.received).not.toContain('0x18');
+  });
+
   it('o alarme da placa chega a todas as telas', async () => {
     await setup();
     const a = await browser();

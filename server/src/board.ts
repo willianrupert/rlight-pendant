@@ -141,13 +141,31 @@ export class Board {
   send(line: string): boolean {
     if (!this.connected || !this.sock) return false;
     this.sock.write(`${line}\n`);
+    this.linesSent++;
     return true;
   }
 
   sendRealtime(byte: number): boolean {
     if (!this.connected || !this.sock) return false;
     this.sock.write(Buffer.from([byte]));
+    // O reset descarta tudo o que a placa tinha na fila: nada mais vai responder.
+    if (byte === SOFT_RESET) this.linesAcked = this.linesSent;
     return true;
+  }
+
+  // A placa responde as linhas em ordem, um ok (ou error) por linha. Contar os dois
+  // diz se uma linha já terminou: um M3 só responde depois do spin-up (spinup_ms).
+  private linesSent = 0;
+  private linesAcked = 0;
+
+  /** O número da última linha enviada, para perguntar depois se ela já terminou. */
+  get lastLine(): number {
+    return this.linesSent;
+  }
+
+  /** A linha `n` já recebeu resposta da placa. */
+  answered(n: number): boolean {
+    return this.linesAcked >= n;
   }
 
   // ── Conexão e reconexão ────────────────────────────────────────────────────
@@ -167,6 +185,8 @@ export class Board {
       // A configuração vem primeiro: limites e perfil de cada conexão vêm dela
       // (ADR-0008). Depois modo e offsets, como pede o ADR-0007.
       sock.write('$CD\n$I\n$G\n$#\n');
+      this.linesSent = 4;
+      this.linesAcked = 0;
       this.startPolling();
       this.emit('connected');
     });
@@ -233,6 +253,7 @@ export class Board {
       this.emit('status', this.snapshot, message.report);
       return;
     }
+    if (message.kind === 'ok' || message.kind === 'error') this.linesAcked = Math.min(this.linesSent, this.linesAcked + 1);
     if (this.configLines) {
       if (message.kind === 'ok') {
         const text = this.configLines.join('\n');

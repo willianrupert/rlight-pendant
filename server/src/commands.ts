@@ -60,6 +60,8 @@ export interface CommandContext {
   now: number;
   /** O último zero, para desfazer. */
   lastZero: ZeroMemory | null;
+  /** Um M3 ainda na espera do spin-up (spinup_ms): a placa não lê a próxima linha antes. */
+  spindleDwelling?: boolean;
 }
 
 /** O offset anterior de cada eixo zerado, e quando o zero foi feito. */
@@ -133,6 +135,9 @@ export function planCommand(req: CommandRequest, ctx: CommandContext): Plan {
     case 'resume':
       return simple({ realtime: '~'.charCodeAt(0) }, false);
     case 'spindleOff':
+      // Na espera do spin-up, um M5 ficaria na fila até ela acabar (5 s na RLight).
+      // O reset de tempo real passa na frente e desliga o spindle na hora.
+      if (ctx.spindleDwelling) return simple({ realtime: SOFT_RESET }, true);
       return simple({ line: 'M5' }, false);
     case 'zero': {
       const wco = ctx.snapshot.wco;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DIAL_SWEEP_DEG, OFF, OFF_DEG, angleFromRpm, dialAngle, rampMs, releaseAction, ringFill, rpmFromAngle, snapRpm, spindleButtons, thousandsCrossed } from './spindle';
+import { DIAL_SWEEP_DEG, OFF, OFF_DEG, angleFromRpm, dialAngle, rampMs, releaseAction, ringFill, spindleStatus, rpmFromAngle, snapRpm, spindleButtons, thousandsCrossed } from './spindle';
 
 const r = { min: 1_800, max: 24_000 }; // minRunningRpm..maxRpm da máquina de referência
 
@@ -84,6 +84,26 @@ describe('o anel', () => {
 
   it('sem estimativa no perfil, chega direto', () => {
     expect(ringFill({ ...base, spinupMs: 0, holdProgress: 1, spinupStartedAt: 0, now: 0, running: false }).phase).toBe('running');
+  });
+});
+
+describe('a linha de estado do mostrador', () => {
+  it('acelerando: a estimativa, dita como estimativa', () => {
+    expect(spindleStatus({ phase: 'spinup', estimatedRpm: 2_300, on: false, started: true, reported: 0 })).toBe('Acelerando · ~2.300 rpm');
+  });
+
+  it('a rampa acabou mas a placa ainda não confirmou: "Ligando…", nunca "Parado" com o motor girando', () => {
+    // Visto na máquina: o A: do relatório chega a cada ~10 relatórios, e por ~2 s a folha dizia "Parado".
+    expect(spindleStatus({ phase: 'running', estimatedRpm: 900, on: false, started: true, reported: 0 })).toBe('Ligando…');
+  });
+
+  it('ligado pela placa, com a rotação reportada quando houver', () => {
+    expect(spindleStatus({ phase: 'running', estimatedRpm: 0, on: true, started: false, reported: 900 })).toBe('Ligado · 900 rpm');
+    expect(spindleStatus({ phase: 'running', estimatedRpm: 0, on: true, started: false, reported: 0 })).toBe('Ligado');
+  });
+
+  it('sem pedido e sem a placa dizer que gira: parado', () => {
+    expect(spindleStatus({ phase: 'idle', estimatedRpm: 0, on: false, started: false, reported: 0 })).toBe('Parado');
   });
 });
 

@@ -42,6 +42,11 @@ export interface FakeOptions {
   homingMs?: number;
   /** Passo da simulação de movimento. */
   tickMs?: number;
+  /**
+   * Como o spinup_ms do FluidNC: depois de um M3 a placa espera esse tempo antes
+   * do ok, e as linhas seguintes esperam na fila. Só o tempo real (0x18) passa.
+   */
+  spinupMs?: number;
 }
 
 const fmt = (v: number) => (Object.is(v, -0) ? 0 : v).toFixed(3);
@@ -66,10 +71,15 @@ export class FakeFluidNC {
   private readonly homePos: Vec;
   private readonly homingMs: number;
   private readonly tickMs: number;
+  private readonly spinupMs: number;
+  private dwellTimer: NodeJS.Timeout | null = null;
+  private waiting: { sock: net.Socket; cmd: string }[] = [];
   private queue: Segment[] = [];
   private reports = 0;
   /** Como a placa: depois de um G10, o próximo relatório traz o WCO. */
   private wcoDirty = false;
+  /** Como no Grbl: mudar o spindle zera o contador dos overrides, e o próximo relatório traz Ov e A:. */
+  private ovDirty = false;
   private frozenUntil = 0;
   private refusing = false;
   private homingTimer: NodeJS.Timeout | null = null;
@@ -83,6 +93,7 @@ export class FakeFluidNC {
     this.homePos = options.homePos ?? { x: 0, y: 0, z: 0 };
     this.homingMs = options.homingMs ?? 50;
     this.tickMs = options.tickMs ?? 10;
+    this.spinupMs = options.spinupMs ?? 0;
     this.ticker = setInterval(() => this.step(this.tickMs), this.tickMs);
   }
 
@@ -98,6 +109,7 @@ export class FakeFluidNC {
   async close(): Promise<void> {
     clearInterval(this.ticker);
     if (this.homingTimer) clearTimeout(this.homingTimer);
+    if (this.dwellTimer) clearTimeout(this.dwellTimer);
     for (const s of this.sockets) s.destroy();
     await new Promise<void>((resolve) => this.server.close(() => resolve()));
   }
@@ -168,7 +180,7 @@ export class FakeFluidNC {
         } else if (c === '\n' || c === '\r') {
           const cmd = line.trim();
           line = '';
-          if (cmd) this.command(sock, cmd);
+          if (cmd) this.enqueue(sock, cmd);
         } else {
           line += c;
         }
@@ -214,6 +226,11 @@ export class FakeFluidNC {
         this.state = 'Idle';
       }
     } else if (byte === 0x18) {
+      // O reset passa na frente de tudo: acaba a espera do spin-up e descarta a fila.
+      if (this.dwellTimer) clearTimeout(this.dwellTimer);
+      this.dwellTimer = null;
+      this.waiting = [];
+      this.ovDirty = true;
       this.queue = [];
       this.state = 'Alarm';
       this.spindleOn = false;
@@ -232,9 +249,26 @@ export class FakeFluidNC {
       parts.push(`WCO:${vec(this.wco)}`);
       this.wcoDirty = false;
     }
+    // Ov e depois A:, como no Grbl.
+    if (n % 10 === 5 || this.ovDirty) {
+      parts.push('Ov:100,100,100');
+      this.ovDirty = false;
+    }
     if (this.spindleOn) parts.push('A:S');
-    if (n % 10 === 5) parts.push('Ov:100,100,100');
     return `<${parts.join('|')}>`;
+  }
+
+  /** Uma linha por vez: durante a espera do spin-up, as próximas aguardam. */
+  private enqueue(sock: net.Socket, cmd: string): void {
+    if (this.dwellTimer) this.waiting.push({ sock, cmd });
+    else this.command(sock, cmd);
+  }
+
+  private drain(): void {
+    while (!this.dwellTimer && this.waiting.length) {
+      const w = this.waiting.shift()!;
+      this.command(w.sock, w.cmd);
+    }
   }
 
   private command(sock: net.Socket, cmd: string): void {
@@ -287,8 +321,18 @@ export class FakeFluidNC {
       return;
     }
     if (m[2] !== undefined) this.rpm = Number(m[2]);
-    if (m[1] === 'M3') this.spindleOn = true;
     if (m[1] === 'M5') this.spindleOn = false;
+    if (m[1]) this.ovDirty = true;
+    if (m[1] === 'M3' && !this.spindleOn && this.spinupMs > 0) {
+      this.spindleOn = true;
+      this.dwellTimer = setTimeout(() => {
+        this.dwellTimer = null;
+        this.write(sock, 'ok');
+        this.drain();
+      }, this.spinupMs);
+      return;
+    }
+    if (m[1] === 'M3') this.spindleOn = true;
     this.write(sock, 'ok');
   }
 

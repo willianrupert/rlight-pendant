@@ -7,7 +7,7 @@
   import type { Clicker } from '../lib/feel';
   import { HOLD_MS, holdProgress, idleHold, pressHold } from '../lib/hold';
   import { formatRpm } from '../lib/present';
-  import { DIAL_SWEEP_DEG, OFF, OFF_DEG, angleFromRpm, dialAngle, rampMs, releaseAction, ringFill, rpmFromAngle, snapRpm, spindleButtons, thousandsCrossed } from '../lib/spindle';
+  import { DIAL_SWEEP_DEG, OFF, OFF_DEG, angleFromRpm, dialAngle, rampMs, releaseAction, ringFill, rpmFromAngle, snapRpm, spindleButtons, spindleStatus, thousandsCrossed } from '../lib/spindle';
 
   interface Props {
     spindle: SpindleProfile;
@@ -248,11 +248,12 @@
       <text x="150" y="178" class="unit">rpm</text>
     {/if}
     <text x="150" y="212" class="now">
-      {#if spinningUp}Acelerando · ~{formatRpm(ring.estimatedRpm)} rpm{:else if running}{reported > 0 ? `Ligado · ${formatRpm(reported)} rpm` : 'Ligado'}{:else}Parado{/if}
+      {spindleStatus({ phase: ring.phase, estimatedRpm: ring.estimatedRpm, on: running, started: spinupAt !== null, reported })}
     </text>
   </svg>
 
-  {#if buttons.idleNote}<p class="honest">{buttons.idleNote}</p>{/if}
+  <!-- As duas linhas sempre ocupam o lugar delas: a folha não muda de altura e o mostrador não pula. -->
+  <p class="honest" class:empty={!buttons.idleNote}>{buttons.idleNote ?? ' '}</p>
   <div class="actions">
     {#if buttons.start}
       <button
@@ -279,8 +280,10 @@
       {pending === 'Desligando…' ? 'Desligando…' : 'Desligar'}
     </button>
   </div>
-  {#if spindle.spinupMs > 0 && rpm !== OFF}
-    <p class="note">O anel segue a rampa do inversor: {formatRpm(target)} rpm em ~{(Math.round(rampTo / 100) / 10).toLocaleString('pt-BR')} s, pelo perfil da máquina.</p>
+  {#if spindle.spinupMs > 0}
+    <p class="note">
+      {#if rpm === OFF}Gire o mostrador para escolher a rotação.{:else}O anel segue a rampa do inversor: {formatRpm(target)} rpm em ~{(Math.round(rampTo / 100) / 10).toLocaleString('pt-BR')} s, pelo perfil da máquina.{/if}
+    </p>
   {/if}
 </div>
 
@@ -321,7 +324,8 @@
   .unit { font: 500 15px var(--sans); fill: var(--fg-3); text-anchor: middle; }
   .now { font: 500 14px var(--sans); fill: var(--fg-2); text-anchor: middle; }
   .actions { display: flex; gap: 10px; }
-  .honest { margin: 0; font-size: 13px; color: var(--fg-3); text-align: center; }
+  .honest { margin: 0; font-size: 13px; line-height: 18px; min-height: 18px; color: var(--fg-3); text-align: center; }
+  .honest.empty { visibility: hidden; }
   .big {
     --p: 0;
     position: relative;
@@ -345,7 +349,7 @@
   .big:disabled { opacity: 0.45; }
   .big .fill { position: absolute; inset: 0; background: currentColor; opacity: 0.2; transform-origin: left; transform: scaleX(var(--p)); }
   .big .t { position: relative; }
-  .note { margin: 4px 0 0; font-size: 12px; color: var(--fg-3); text-align: center; }
+  .note { margin: 4px 0 0; font-size: 12px; line-height: 16px; min-height: 32px; color: var(--fg-3); text-align: center; text-wrap: balance; }
   @keyframes rise { from { transform: translateY(100%); } }
   @keyframes fade { from { opacity: 0; } }
   @keyframes breathe { 50% { opacity: 0.6; } }

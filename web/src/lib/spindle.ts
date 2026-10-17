@@ -2,6 +2,8 @@
 // segurar para ligar. O anel enche durante a confirmação e continua durante o
 // spin-up do inversor, que é uma estimativa do perfil, não uma leitura.
 
+import { formatRpm } from './present';
+
 export const DIAL_SWEEP_DEG = 270;
 /** Valores comuns de fresas e inversores: o mostrador encosta neles ao soltar. */
 export const COMMON_RPM = [6_000, 8_000, 10_000, 12_000, 15_000, 18_000, 20_000, 24_000];
@@ -118,6 +120,18 @@ export function ringFill(input: {
   if (input.running) return { fill: frac(input.runningRpm > 0 ? input.runningRpm : input.targetRpm), phase: 'running', estimatedRpm: 0 };
   if (input.holdProgress > 0) return { fill: (OFF_DEG / DIAL_SWEEP_DEG) * input.holdProgress, phase: 'confirming', estimatedRpm: 0 };
   return { fill: 0, phase: 'idle', estimatedRpm: 0 };
+}
+
+/**
+ * A linha de estado sob a rotação. Entre o fim da rampa estimada e a placa
+ * confirmar (o campo A: chega a cada ~10 relatórios), diz "Ligando…": nem
+ * "Ligado", que a placa ainda não disse, nem "Parado", com o motor girando.
+ */
+export function spindleStatus(input: { phase: Ring['phase']; estimatedRpm: number; on: boolean; started: boolean; reported: number }): string {
+  if (input.on) return input.reported > 0 ? `Ligado · ${formatRpm(input.reported)} rpm` : 'Ligado';
+  if (input.phase === 'spinup') return `Acelerando · ~${formatRpm(input.estimatedRpm)} rpm`;
+  if (input.started) return 'Ligando…';
+  return 'Parado';
 }
 
 export interface SpindleButtons {
