@@ -24,6 +24,9 @@ import { formatMm } from './present';
 
 export const PX_PER_TICK = 22;
 const SETTLE_MS = 55;
+/** Um toque, não um arrasto: anda menos que isto e dura menos que aquilo. */
+const TAP_SLOP_PX = 8;
+const TAP_MS = 350;
 /** Depois de um gesto, a régua espera o servidor confirmar o alvo antes de voltar a seguir a máquina. */
 const EXPECT_MS = 2_500;
 
@@ -35,6 +38,15 @@ export interface RulerDeps {
 }
 
 const r6 = (v: number) => Math.round(v * 1e6) / 1e6;
+
+/**
+ * Quanto a régua pode ficar à frente da máquina: 2 mm, ou dois traços nos passos
+ * grandes (senão a 10 mm por traço ela nem andaria). O servidor usa a mesma regra
+ * com o `step` que vai em cada nudge.
+ */
+export function leadMm(step: number): number {
+  return Math.max(DEFAULT_MAX_LEAD_MM, 2 * step);
+}
 
 export class RulerModel {
   axis: Axis;
@@ -54,6 +66,8 @@ export class RulerModel {
    * de propósito, já na superfície (zBarrier do core, VISION.md).
    */
   barrier: number | null = null;
+  /** A máquina está andando: um toque na régua, sem arrastar, é o Parar dela. */
+  machineMoving = false;
 
   #glideFrom = 0;
   #glideStart = 0;
@@ -65,6 +79,7 @@ export class RulerModel {
   #batcher: NudgeBatcher;
   #expect: { value: number; until: number } | null = null;
   #startAbove = false;
+  #tap: { x: number; t: number } | null = null;
   #atBarrier = false;
 
   constructor(
@@ -141,6 +156,7 @@ export class RulerModel {
   }
 
   down(x: number, t: number): void {
+    this.#tap = this.mode === 'rest' && this.machineMoving ? { x, t } : null;
     if (this.mode === 'glide') this.#catch();
     this.#startAbove = this.barrier !== null && this.value > this.barrier + 1e-6;
     this.#atBarrier = false;
@@ -162,6 +178,16 @@ export class RulerModel {
 
   up(t: number): void {
     if (this.mode !== 'drag') return;
+    const tap = this.#tap;
+    this.#tap = null;
+    if (tap && Math.abs(this.#lastX - tap.x) < TAP_SLOP_PX && t - tap.t < TAP_MS) {
+      // Um toque com a máquina andando para tudo, sem overlay: a régua é o Parar.
+      this.#batcher.discard();
+      this.deps.send({ command: 'cancelJog' });
+      this.#expect = null;
+      this.#reset(this.reported ?? this.value);
+      return;
+    }
     const pxPerMs = velocityFromSamples(this.#samples);
     const velocity = this.canGlide ? -pxPerMs / PX_PER_TICK : 0;
     const bt = this.#startAbove ? this.barrierTick : null;
@@ -198,8 +224,7 @@ export class RulerModel {
       this.pos += d * (1 - Math.exp(-dt / SETTLE_MS));
       if (Math.abs(d) < 0.002) this.#settled();
     } else if (this.mode === 'drag') {
-      // A máquina alcança a régua: o que estava no elástico vai sendo mandado.
-      this.#queueTicks(now);
+      // Só o que o dedo arrastou sai; com o dedo parado, nada vai para a placa.
       const cmd = this.#batcher.flush(now);
       if (cmd) this.deps.send(cmd);
     }
@@ -250,7 +275,7 @@ export class RulerModel {
    */
   #leadWindow(): { lo: number; hi: number } | null {
     if (this.reported === null) return null;
-    const lead = r6(DEFAULT_MAX_LEAD_MM / this.step);
+    const lead = r6(leadMm(this.step) / this.step);
     const here = r6((this.reported - this.base) / this.step);
     return { lo: Math.ceil(here - lead - 1e-9), hi: Math.floor(here + lead + 1e-9) };
   }

@@ -131,8 +131,9 @@ describe('a régua parada segue a máquina, sem pular de volta', () => {
 });
 
 describe('o elástico dos 2 mm', () => {
-  it('conforme a máquina alcança, o que estava no elástico vai sendo mandado', () => {
+  it('com o dedo parado no elástico nada sai; o próximo movimento manda o que a máquina já permite', () => {
     const { m, sent } = setup(1);
+    const total = () => sent.filter((s) => s.command === 'nudge').reduce((a, n) => a + (n as { delta: number }).delta, 0);
     let t = 0;
     let x = 200;
     m.down(x, t);
@@ -142,16 +143,29 @@ describe('o elástico dos 2 mm', () => {
       m.move(x, t);
       m.frame(t);
     }
-    const before = sent.filter((s) => s.command === 'nudge').reduce((a, n) => a + (n as { delta: number }).delta, 0);
-    expect(before).toBe(2);
+    t += 150;
+    m.frame(t);
+    expect(total()).toBe(2);
     m.reported = 414.3; // a máquina chegou aos 2 mm
-    t += 60;
-    m.frame(t);
-    t += 60;
-    m.frame(t);
-    const after = sent.filter((s) => s.command === 'nudge').reduce((a, n) => a + (n as { delta: number }).delta, 0);
-    expect(after).toBeGreaterThan(2);
-    expect(after).toBeLessThanOrEqual(4);
+    for (let k = 0; k < 5; k++) m.frame((t += 50));
+    expect(total()).toBe(2);
+    m.move(x - 1, (t += 10));
+    m.frame((t += 120));
+    expect(total()).toBeGreaterThan(2);
+    expect(total()).toBeLessThanOrEqual(4);
+  });
+
+  it('nos passos grandes a folga é de dois traços', () => {
+    const { m, sent } = setup(10);
+    slowDrag(m, 5);
+    const total = sent.filter((s) => s.command === 'nudge').reduce((a, n) => a + (n as { delta: number }).delta, 0);
+    expect(total).toBe(20);
+  });
+
+  it('cada nudge leva o passo', () => {
+    const { m, sent } = setup(1);
+    slowDrag(m, 1);
+    expect(sent[0]).toMatchObject({ command: 'nudge', step: 1 });
   });
 });
 
@@ -200,5 +214,31 @@ describe('a barreira no Z0 da peça', () => {
     m.sync(-1.5, 0);
     slowDrag(m, 5);
     expect(total()).toBeCloseTo(0.5, 6);
+  });
+});
+
+describe('a régua é o Parar', () => {
+  it('um toque com a máquina andando manda cancelJog e volta para a posição real', () => {
+    const { m, sent } = setup();
+    m.machineMoving = true;
+    m.reported = 413.1;
+    m.down(200, 0);
+    m.up(120);
+    expect(sent).toEqual([{ command: 'cancelJog' }]);
+    expect(m.value).toBeCloseTo(413.1, 6);
+  });
+
+  it('arrastar com a máquina andando não para nada: só continua o ajuste', () => {
+    const { m, sent } = setup();
+    m.machineMoving = true;
+    slowDrag(m, 3);
+    expect(sent.some((s) => s.command === 'cancelJog')).toBe(false);
+  });
+
+  it('com a máquina parada, um toque não manda nada', () => {
+    const { m, sent } = setup();
+    m.down(200, 0);
+    m.up(100);
+    expect(sent).toEqual([]);
   });
 });
