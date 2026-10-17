@@ -116,6 +116,8 @@
       limits: conn.limits[axis] ?? null,
       offset: m.wco?.[axis] ?? 0,
       canGlide: st?.homed ?? false,
+      // A superfície da peça só existe com um zero de peça definido.
+      barrier: axis === 'z' && m.wco ? m.wco.z : null,
       now: at,
     });
   }

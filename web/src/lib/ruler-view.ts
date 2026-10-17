@@ -30,7 +30,7 @@ export type RulerMode = 'rest' | 'drag' | 'glide' | 'settle';
 
 export interface RulerDeps {
   send: (req: CommandRequest) => void;
-  click: (kind: 'major' | 'minor') => void;
+  click: (kind: 'major' | 'minor' | 'wall') => void;
 }
 
 const r6 = (v: number) => Math.round(v * 1e6) / 1e6;
@@ -47,6 +47,12 @@ export class RulerModel {
   limits: AxisLimits | null = null;
   /** A última posição real da máquina neste eixo. */
   reported: number | null = null;
+  /**
+   * O zero da peça, em coordenada de máquina, quando a régua é a do Z. Um gesto
+   * que começou acima dele para nele; para descer além é preciso um gesto novo,
+   * de propósito, já na superfície (zBarrier do core, VISION.md).
+   */
+  barrier: number | null = null;
 
   #glideFrom = 0;
   #glideStart = 0;
@@ -57,6 +63,8 @@ export class RulerModel {
   #sentTick = 0;
   #batcher: NudgeBatcher;
   #expect: { value: number; until: number } | null = null;
+  #startAbove = false;
+  #atBarrier = false;
 
   constructor(
     axis: Axis,
@@ -125,8 +133,16 @@ export class RulerModel {
     this.#reset(this.reported ?? this.value);
   }
 
+  /** O traço da barreira, ou null sem barreira. Arredonda para cima: nunca passa da superfície. */
+  get barrierTick(): number | null {
+    if (this.barrier === null) return null;
+    return Math.ceil(r6((this.barrier - this.base) / this.step) - 1e-9);
+  }
+
   down(x: number, t: number): void {
     if (this.mode === 'glide') this.#catch();
+    this.#startAbove = this.barrier !== null && this.value > this.barrier + 1e-6;
+    this.#atBarrier = false;
     this.mode = 'drag';
     this.target = null;
     this.#samples = [{ t, x }];
@@ -137,7 +153,7 @@ export class RulerModel {
     if (this.mode !== 'drag') return;
     const d = dragDelta({ dxPx: x - this.#lastX, pxPerTick: PX_PER_TICK, pos: this.pos, minTick: this.minTick, maxTick: this.maxTick });
     this.#lastX = x;
-    this.pos = this.#leadClamp(this.pos + d, d);
+    this.pos = this.#barrierClamp(this.#leadClamp(this.pos + d, d));
     this.#samples.push({ t, x });
     while (this.#samples.length > 2 && t - this.#samples[0]!.t > 120) this.#samples.shift();
     this.#queueTicks(t);
@@ -147,7 +163,8 @@ export class RulerModel {
     if (this.mode !== 'drag') return;
     const pxPerMs = velocityFromSamples(this.#samples);
     const velocity = this.canGlide ? -pxPerMs / PX_PER_TICK : 0;
-    const plan = planRelease({ pos: this.pos, velocity, minTick: this.minTick, maxTick: this.maxTick });
+    const bt = this.#startAbove ? this.barrierTick : null;
+    const plan = planRelease({ pos: this.pos, velocity, minTick: bt === null ? this.minTick : Math.max(this.minTick, bt), maxTick: this.maxTick });
     this.target = plan.target;
     if (plan.kind === 'glide') {
       // Um único comando absoluto para o destino anunciado (ADR-0002).
@@ -233,6 +250,17 @@ export class RulerModel {
     if (delta > 0 && next > hi) return Math.max(this.pos, hi);
     if (delta < 0 && next < lo) return Math.min(this.pos, lo);
     return next;
+  }
+
+  #barrierClamp(next: number): number {
+    const bt = this.#startAbove ? this.barrierTick : null;
+    if (bt === null || next >= bt) {
+      if (bt !== null && next > bt + 0.5) this.#atBarrier = false;
+      return next;
+    }
+    if (!this.#atBarrier) this.deps.click('wall');
+    this.#atBarrier = true;
+    return bt;
   }
 
   #expectValue(value: number, t: number): void {
@@ -383,6 +411,17 @@ export class RulerView {
       }
     }
     g.globalAlpha = 1;
+    // A superfície da peça (Z0): uma parede âmbar com o nome dela.
+    if (m.barrier !== null) {
+      const bx = cx + ((m.barrier - m.base) / m.step - m.pos) * SP;
+      if (bx > -20 && bx < W + 20) {
+        g.fillStyle = '#ffb454';
+        g.fillRect(bx - 1.5, base - 52, 3, 60);
+        g.font = '600 11px ui-monospace, "SF Mono", monospace';
+        g.fillText('Z0', bx, base - 58);
+        g.font = '600 13px ui-monospace, "SF Mono", monospace';
+      }
+    }
     g.fillStyle = '#7fb0ff';
     g.fillRect(cx - 1.5, base - 58, 3, 66);
     if (m.mode === 'glide' && m.target !== null) {

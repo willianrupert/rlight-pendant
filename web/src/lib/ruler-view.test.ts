@@ -128,3 +128,51 @@ describe('a régua parada segue a máquina, sem pular de volta', () => {
     expect(m.value).toBe(500);
   });
 });
+
+describe('a barreira no Z0 da peça', () => {
+  function zSetup() {
+    const sent: CommandRequest[] = [];
+    const clicks: string[] = [];
+    const m = new RulerModel('z', 0.1, { send: (r) => sent.push(r), click: (k) => clicks.push(k) });
+    m.limits = { min: -150, max: 0 };
+    m.sync(-1, 0);
+    m.reported = -1;
+    m.barrier = -1.5; // o zero da peça, em coordenada de máquina
+    const total = () => sent.filter((s) => s.command === 'nudge').reduce((a, n) => a + (n as { delta: number }).delta, 0);
+    return { m, sent, clicks, total };
+  }
+
+  it('um gesto que começou acima para na superfície, com a batida da parede', () => {
+    const { m, clicks, total } = zSetup();
+    slowDrag(m, -10);
+    expect(total()).toBeCloseTo(-0.5, 6);
+    expect(clicks.filter((c) => c === 'wall')).toHaveLength(1);
+  });
+
+  it('um gesto novo, já na superfície, passa de propósito', () => {
+    const { m, total } = zSetup();
+    const t = slowDrag(m, -10);
+    for (let k = 0; k < 20; k++) m.frame(t + k * 16);
+    m.reported = -1.5;
+    m.sync(-1.5, t + 400);
+    slowDrag(m, -5, t + 500);
+    expect(total()).toBeCloseTo(-1, 6);
+  });
+
+  it('um peteleco para baixo também para na superfície', () => {
+    const { m, sent } = zSetup();
+    m.down(100, 0);
+    for (let k = 1; k <= 5; k++) m.move(100 + k * 30, k * 10);
+    m.up(50);
+    const jog = sent.find((s) => s.command === 'jogAxisTo') as { value: number } | undefined;
+    if (jog) expect(jog.value).toBeGreaterThanOrEqual(-1.5);
+    expect(m.target! * 0.1 + m.base).toBeGreaterThanOrEqual(-1.5 - 1e-9);
+  });
+
+  it('subir nunca é barrado', () => {
+    const { m, total } = zSetup();
+    m.sync(-1.5, 0);
+    slowDrag(m, 5);
+    expect(total()).toBeCloseTo(0.5, 6);
+  });
+});
