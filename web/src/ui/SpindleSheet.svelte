@@ -145,8 +145,8 @@
     for (let v = Math.ceil(range.min / 1000) * 1000; v <= range.max; v += 1000) {
       const a = ((angleFromRpm(v, range) - 135 - 90) * Math.PI) / 180;
       const major = v % 5000 === 0;
-      const r1 = R - 22;
-      const r2 = R - (major ? 34 : 28);
+      const r1 = R - 14;
+      const r2 = R - (major ? 26 : 21);
       out.push({ x1: C + r1 * Math.cos(a), y1: C + r1 * Math.sin(a), x2: C + r2 * Math.cos(a), y2: C + r2 * Math.sin(a), major });
     }
     return out;
@@ -189,7 +189,7 @@
     <circle class="knob" cx={knob.x} cy={knob.y} r="15" />
     <text x="150" y="150" class="rpm">{formatRpm(rpm)}</text>
     <text x="150" y="178" class="unit">rpm</text>
-    <text x="150" y="232" class="now">
+    <text x="150" y="212" class="now">
       {#if spinningUp}Acelerando · estimativa{:else if running}Girando a {formatRpm(reported)}{:else}Parado{/if}
     </text>
   </svg>
@@ -248,7 +248,7 @@
   .tick { stroke: var(--fg-3); stroke-width: 2; }
   .tick.major { stroke: var(--fg-2); stroke-width: 3; }
   .knob { fill: var(--fg); }
-  .rpm { font: 600 52px var(--mono); fill: var(--fg); text-anchor: middle; dominant-baseline: middle; font-variant-numeric: tabular-nums; }
+  .rpm { font: 600 44px var(--mono); fill: var(--fg); text-anchor: middle; dominant-baseline: middle; font-variant-numeric: tabular-nums; }
   .unit { font: 500 15px var(--sans); fill: var(--fg-3); text-anchor: middle; }
   .now { font: 500 14px var(--sans); fill: var(--fg-2); text-anchor: middle; }
   .actions { display: flex; }

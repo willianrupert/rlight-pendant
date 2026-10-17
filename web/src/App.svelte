@@ -462,7 +462,16 @@
   main.hands h1 { font-size: 28px; }
   .detail { margin: 6px 0 0; font-size: 16px; line-height: 1.4; color: var(--fg-2); max-width: 32ch; }
 
+  /* Flutua sobre a tela: um aviso nunca empurra o que está sob o dedo. */
   .notice {
+    position: fixed;
+    top: calc(env(safe-area-inset-top) + 10px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(488px, calc(100vw - 32px));
+    z-index: 15;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    background: var(--sheet) !important;
     margin: 0;
     padding: 12px 16px;
     border-radius: 14px;
@@ -561,7 +570,7 @@
   .toast button { border: 0; background: transparent; color: var(--acc); font: 600 17px var(--sans); min-height: 60px; min-width: 60px; padding: 0 14px; cursor: pointer; }
   .toast i { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--acc); opacity: 0.5; transform-origin: left; transition: transform 0.25s linear; }
   @keyframes rise { from { transform: translate(-50%, 120%); } }
-  @keyframes drop { from { transform: translateY(-8px); opacity: 0; } }
+  @keyframes drop { from { transform: translate(-50%, -8px); opacity: 0; } }
   @media (prefers-reduced-motion: reduce) {
     .notice, .toast { animation: none; }
     .toast i { transition: none; }
