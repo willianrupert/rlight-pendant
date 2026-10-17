@@ -118,6 +118,11 @@ tela. A interface funciona igual com ou sem vibração.
   servidor para a máquina em menos de meio segundo ([ADR-0002](adr/0002-jog-continuo-em-pedacos.md)).
 - **Tudo fica registrado:** trabalhos, alarmes, horas de spindle, quem estava no
   controle. Quando algo dá errado, dá para ver o que aconteceu antes.
+- **A conexão com a máquina vai cair**, porque ela está no Wi-Fi dentro de um
+  painel de aço. A tela nunca finge: cada número carrega a idade dele, como o
+  Buscar mostra "há 2 min". Sem sinal, os números esmaecem, os comandos somem e
+  nada fica na fila. O trabalho do SD continua cortando, e o app volta a vê-lo
+  sozinho ([ADR-0007](adr/0007-a-conexao-vai-cair.md)).
 - **O celular nunca é E-stop.** O E-stop é o botão vermelho na máquina ([ADR-0005](adr/0005-seguranca-o-celular-nao-e-e-stop.md)).
 
 ---

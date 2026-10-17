@@ -39,11 +39,13 @@ O servidor conectado à placa e o app só mostrando. Nenhum comando.
 - Posição de trabalho e de máquina; avanço real, rotação e overrides.
 - Progresso de trabalho rodando do SD (porcentagem e arquivo) e tempo decorrido.
 - Várias telas ao mesmo tempo.
-- Indicador de conexão de ponta a ponta: celular ↔ servidor ↔ placa.
-- Histórico mínimo: alarmes e horas de spindle.
+- Dados com idade: sem sinal, os números esmaecem e aparece "Sem sinal da máquina · há 4 s". Tocar mostra a corrente celular ─ servidor ─ máquina ([ADR-0007](adr/0007-a-conexao-vai-cair.md)).
+- Reconexão automática e silenciosa; reinício da placa detectado e avisado.
+- Histórico mínimo: alarmes, horas de spindle e cada queda de conexão (início, duração, o que estava acontecendo).
 
 **Pronto quando:** um trabalho iniciado pela WebUI do FluidNC é acompanhado do
-começo ao fim no iPhone e no Android, ao mesmo tempo, sem travar.
+começo ao fim no iPhone e no Android, ao mesmo tempo, e uma queda forçada da
+placa no meio aparece como "sem sinal", volta sozinha e não afeta o corte.
 
 ### v1 · As mãos
 
@@ -98,6 +100,7 @@ Resumo do [ADR-0005](adr/0005-seguranca-o-celular-nao-e-e-stop.md):
 4. **Ação perigosa se confirma segurando.**
 5. **Nada é otimista:** a tela mostra o que a placa reportou.
 6. **Trabalho não depende do celular** (ADR-0006).
+7. **A tela nunca mente:** um número nítido é atual; sem sinal, nada é aceito nem enfileirado (ADR-0007).
 
 Limite conhecido: na bancada, a placa já travou depois de um panic,
 respondendo pela rede e "movendo" eixos sem gerar pulsos. Nenhum software de
@@ -125,7 +128,7 @@ Cada spike tem o critério escrito **antes** de rodar.
 
 | # | Pergunta | Aprova se | Bloqueia |
 |---|---|---|---|
-| **S1** | O servidor mantém a conexão com a placa estável? | Relatório de estado a 10 Hz ou mais por 1 h, sem queda que dure mais de 2 s; tráfego gravado como fixture; conexões simultâneas (WebUI no Mac + servidor) sem conflito | v0 |
+| **S1** | Como se comporta o elo servidor → placa (Wi-Fi no painel)? | Relatório de estado a 10 Hz ou mais por 1 h com o painel energizado; **cada queda registrada** (quantas, quanto duram); reconexão sozinha em todas; tráfego gravado como fixture; WebUI no Mac junto sem conflito. Mais de uma queda por hora → antena externa ou ponto de acesso antes da v1 | v0 |
 | **S2** | O jog em pedaços para a máquina quando a rede cai? | Para em ≤ 0,5 s se o celular cair e anda ≤ 6 mm se a placa cair (ADR-0002) | v1 |
 | **S3** | Dá para ter háptica no iPhone? | Toque perceptível e consistente no iOS atual | Nada: sem ela, segue sem vibração no iPhone |
 | **S4** | O envio ao SD é confiável com o painel energizado? | 10 envios de 500 KB verificados, sem intervenção (ADR-0006) | v2 |
@@ -155,3 +158,4 @@ isolada.
 | [0004](adr/0004-pwa-em-vez-de-app-nativo.md) | PWA em vez de app nativo |
 | [0005](adr/0005-seguranca-o-celular-nao-e-e-stop.md) | Segurança: o celular não é E-stop |
 | [0006](adr/0006-trabalhos-rodam-do-sd.md) | Trabalhos rodam do SD, enviados e verificados pelo servidor |
+| [0007](adr/0007-a-conexao-vai-cair.md) | A conexão com a máquina vai cair: projetar para isso |
