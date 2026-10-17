@@ -5,6 +5,7 @@
 import {
   allowed,
   clampToLimits,
+  leadForStep,
   formatJog,
   goTo,
   limitsOf,
@@ -35,7 +36,7 @@ export const DEFAULT_MOTION: MotionSettings = { nudgeFeedMmPerMin: 1_000, jogToF
  * frente, nunca menos que 2 mm; o avanço cresce com o passo e o eixo recorta.
  */
 export function stepMotion(step: number): { leadMm: number; feedMmPerMin: number } {
-  const leadMm = Math.max(2, 4 * step);
+  const leadMm = leadForStep(step);
   const feedMmPerMin = step <= 0.01 ? 300 : step <= 0.1 ? 1_000 : step <= 1 ? 2_000 : 3_000;
   return { leadMm, feedMmPerMin };
 }

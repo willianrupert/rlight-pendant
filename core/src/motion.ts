@@ -15,6 +15,15 @@ export type AxisValues = Partial<Record<Axis, number>>;
 /** Avanço máximo do alvo da régua à frente da posição real. */
 export const DEFAULT_MAX_LEAD_MM = 2;
 
+/**
+ * Quanto o alvo da régua pode ficar à frente da máquina, conforme o passo:
+ * quatro passos, nunca menos que 2 mm. Servidor e app usam a mesma regra; o
+ * app desenha esse alcance para que o que se vê na régua seja o que se alcança.
+ */
+export function leadForStep(step: number): number {
+  return Math.max(DEFAULT_MAX_LEAD_MM, 4 * step);
+}
+
 /** Arredonda ao micrômetro, a precisão do comando enviado. */
 export function roundMm(value: number): number {
   return Math.round(value * 1000) / 1000;

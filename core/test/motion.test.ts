@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampToLimits, formatJog, goTo, nudge, resync, zBarrier, type MachineLimits } from '../src/motion';
+import { clampToLimits, formatJog, goTo, leadForStep, nudge, resync, zBarrier, type MachineLimits } from '../src/motion';
 
 // ADR-0002: todo movimento manual é absoluto, tem destino e respeita o curso.
 // Os limites vêm da placa (ADR-0008); aqui usamos um perfil de exemplo.
@@ -117,5 +117,18 @@ describe('formatJog: o comando que vai para a placa', () => {
 describe('resync: ao voltar o sinal, o alvo vira a posição real', () => {
   it('descarta o alvo antigo', () => {
     expect(resync({ x: 120, y: 40, z: -1 })).toEqual({ x: 120, y: 40, z: -1 });
+  });
+});
+
+describe('leadForStep: quanto a régua pode ficar à frente, conforme o passo', () => {
+  it('nunca menos que 2 mm', () => {
+    expect(leadForStep(0.01)).toBe(2);
+    expect(leadForStep(0.1)).toBe(2);
+  });
+
+  it('quatro passos nos passos grandes', () => {
+    expect(leadForStep(1)).toBe(4);
+    expect(leadForStep(10)).toBe(40);
+    expect(leadForStep(100)).toBe(400);
   });
 });
