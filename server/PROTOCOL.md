@@ -137,7 +137,7 @@ a resposta é imediata e nada é enfileirado nem reenviado depois
 | Pedido | Vai para a placa |
 |---|---|
 | `{ "type": "command", "id": "r1", "command": "nudge", "axis": "x", "delta": 0.1, "step": 0.1 }` | `$J=G53 G90 X<alvo> F<avanço>`: o alvo comandado + `delta`, recortado pelo curso. `step` (opcional) é o passo da régua: o limite à frente vira max(2 mm, 4 passos) e o avanço cresce com ele (300 / 1000 / 2000 / máximo do eixo). Sem `step`: 2 mm e 1000 mm/min |
-| `{ "type": "command", "command": "jogTo", "x": 410, "y": 220 }` | `$J=G53 G90 X410.000 Y220.000 F2000`, recortado pelo curso |
+| `{ "type": "command", "command": "jogTo", "x": 410, "y": 220 }` | `$J=G53 G90 X410.000 Y220.000 F<máximo do eixo>`, recortado pelo curso |
 | `{ "type": "command", "command": "cancelJog" }` | `0x85` |
 | `{ "type": "command", "command": "unlock" }` | `$X` |
 | `{ "type": "command", "command": "home" }` | `$H` |
@@ -149,7 +149,7 @@ a resposta é imediata e nada é enfileirado nem reenviado depois
 
 | Pedido | Vai para a placa | Notas |
 |---|---|---|
-| `{ "type": "command", "command": "jogAxisTo", "axis": "z", "value": -12.5 }` | `$J=G53 G90 Z-12.500 F<avanço>` | O destino anunciado da régua ao soltar com inércia ([ADR-0010](../docs/adr/0010-a-regua.md)). Recortado pelo curso; **sem** o limite de 2 mm à frente, porque o destino foi mostrado antes. Exige homing. Avanço de `jogToFeedMmPerMin`, limitado pelo eixo |
+| `{ "type": "command", "command": "jogAxisTo", "axis": "z", "value": -12.5 }` | `$J=G53 G90 Z-12.500 F<avanço>` | O destino anunciado da régua ao soltar com inércia ([ADR-0010](../docs/adr/0010-a-regua.md)). Recortado pelo curso; **sem** o limite de 2 mm à frente, porque o destino foi mostrado antes. Exige homing. Avanço: a velocidade máxima do eixo (lida da placa) |
 | `{ "type": "command", "command": "zero", "axis": "x" }` (ou `"all"`) | `G10 L20 P0 X0` (ou `X0 Y0 Z0`) | A posição atual vira o zero da peça no sistema ativo. O servidor guarda o offset anterior (`machine.wco`) para o desfazer. A resposta traz `"undoable": true` |
 | `{ "type": "command", "command": "undoZero" }` | `G10 L2 P0 X<wco anterior> ...` | Desfaz o último zero, nos mesmos eixos. Vale por 30 s e uma vez só. Sem nada a desfazer: `ok: false`, `reason: "Nada para desfazer"` |
 | `{ "type": "command", "command": "spindleOn", "rpm": 12000 }` | `M3 S12000` | Rotação recortada pela faixa do perfil (`profile.spindle`), com `hitLimit`. Sem spindle no perfil: `ok: false`, `reason: "Esta máquina não tem spindle configurado"` |

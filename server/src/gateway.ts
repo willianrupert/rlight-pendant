@@ -3,6 +3,7 @@
 // por segundo. Todo comando passa pela policy antes de chegar à placa, e nada
 // fica guardado para quando o sinal voltar (ADR-0007).
 
+import { alarmKeepsHoming, noHomingMemory, type HomingMemory } from './homing-memory';
 import type { AddressInfo } from 'node:net';
 import { WebSocketServer, WebSocket } from 'ws';
 import { combineLinks, limitsOf, type AxisValues, type LinkView, type MachineState } from '@rlight/core';
@@ -26,6 +27,8 @@ export interface GatewayOptions {
   maxStateHz?: number;
   /** De quanto em quanto tempo o estado sai mesmo sem relatório novo, para a idade andar. */
   heartbeatMs?: number;
+  /** Onde guardar que o homing foi visto, para sobreviver a reinícios do servidor. */
+  homingMemory?: HomingMemory;
 }
 
 /** Depois de um jog, quanto tempo a frequência fica alta e o alvo não é ressincronizado. */
@@ -58,9 +61,12 @@ export class Gateway {
   private readonly board: Board;
   private readonly motion: MotionSettings;
   private readonly minStateIntervalMs: number;
+  private readonly homingMemory: HomingMemory;
 
   constructor(private readonly options: GatewayOptions) {
     this.board = options.board;
+    this.homingMemory = options.homingMemory ?? noHomingMemory;
+    this.sawHoming = this.homingMemory.read();
     this.motion = options.motion ?? DEFAULT_MOTION;
     this.minStateIntervalMs = 1000 / (options.maxStateHz ?? 10);
   }
@@ -80,6 +86,7 @@ export class Gateway {
       b.on('message', (m) => {
         if (m.kind !== 'alarm') return;
         this.commanded = {};
+        if (!alarmKeepsHoming(m.code)) this.setHomed(false);
         this.broadcast({ type: 'alarm', code: m.code });
       }),
     );
@@ -109,6 +116,12 @@ export class Gateway {
 
   // ── A placa ────────────────────────────────────────────────────────────────
 
+  private setHomed(homed: boolean): void {
+    if (homed === this.sawHoming) return;
+    this.sawHoming = homed;
+    this.homingMemory.write(homed);
+  }
+
   private get homed(): boolean {
     const p = this.board.profile;
     if (!p) return false;
@@ -118,8 +131,8 @@ export class Gateway {
   private onStatus(state: MachineState): void {
     const now = this.board.now();
     // Placa em alarme logo na conexão: pode ter reiniciado, e o homing se perdeu.
-    if (this.firstReport && state === 'Alarm') this.sawHoming = false;
-    if (this.prevState === 'Home' && state !== 'Home' && state !== 'Alarm') this.sawHoming = true;
+    if (this.firstReport && state === 'Alarm') this.setHomed(false);
+    if (this.prevState === 'Home' && state !== 'Home' && state !== 'Alarm') this.setHomed(true);
     this.firstReport = false;
     this.prevState = state;
     // Parada, sem jog recente: o alvo volta a ser a posição real.

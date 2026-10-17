@@ -27,7 +27,13 @@ export interface MotionSettings {
   maxLeadMm?: number;
 }
 
-export const DEFAULT_MOTION: MotionSettings = { nudgeFeedMmPerMin: 1_000, jogToFeedMmPerMin: 2_000 };
+// O fantasma e o destino da régua vão na velocidade máxima de cada eixo, lida da
+// placa (ADR-0008): o destino é mostrado antes, o S2 aprovou, e um deslocamento
+// longo deixa ver a rampa de aceleração do próprio planejador do FluidNC.
+export const DEFAULT_MOTION: MotionSettings = { nudgeFeedMmPerMin: 1_000, jogToFeedMmPerMin: Infinity };
+
+/** Sem velocidade máxima conhecida no eixo, um valor prudente. */
+const FALLBACK_FEED_MM_PER_MIN = 2_000;
 
 /**
  * Limite à frente e avanço da régua conforme o passo escolhido. Com só 2 mm à
@@ -88,7 +94,7 @@ function feedFor(profile: MachineProfile, axes: readonly Axis[], wanted: number)
     const max = profile.axes[axis]?.maxRateMmPerMin ?? 0;
     if (max > 0) feed = Math.min(feed, max);
   }
-  return feed;
+  return Number.isFinite(feed) ? feed : FALLBACK_FEED_MM_PER_MIN;
 }
 
 export function planCommand(req: CommandRequest, ctx: CommandContext): Plan {
@@ -150,8 +156,15 @@ export function planCommand(req: CommandRequest, ctx: CommandContext): Plan {
       const spindle = ctx.profile.spindle;
       if (!spindle) return refuse('Esta máquina não tem spindle configurado');
       let rpm = Math.round(req.rpm);
-      const max = spindle.maxRpm > spindle.minRpm ? spindle.maxRpm : Infinity;
-      const clamped = Math.min(Math.max(rpm, spindle.minRpm, 0), max);
+      // Puxar para 0 desliga: há máquinas (a de referência é uma) que seguem
+      // girando na velocidade mínima do inversor com S0.
+      if (rpm <= 0) {
+        if (req.command === 'spindleOn') return refuse('Escolha uma rotação para ligar');
+        return simple({ line: 'M5' }, false);
+      }
+      const floor = Math.max(spindle.minRunningRpm, spindle.minRpm, 1);
+      const max = spindle.maxRpm > floor ? spindle.maxRpm : Infinity;
+      const clamped = Math.min(Math.max(rpm, floor), max);
       const hitLimit = clamped !== rpm;
       rpm = clamped;
       const line = req.command === 'spindleOn' ? `M3 S${rpm}` : `S${rpm}`;

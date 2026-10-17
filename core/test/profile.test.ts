@@ -55,7 +55,7 @@ describe('profileFromConfig: a máquina de referência', () => {
   });
 
   it('o spindle: faixa e tempos de rampa', () => {
-    expect(p.spindle).toEqual({ type: '10V', minRpm: 0, maxRpm: 18000, spinupMs: 5000, spindownMs: 10000 });
+    expect(p.spindle).toEqual({ type: '10V', minRpm: 0, minRunningRpm: 1800, maxRpm: 18000, spinupMs: 5000, spindownMs: 10000 });
   });
 
   it('apalpador e cartão SD configurados', () => {
@@ -104,6 +104,16 @@ describe('profileFromConfig: outras máquinas (configurações sintéticas)', ()
     expect(p.hasSd).toBe(false);
     expect(p.hasProbe).toBe(false);
     expect(p.spindle).toBeNull();
+  });
+
+  it('menor rotação útil: o primeiro valor diferente de zero do speed_map', () => {
+    const p = profileFromConfig(minimal('PWM:\n  speed_map: 0=0% 500=5% 24000=100%'));
+    expect(p.spindle?.minRunningRpm).toBe(500);
+  });
+
+  it('sem speed_map, a menor rotação útil é a mínima', () => {
+    const p = profileFromConfig(minimal('Relay:\n  spinup_ms: 1000'));
+    expect(p.spindle?.minRunningRpm).toBe(0);
   });
 
   it('apalpador com NO_PIN não conta', () => {
