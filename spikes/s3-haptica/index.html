@@ -53,7 +53,7 @@ textarea{width:100%;box-sizing:border-box;min-height:140px;background:var(--pane
 <main>
   <header class="lead">
     <h1>Laboratório RLight</h1>
-    <p>Rodada 4 do spike S3: a régua, agora com inércia. Abra no Safari do iPhone e use com uma mão.</p>
+    <p>Rodada 5 do spike S3: a régua para exatamente onde anuncia, mostra o destino com o número e clica menos nos deslizes rápidos. Use com uma mão.</p>
   </header>
 
   <section class="card" aria-labelledby="h-r">
@@ -63,7 +63,8 @@ textarea{width:100%;box-sizing:border-box;min-height:140px;background:var(--pane
     <div class="seg" role="group" aria-label="Passo por traço" id="step">
       <button data-s="0.01">0,01 mm</button><button data-s="0.1" aria-pressed="true">0,1 mm</button><button data-s="1">1 mm</button>
     </div>
-    <p>Arraste devagar para o ajuste fino. Dê um peteleco para atravessar: a régua desliza com atrito e o marcador azul-claro mostra onde vai parar antes de parar. Toque para segurar. Nas pontas do curso ela resiste e volta.</p>
+    <p>Arraste devagar para o ajuste fino. Dê um peteleco para atravessar: a etiqueta azul mostra o número onde a régua vai parar, e ela para exatamente ali. Toque para segurar. Nas pontas do curso ela resiste e volta.</p>
+    <p class="status">Resolução real do X da máquina de referência: 72,26 mm ÷ 8000 passos = 0,009 mm por passo do motor. O passo de 0,01 é o limite honesto.</p>
     <label class="row" for="snd"><span>Clique sonoro</span><input type="checkbox" id="snd" checked></label>
     <div class="meters">
       <div class="meter"><small>quadro médio</small><strong id="m-avg">–</strong></div>
@@ -144,7 +145,7 @@ function renderDRO(v, fast) {
 }
 
 /* ---------- Régua com física de scroll do iOS ---------- */
-const box = $('#ruler'), cv = $('#rc'), g = cv.getContext('2d');
+const box = $('#ruler'), cv = $('#rc'), g = cv.getContext('2d', { alpha: false });
 let W = 0, H = 0, dpr = 1, SP = 22; // px CSS por traço
 function resize() {
   dpr = Math.min(3, window.devicePixelRatio || 1); W = box.clientWidth; H = box.clientHeight;
@@ -152,7 +153,7 @@ function resize() {
 }
 // estado em "traços" (float); valor = traços * passo
 let pos = 6000, vel = 0, dragging = false, mode = 'rest', lastTick = Math.round(pos), dirty = true;
-let samples = [], lastX = 0, target = null;
+let samples = [], lastX = 0, target = null, glideFrom = 0, glideStart = 0, gestureFrames = 0;
 const minT = () => MIN / step, maxT = () => MAX / step;
 const TAU = 325; // ms, a constante de desaceleração do UIScrollView "normal"
 function rubber(over, dim) { return (1 - 1 / (over * 0.55 / dim + 1)) * dim; }
@@ -178,7 +179,11 @@ function onUp(e) {
   const a = samples[0], b = samples[samples.length - 1]; const dt = Math.max(1, b.t - a.t);
   const v = -(b.x - a.x) / SP / dt; // traços por ms
   if (pos < minT() || pos > maxT()) { mode = 'settle'; target = Math.min(maxT(), Math.max(minT(), Math.round(pos))); vel = 0; }
-  else if (Math.abs(v) * 1000 > 6) { vel = v; mode = 'glide'; target = Math.round(Math.min(maxT(), Math.max(minT(), pos + vel * TAU))); }
+  else if (Math.abs(v) * 1000 > 6) {
+    // O destino anunciado é a trajetória: a régua desliza numa exponencial que termina nele.
+    target = Math.round(Math.min(maxT(), Math.max(minT(), pos + v * TAU)));
+    glideFrom = pos; glideStart = performance.now(); mode = 'glide';
+  }
   else { mode = 'settle'; target = Math.round(pos); }
   dirty = true;
 }
@@ -193,10 +198,10 @@ function step_(now) {
   const dt = Math.min(64, now - lastFrame); lastFrame = now;
   frames.push(dt); if (frames.length > 120) frames.shift();
   if ((dragging || mode === 'glide') && dt > 22) slow++;
+  if (dragging || mode === 'glide') gestureFrames++;
   if (mode === 'glide') {
-    pos += vel * dt; vel *= Math.exp(-dt / TAU);
-    if (pos < minT() || pos > maxT()) { vel *= 0.6; if (Math.abs(vel) < 0.002) { mode = 'settle'; target = Math.min(maxT(), Math.max(minT(), Math.round(pos))); } }
-    if (Math.abs(vel) < 0.0025) { mode = 'settle'; target = Math.round(Math.min(maxT(), Math.max(minT(), pos))); }
+    pos = target - (target - glideFrom) * Math.exp(-(now - glideStart) / TAU);
+    if (Math.abs(target - pos) < 0.02) { pos = target; mode = 'rest'; target = null; }
     dirty = true;
   } else if (mode === 'settle') {
     const d = target - pos; pos += d * (1 - Math.exp(-dt / 55));
@@ -204,17 +209,25 @@ function step_(now) {
     dirty = true;
   }
   const t = Math.round(Math.min(maxT(), Math.max(minT(), pos)));
-  if (t !== lastTick) { click(t % 10 === 0); lastTick = t; }
+  if (t !== lastTick) {
+    // Deslize rápido: só os traços de dez em dez clicam. Clique completo no arrasto e no fim do deslize.
+    const fastGlide = mode === 'glide' && Math.abs(target - pos) > 12;
+    if (!fastGlide || t % 10 === 0) click(t % 10 === 0);
+    lastTick = t;
+  }
   if (dirty) { draw(); dirty = false; }
   requestAnimationFrame(step_);
 }
+// Medidores só se atualizam com a régua parada, para não causar layout no meio do gesto.
 setInterval(() => {
-  if (!frames.length) return; const avg = frames.reduce((a, b) => a + b, 0) / frames.length;
-  $('#m-avg').textContent = avg.toFixed(1) + ' ms'; $('#m-hz').textContent = Math.round(1000 / avg) + ' Hz'; $('#m-slow').textContent = slow; summary();
-}, 500);
+  if (!frames.length || dragging || mode === 'glide') return; const avg = frames.reduce((a, b) => a + b, 0) / frames.length;
+  $('#m-avg').textContent = avg.toFixed(1) + ' ms'; $('#m-hz').textContent = Math.round(1000 / avg) + ' Hz';
+  $('#m-slow').textContent = gestureFrames ? `${slow} de ${gestureFrames}` : '0';
+}, 1000);
 
 function draw() {
-  g.clearRect(0, 0, W, H);
+  g.fillStyle = '#1b1f26'; g.fillRect(0, 0, W, H);
+  g.font = '600 13px ui-monospace, "SF Mono", monospace'; g.textAlign = 'center';
   const cx = W / 2, base = H * 0.62;
   const first = Math.floor(pos - cx / SP) - 1, last = Math.ceil(pos + cx / SP) + 1;
   for (let i = first; i <= last; i++) {
@@ -225,14 +238,21 @@ function draw() {
     g.fillStyle = major ? '#d4dbe4' : '#6b7480';
     const h = major ? 46 : mid ? 32 : 20; const w = major ? 2.5 : 2;
     g.fillRect(Math.round(x * dpr) / dpr - w / 2, base - h, w, h);
-    if (major && !outside) { g.font = '600 13px ui-monospace, "SF Mono", monospace'; g.textAlign = 'center'; g.fillStyle = '#9aa3ae'; g.fillText(fmt(i * step), x, base + 22); }
+    if (major && !outside) { g.fillStyle = '#9aa3ae'; g.fillText(fmt(i * step), x, base + 22); }
   }
   g.globalAlpha = 1;
-  if (target !== null && mode === 'glide') {
-    const tx = cx + (target - pos) * SP;
-    if (tx > -10 && tx < W + 10) { g.fillStyle = 'rgba(127,176,255,.35)'; g.fillRect(tx - 1.5, base - 56, 3, 56); }
-  }
   g.fillStyle = '#7fb0ff'; g.fillRect(cx - 1.5, base - 62, 3, 70);
+  if (target !== null && mode === 'glide') {
+    // Etiqueta do destino: o número para onde a régua vai, presa à borda se estiver fora da tela.
+    const tx = cx + (target - pos) * SP, dir = target > pos ? 1 : -1;
+    const label = (dir > 0 ? '→ ' : '← ') + fmt(target * step);
+    g.font = '600 13px ui-monospace, "SF Mono", monospace';
+    const lw = g.measureText(label).width + 18, lh = 24;
+    const px = Math.min(W - lw / 2 - 8, Math.max(lw / 2 + 8, tx)), py = 8;
+    g.fillStyle = '#7fb0ff'; g.beginPath(); g.roundRect ? g.roundRect(px - lw / 2, py, lw, lh, 12) : g.rect(px - lw / 2, py, lw, lh); g.fill();
+    g.fillStyle = '#0b1a33'; g.textAlign = 'center'; g.fillText(label, px, py + 16.5);
+    if (tx > 0 && tx < W) { g.fillStyle = 'rgba(127,176,255,.55)'; g.fillRect(tx - 1, py + lh, 2, base - py - lh); }
+  }
   const v = Math.min(MAX, Math.max(MIN, pos * step));
   renderDRO(v, dragging || mode === 'glide');
 }
@@ -253,9 +273,9 @@ document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === 
 function summary() {
   const avg = frames.length ? frames.reduce((a, b) => a + b, 0) / frames.length : 0;
   $('#out').value = [
-    'RLight · spike S3 · rodada 4 (régua com inércia)',
+    'RLight · spike S3 · rodada 5 (régua: destino exato, etiqueta, cliques adaptativos)',
     `sistema: ${isIOS ? 'iOS ' + (safariVer || '?') : /Android/.test(ua) ? 'Android' : 'outro'}`,
-    `tela: ${avg ? Math.round(1000 / avg) + ' Hz' : '?'}, quadros lentos durante gestos: ${slow}`,
+    `tela: ${avg ? Math.round(1000 / avg) + ' Hz' : '?'}, quadros lentos durante gestos: ${slow} de ${gestureFrames} (${gestureFrames ? (100 * slow / gestureFrames).toFixed(1) : 0} %)`,
     `passo: ${String(step).replace('.', ',')} mm, som: ${sound ? 'sim' : 'não'}`,
     ...Object.entries(results).map(([k, v]) => `${k}: ${v.replace('nao', 'não').replace('_', ' ')}`),
   ].join('\n');
