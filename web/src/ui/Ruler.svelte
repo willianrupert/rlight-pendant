@@ -1,12 +1,14 @@
 <script lang="ts">
-  // A régua (ADR-0010) com as três pílulas de passo. O gesto e o desenho moram
-  // em lib/ruler-view.ts; aqui só a casca e as pílulas.
+  // A régua (ADR-0010) com o seletor de passo. O gesto e o desenho moram em
+  // lib/ruler-view.ts; aqui só a casca.
   import { onDestroy, onMount } from 'svelte';
-  import { stepOptions, type Axis, type AxisLimits } from '@rlight/core';
+  import type { Axis, AxisLimits } from '@rlight/core';
   import type { CommandRequest } from '../lib/connection';
   import type { Clicker } from '../lib/feel';
   import { formatMm } from '../lib/present';
   import { RulerModel, RulerView } from '../lib/ruler-view';
+  import { DEFAULT_STEP_INDEX, stepLadder } from '../lib/step-dial';
+  import StepDial from './StepDial.svelte';
 
   interface Props {
     axis: Axis;
@@ -18,7 +20,7 @@
   let { axis, minStep, send, clicker }: Props = $props();
 
   const STEP_KEY = 'rlight.step.';
-  const steps = $derived(stepOptions(minStep));
+  const steps = $derived(stepLadder(minStep));
   let step = $state(0.1);
   let canvas: HTMLCanvasElement;
   let view: RulerView | null = null;
@@ -36,7 +38,7 @@
     } catch {
       /* sem armazenamento */
     }
-    return options[1]!;
+    return options[DEFAULT_STEP_INDEX]!;
   }
 
   function choose(s: number) {
@@ -72,8 +74,11 @@
     canGlide: boolean;
     /** Z0 da peça em coordenada de máquina, só na régua do Z. */
     barrier: number | null;
+    /** A máquina anda: um toque na régua é o Parar. */
+    moving: boolean;
     now: number;
   }): void {
+    model.machineMoving = input.moving;
     model.reported = input.reported;
     model.barrier = input.barrier;
     model.limits = input.limits;
@@ -111,13 +116,7 @@
 <section class="ruler-box" aria-label="Régua de ajuste fino do {axis.toUpperCase()}">
   <div class="top">
     <span class="axis">{axis.toUpperCase()}</span>
-    <div class="pills" role="radiogroup" aria-label="Passo">
-      {#each steps as s (s)}
-        <button role="radio" aria-checked={s === step} class:on={s === step} onclick={() => choose(s)}>
-          {String(s).replace('.', ',')}
-        </button>
-      {/each}
-    </div>
+    <StepDial {steps} index={Math.max(0, steps.indexOf(step))} {clicker} onchange={(i) => choose(steps[i]!)} />
     <span class="unit">mm por traço</span>
   </div>
   <canvas bind:this={canvas} class="ruler" aria-hidden="true"></canvas>
@@ -129,19 +128,6 @@
   .top { display: flex; align-items: center; gap: 10px; }
   .axis { font: 700 17px var(--sans); color: var(--acc); width: 22px; }
   .unit { font-size: 11px; color: var(--fg-3); margin-left: auto; }
-  .pills { display: flex; background: var(--panel); border-radius: 14px; padding: 3px; gap: 3px; }
-  .pills button {
-    border: 0;
-    background: transparent;
-    color: var(--fg-2);
-    font: 600 15px var(--mono);
-    min-width: 60px;
-    min-height: 44px;
-    border-radius: 11px;
-    cursor: pointer;
-    touch-action: manipulation;
-  }
-  .pills button.on { background: var(--line-2); color: var(--fg); }
   .ruler {
     display: block;
     width: 100%;

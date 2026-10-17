@@ -3,13 +3,15 @@
   // Com o controle, aparecem o mapa, a régua e as ações que o estado permite
   // (a policy do core decide, a mesma do servidor). Sem sinal, os controles saem.
   import { onDestroy, onMount } from 'svelte';
-  import { allowed, type Axis, type Command, type MachineProfile } from '@rlight/core';
+  import { fade } from 'svelte/transition';
+  import { allowed, type Axis, type Command, type MachineProfile, type MachineState } from '@rlight/core';
   import { Connection, serverUrl, type CommandName, type CommandRequest, type ServerState } from './lib/connection';
-  import { PENDING_LABELS, PendingTracker, UNDO_WINDOW_MS, UndoWindow, canTakeControl, controlsVisible, machineActions } from './lib/control';
+  import { PENDING_LABELS, PendingTracker, UNDO_WINDOW_MS, UndoWindow, barSlots, canTakeControl, controlsVisible, type Slot } from './lib/control';
   import { Telemetry } from './lib/dro';
-  import { Clicker } from './lib/feel';
+  import { Clicker, prefersReducedMotion } from './lib/feel';
   import { HOLD_MS, holdProgress, idleHold, pressHold, type Hold } from './lib/hold';
   import type { TableLimits } from './lib/map-view';
+  import { Presence } from './lib/presence';
   import { formatFeed, formatRpm, linkLine, presentState } from './lib/present';
   import HoldButton from './ui/HoldButton.svelte';
   import Ruler from './ui/Ruler.svelte';
@@ -21,6 +23,8 @@
   const clicker = new Clicker();
   const tracker = new PendingTracker();
   const undo = new UndoWindow();
+  const presence = new Presence();
+  const fadeMs = prefersReducedMotion() ? 0 : 180;
   const axes: Axis[] = ['x', 'y', 'z'];
   const roots: Partial<Record<Axis, HTMLElement>> = {};
   const rows: Partial<Record<Axis, HTMLElement>> = {};
@@ -39,6 +43,10 @@
   let sound = $state(clicker.sound);
   let ruler: ReturnType<typeof Ruler> | null = $state(null);
   let map: ReturnType<typeof TableMap> | null = $state(null);
+  /** O estado que a tela mostra: o real, com histerese entre repouso e movimento. */
+  let shown = $state<MachineState | null>(null);
+  /** Um movimento pelo mapa em andamento: só ele transforma o mapa em Parar. */
+  let mapMoveAt = $state<number | null>(null);
 
   const machine = $derived(st?.machine ?? null);
   const link = $derived(conn.link(now));
@@ -46,7 +54,7 @@
   const inControl = $derived(st?.control.inControl ?? false);
   const homed = $derived(st?.homed ?? false);
   const usingWork = $derived(!!machine?.wco);
-  const pres = $derived(presentState({ state: machine?.state ?? null, homed, alarmCode: conn.alarmCode }));
+  const pres = $derived(presentState({ state: shown, homed, alarmCode: conn.alarmCode }));
   const line = $derived(linkLine(link));
   const axisNames = $derived(axes.filter((a) => !profile || profile.axes[a]));
   const ov = $derived(machine?.overrides ?? null);
@@ -56,18 +64,20 @@
   const otherControls = $derived(!inControl && (st?.control.controlled ?? false));
   const ctx = $derived({ link: link.mode, inControl, homed, canHome: profile?.canHome ?? true });
   const may = (c: Command) => !!machine && allowed(c, machine.state, ctx).ok;
+  // O que aparece segue o estado mostrado, para a tela não piscar a cada nudge.
+  const shows = (c: Command) => !!shown && allowed(c, shown, ctx).ok;
 
   const table = $derived<TableLimits | null>(limits.x && limits.y ? { x: limits.x, y: limits.y } : null);
-  const showMap = $derived(hands && !!table && !!machine && ['Idle', 'Jog'].includes(machine.state));
-  const ghost = $derived(hands && may('jogTo') && machine?.state === 'Idle');
-  const mapStop = $derived(hands && machine?.state === 'Jog');
-  const showRuler = $derived(hands && may('nudge') && axisNames.includes(axis));
-  const canZero = $derived(hands && may('zero'));
-  const actions = $derived.by(() => {
-    if (!hands || !machine) return [];
-    void pendingRev;
-    return machineActions(machine.state, ctx).filter((a) => !(a.command === 'cancelJog' && showMap));
-  });
+  const showMap = $derived(hands && !!table && !!shown && ['Idle', 'Jog'].includes(shown));
+  const ghost = $derived(hands && shows('jogTo') && shown === 'Idle');
+  // O Parar grande do mapa é só para o movimento que o mapa mandou; na régua, a régua é o Parar.
+  const mapStop = $derived(hands && mapMoveAt !== null && machine?.state === 'Jog');
+  const showRuler = $derived(hands && shows('nudge') && axisNames.includes(axis));
+  const canZero = $derived(hands && shows('zero'));
+  const slots = $derived<[Slot, Slot, Slot]>(
+    hands && shown ? barSlots(shown, { ...ctx, hasSpindle: !!profile?.spindle }) : [null, null, null],
+  );
+  const slotKey = (x: Slot) => (x === null ? 'empty' : x.kind === 'action' ? x.command : x.kind);
   const pending = (c: CommandName) => {
     void pendingRev;
     return tracker.has(c) ? (PENDING_LABELS[c] ?? 'Enviando…') : null;
@@ -113,6 +123,7 @@
       reported: m.mpos[axis],
       // Parada, a máquina está onde diz; movendo, a régua segue o alvo comandado.
       commanded: m.state === 'Idle' ? null : (st?.commanded[axis] ?? null),
+      moving: m.state === 'Jog',
       limits: conn.limits[axis] ?? null,
       offset: m.wco?.[axis] ?? 0,
       canGlide: st?.homed ?? false,
@@ -179,6 +190,9 @@
     conn.onState = (s, at) => {
       st = s;
       const m = s.machine;
+      shown = presence.update(m?.state ?? null, at);
+      // O movimento do mapa acabou quando a máquina para (ou nunca chegou a andar).
+      if (mapMoveAt !== null && m?.state !== 'Jog' && at - mapMoveAt > 1_000) mapMoveAt = null;
       const pos = m?.wco ? m.wpos : m?.mpos;
       if (pos) telemetry.push(pos, at);
       if (m?.mpos) map?.push(m.mpos, at);
@@ -206,6 +220,7 @@
       if (outcome) pendingRev++;
       if (!result.ok) {
         flash(result.reason);
+        if (command === 'jogTo') mapMoveAt = null;
         if (MOVES.has(command)) ruler?.abort();
         return;
       }
@@ -226,6 +241,7 @@
     telemetry.start();
     tick = setInterval(() => {
       now = performance.now();
+      shown = presence.update(st?.machine?.state ?? null, now);
       if (notice && now > notice.until) notice = null;
       if (tracker.items.length) {
         for (const o of tracker.expire(now)) flash(o.reason);
@@ -295,6 +311,7 @@
       zZero={machine?.wco ? machine.wco.z : null}
       onjog={(p) => {
         clicker.play('confirm');
+        mapMoveAt = performance.now();
         send({ command: 'jogTo', x: p.x, y: p.y });
       }}
       onstop={() => send({ command: 'cancelJog' })}
@@ -360,41 +377,36 @@
   {/if}
 
   {#if hands}
+    <!-- Três lugares fixos: o conteúdo troca dentro do lugar, nada se mexe. -->
     <section class="bar" aria-label="Ações">
-      {#if (profile?.spindle && (may('spindleOn') || may('spindleOff') || may('spindleSpeed'))) || (machine && machine.spindle > 0)}
-        <button class="chip" class:on={!!machine && machine.spindle > 0} disabled={!profile?.spindle} onclick={() => (sheet = true)} aria-label="Spindle">
-          <small>Spindle{#if ov && ov.spindle !== 100} · {ov.spindle} %{/if}</small>
-          <span>{spindlePending ?? (machine && machine.spindle > 0 ? `${formatRpm(machine.spindle)} rpm` : 'Parado')}</span>
-        </button>
-      {/if}
-      {#each actions.filter((x) => x.command !== 'softReset') as a (a.command)}
-        <HoldButton
-          label={a.label}
-          hold={a.hold}
-          tone={a.primary ? 'primary' : 'normal'}
-          pending={pending(a.command)}
-          onpress={() => clicker.wake()}
-          onfire={() => {
-            if (a.hold) clicker.play('confirm');
-            send({ command: a.command });
-          }}
-        />
-      {/each}
-      {#if canZero}
-        <HoldButton label="Zerar todos" hold tone="quiet" onfire={() => zero('all')} />
-      {/if}
-      {#each actions.filter((x) => x.command === 'softReset') as a (a.command)}
-        <span class="gap"></span>
-        <HoldButton
-          label={a.label}
-          hold
-          tone="danger"
-          pending={pending(a.command)}
-          onfire={() => {
-            clicker.play('confirm');
-            send({ command: a.command });
-          }}
-        />
+      {#each slots as slot, i (i)}
+        <div class="slot">
+          {#key slotKey(slot)}
+            <div class="cell" in:fade={{ duration: fadeMs }} out:fade={{ duration: fadeMs }}>
+              {#if slot?.kind === 'spindle'}
+                <button class="chip" class:on={!!machine && machine.spindle > 0} disabled={!(may('spindleOn') || may('spindleOff') || may('spindleSpeed'))} onclick={() => (sheet = true)} aria-label="Spindle">
+                  <small>Spindle{#if ov && ov.spindle !== 100} · {ov.spindle} %{/if}</small>
+                  <span>{spindlePending ?? (machine && machine.spindle > 0 ? `${formatRpm(machine.spindle)} rpm` : 'Parado')}</span>
+                </button>
+              {:else if slot?.kind === 'zeroAll'}
+                <HoldButton label="Zerar todos" hold tone="quiet" onfire={() => zero('all')} />
+              {:else if slot?.kind === 'action'}
+                {@const a = slot}
+                <HoldButton
+                  label={a.label}
+                  hold={a.hold}
+                  tone={a.tone}
+                  pending={pending(a.command)}
+                  onpress={() => clicker.wake()}
+                  onfire={() => {
+                    if (a.hold) clicker.play('confirm');
+                    send({ command: a.command });
+                  }}
+                />
+              {/if}
+            </div>
+          {/key}
+        </div>
       {/each}
     </section>
   {/if}
@@ -529,11 +541,10 @@
   .chip.on span { color: var(--acc); font-family: var(--mono); }
   .chip:disabled { cursor: default; }
 
-  .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
-  .bar > :global(button) { flex: 1 1 0; min-width: 96px; }
-  /* A ação principal do estado tem a linha inteira; Resetar fica longe dela. */
-  .bar > :global(button.primary) { flex-basis: 100%; order: -1; }
-  .bar .gap { flex: 0 0 18px; }
+  .bar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; height: 60px; }
+  .slot { display: grid; min-width: 0; }
+  .cell { grid-area: 1 / 1; display: grid; min-width: 0; }
+  .cell > :global(button) { width: 100%; height: 60px; min-width: 0; padding: 0 8px; font-size: 16px; }
 
   footer { margin-top: auto; display: flex; flex-direction: column; align-items: center; gap: 8px; min-height: 44px; }
   main.hands footer { min-height: 0; }
