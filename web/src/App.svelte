@@ -70,12 +70,13 @@
   const table = $derived<TableLimits | null>(limits.x && limits.y ? { x: limits.x, y: limits.y } : null);
   const showMap = $derived(hands && !!table && !!shown && ['Idle', 'Jog'].includes(shown));
   const ghost = $derived(hands && shows('jogTo') && shown === 'Idle');
-  // O Parar grande do mapa é só para o movimento que o mapa mandou; na régua, a régua é o Parar.
-  const mapStop = $derived(hands && mapMoveAt !== null && machine?.state === 'Jog');
+  // Depois de um movimento pelo mapa (longo, de propósito), a barra mostra o Parar
+  // na hora, sem esperar a histerese; o mapa fica limpo, sem overlay.
+  const barState = $derived(mapMoveAt !== null && machine?.state === 'Jog' ? 'Jog' : shown);
   const showRuler = $derived(hands && shows('nudge') && axisNames.includes(axis));
   const canZero = $derived(hands && shows('zero'));
   const slots = $derived<[Slot, Slot, Slot]>(
-    hands && shown ? barSlots(shown, { ...ctx, hasSpindle: !!profile?.spindle }) : [null, null, null],
+    hands && barState ? barSlots(barState, { ...ctx, hasSpindle: !!profile?.spindle }) : [null, null, null],
   );
   const slotKey = (x: Slot) => (x === null ? 'empty' : x.kind === 'action' ? x.command : x.kind);
   const pending = (c: CommandName) => {
@@ -314,8 +315,7 @@
       bind:this={map}
       limits={table}
       {ghost}
-      stop={mapStop}
-      stopPending={!!pending('cancelJog')}
+      moving={machine?.state === 'Jog'}
       frozen={!live}
       {offset}
       needsHoming={hands && !homed && shown === 'Idle' && shows('home')}
@@ -333,7 +333,6 @@
         mapMoveAt = performance.now();
         send({ command: 'jogTo', x: p.x, y: p.y });
       }}
-      onstop={() => send({ command: 'cancelJog' })}
       ongrab={() => clicker.wake()}
     />
   {/if}

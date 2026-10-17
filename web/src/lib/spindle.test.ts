@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DIAL_SWEEP_DEG, angleFromRpm, dialAngle, ringFill, rpmFromAngle, snapRpm, thousandsCrossed } from './spindle';
+import { DIAL_SWEEP_DEG, angleFromRpm, dialAngle, ringFill, rpmFromAngle, snapRpm, spindleButtons, thousandsCrossed } from './spindle';
 
 const r = { min: 3_000, max: 24_000 };
 
@@ -39,5 +39,27 @@ describe('o anel', () => {
 
   it('sem estimativa, a confirmação enche tudo', () => {
     expect(ringFill({ holdProgress: 0.5, spinupStartedAt: null, now: 0, spinupMs: 0, running: false }).fill).toBe(0.5);
+  });
+});
+
+describe('os botões da folha', () => {
+  it('parado segundo a placa: ligar em destaque, desligar discreto mas presente, e a linha honesta', () => {
+    expect(spindleButtons({ reportedRpm: 0, spinningUp: false, pending: null })).toEqual({
+      start: true,
+      stop: 'secondary',
+      idleNote: 'A placa não está mandando o spindle girar.',
+    });
+  });
+
+  it('girando: desligar em destaque, sem ligar', () => {
+    expect(spindleButtons({ reportedRpm: 12_000, spinningUp: false, pending: null })).toEqual({ start: false, stop: 'primary', idleNote: null });
+  });
+
+  it('acelerando depois de segurar: desligar em destaque, mesmo antes da placa confirmar', () => {
+    expect(spindleButtons({ reportedRpm: 0, spinningUp: true, pending: 'Ligando…' })).toMatchObject({ start: false, stop: 'primary' });
+  });
+
+  it('com um comando pendente, a linha honesta espera', () => {
+    expect(spindleButtons({ reportedRpm: 0, spinningUp: false, pending: 'Desligando…' }).idleNote).toBeNull();
   });
 });

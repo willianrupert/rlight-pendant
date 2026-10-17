@@ -7,7 +7,7 @@
   import type { Clicker } from '../lib/feel';
   import { HOLD_MS, holdProgress, idleHold, pressHold } from '../lib/hold';
   import { formatRpm } from '../lib/present';
-  import { DIAL_SWEEP_DEG, angleFromRpm, dialAngle, ringFill, rpmFromAngle, snapRpm, thousandsCrossed } from '../lib/spindle';
+  import { DIAL_SWEEP_DEG, angleFromRpm, dialAngle, ringFill, rpmFromAngle, snapRpm, spindleButtons, thousandsCrossed } from '../lib/spindle';
 
   interface Props {
     spindle: SpindleProfile;
@@ -124,6 +124,7 @@
 
   const ring = $derived(ringFill({ holdProgress: holdP, spinupStartedAt: spinupAt, now, spinupMs: spindle.spinupMs, running }));
   const spinningUp = $derived(ring.phase === 'spinup');
+  const buttons = $derived(spindleButtons({ reportedRpm: reported, spinningUp: spinupAt !== null && (spinningUp || !!pending), pending }));
 
   // Geometria do arco: 270°, começando embaixo à esquerda.
   const R = 120;
@@ -194,12 +195,9 @@
     </text>
   </svg>
 
+  {#if buttons.idleNote}<p class="honest">{buttons.idleNote}</p>{/if}
   <div class="actions">
-    {#if running || (spinupAt !== null && pending)}
-      <button class="big" onclick={onstop} disabled={!canStop || pending === 'Desligando…'}>
-        {pending === 'Desligando…' ? 'Desligando…' : 'Desligar'}
-      </button>
-    {:else}
+    {#if buttons.start}
       <button
         class="big on"
         style:--p={ring.phase === 'confirming' ? holdP : 0}
@@ -211,9 +209,18 @@
         aria-label="Ligar a {formatRpm(rpm)} rpm, segure para confirmar"
       >
         <span class="fill" aria-hidden="true"></span>
-        <span class="t">{pending ?? `Segure para ligar`}</span>
+        <span class="t">{pending && pending !== 'Desligando…' ? pending : 'Segure para ligar'}</span>
       </button>
     {/if}
+    <!-- Desligar sempre existe: M5 nunca faz mal, e o motor pode girar com a placa dizendo que não. -->
+    <button
+      class="big off"
+      class:secondary={buttons.stop === 'secondary'}
+      onclick={onstop}
+      disabled={!canStop || pending === 'Desligando…'}
+    >
+      {pending === 'Desligando…' ? 'Desligando…' : 'Desligar'}
+    </button>
   </div>
   {#if spindle.spinupMs > 0}
     <p class="note">O anel continua durante a aceleração do inversor: {Math.round(spindle.spinupMs / 100) / 10} s, pelo perfil da máquina.</p>
@@ -251,7 +258,8 @@
   .rpm { font: 600 44px var(--mono); fill: var(--fg); text-anchor: middle; dominant-baseline: middle; font-variant-numeric: tabular-nums; }
   .unit { font: 500 15px var(--sans); fill: var(--fg-3); text-anchor: middle; }
   .now { font: 500 14px var(--sans); fill: var(--fg-2); text-anchor: middle; }
-  .actions { display: flex; }
+  .actions { display: flex; gap: 10px; }
+  .honest { margin: 0; font-size: 13px; color: var(--fg-3); text-align: center; }
   .big {
     --p: 0;
     position: relative;
@@ -270,6 +278,8 @@
     -webkit-touch-callout: none;
   }
   .big.on { background: var(--acc); color: var(--acc-ink); }
+  /* Discreto quando a placa diz que está parado; em destaque quando gira. */
+  .big.off.secondary { flex: 0 0 auto; padding: 0 22px; background: transparent; color: var(--fg-2); border: 1px solid var(--line-2); }
   .big:disabled { opacity: 0.45; }
   .big .fill { position: absolute; inset: 0; background: currentColor; opacity: 0.2; transform-origin: left; transform: scaleX(var(--p)); }
   .big .t { position: relative; }

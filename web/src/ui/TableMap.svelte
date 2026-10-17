@@ -1,7 +1,7 @@
 <script lang="ts">
   // ONDE: a mesa vista de cima (VISION.md). Com homing e o controle, arrasta-se
-  // o fantasma e solta-se (vai direto), ou toca-se na mesa e confirma no "Ir";
-  // movendo pelo mapa, o mapa inteiro vira Parar.
+  // o fantasma e solta-se (vai direto), ou toca-se na mesa e confirma no "Ir".
+  // Movendo, o mapa fica limpo e não aceita gestos: o Parar é o da barra.
   import { onDestroy, onMount } from 'svelte';
   import type { AxisLimits, MachineState, Vec3 } from '@rlight/core';
   import { MapView, destinationText, mapPad, type Point, type TableLimits } from '../lib/map-view';
@@ -11,9 +11,8 @@
     limits: TableLimits;
     /** Pode arrastar o fantasma agora. */
     ghost: boolean;
-    /** A máquina se move por um comando desta tela: o mapa é o botão Parar. */
-    stop: boolean;
-    stopPending: boolean;
+    /** A máquina está andando: o mapa só mostra, nenhum gesto vale. */
+    moving: boolean;
     frozen: boolean;
     offset: Point;
     /** Sem homing (e sem alarme): o mapa pede o homing, com o botão ali mesmo. */
@@ -26,12 +25,11 @@
     zLimits: AxisLimits | null;
     zZero: number | null;
     onjog: (p: Point) => void;
-    onstop: () => void;
     ongrab: () => void;
     onhome: () => void;
   }
 
-  let { limits, ghost, stop, stopPending, frozen, offset, needsHoming, homingPending, machineState, feed, zLimits, zZero, onjog, onstop, ongrab, onhome }: Props = $props();
+  let { limits, ghost, moving, frozen, offset, needsHoming, homingPending, machineState, feed, zLimits, zZero, onjog, ongrab, onhome }: Props = $props();
   let gauge: HTMLElement;
 
   let svg: SVGSVGElement;
@@ -69,7 +67,7 @@
 
   $effect(() => {
     if (!view) return;
-    view.enabled = ghost && !stop;
+    view.enabled = ghost && !moving;
     view.frozen = frozen;
     if (!view.enabled) {
       view.model.cancel();
@@ -104,17 +102,12 @@
   const aspect = $derived((limits.x.max - limits.x.min + 2 * mapPad(limits)) / Math.max(1, limits.y.max - limits.y.min + 2 * mapPad(limits)));
 </script>
 
-<section class="map" class:active={ghost && !stop} aria-label="A mesa vista de cima">
+<section class="map" class:active={ghost && !moving} aria-label="A mesa vista de cima">
   <div class="row">
     <svg bind:this={svg} style:aspect-ratio={aspect} role="img" aria-label="Posição na mesa"></svg>
     <div class="zgauge" bind:this={gauge} aria-hidden="true"><span class="zlabel">Z</span></div>
   </div>
-  {#if stop}
-    <button class="stop" onclick={onstop} disabled={stopPending} aria-label="Parar o movimento">
-      <span>{stopPending ? 'Parando…' : 'Parar'}</span>
-    </button>
-  {/if}
-  {#if pill && preview && !stop}
+  {#if pill && preview && !moving}
     <!-- Um toque na mesa só prepara: quem move é o "Ir". -->
     <button
       class="go"
@@ -124,12 +117,12 @@
       aria-label="Ir até {destinationText(preview, offset)}">Ir</button
     >
   {/if}
-  {#if needsHoming && !stop}
+  {#if needsHoming && !moving}
     <div class="homing">
       <p>Faça o homing para mover pelo mapa</p>
       <HoldButton label="Homing" hold tone="primary" pending={homingPending} onfire={onhome} />
     </div>
-  {:else if !stop && (dest || preview || ghost)}
+  {:else if !moving && (dest || preview || ghost)}
     <p class="caption" class:dest={!!(dest || preview)}>
       {#if dest || preview}
         {destinationText((dest ?? preview)!, offset)}
@@ -169,20 +162,6 @@
   .map.active :global(.halo) { opacity: 0.22; }
   .map :global(.ghost circle) { fill: none; stroke: var(--acc); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
   .map :global(.path) { stroke: var(--acc); stroke-width: 2; stroke-dasharray: 4 5; vector-effect: non-scaling-stroke; opacity: 0.8; }
-  .stop {
-    position: absolute;
-    inset: 0 0 auto 0;
-    height: 100%;
-    border: 0;
-    border-radius: 18px;
-    /* Leve, sem desfoque: o ponto andando e a velocidade continuam à vista. */
-    background: rgba(10, 26, 51, 0.28);
-    color: var(--fg);
-    font: 700 28px var(--sans);
-    cursor: pointer;
-    touch-action: manipulation;
-  }
-  .stop span { padding: 14px 30px; border-radius: 999px; background: var(--fg); color: var(--moving); }
   /* A legenda mora dentro do mapa, embaixo: não empurra a tela. */
   .caption {
     position: absolute; left: 0; right: 34px; bottom: 8px; margin: 0; pointer-events: none;

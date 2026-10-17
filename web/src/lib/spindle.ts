@@ -66,3 +66,25 @@ export function ringFill(input: { holdProgress: number; spinupStartedAt: number 
   if (input.holdProgress > 0) return { fill: share * input.holdProgress, phase: 'confirming' };
   return { fill: 0, phase: 'idle' };
 }
+
+export interface SpindleButtons {
+  /** Segurar para ligar: só com o spindle parado segundo a placa. */
+  start: boolean;
+  /**
+   * Desligar existe sempre: mandar M5 nunca faz mal, e o motor pode estar girando
+   * com a placa dizendo que não (visto na máquina real, a 30 Hz com 0 rpm
+   * reportado). Em destaque quando a placa diz que gira; discreto quando não.
+   */
+  stop: 'primary' | 'secondary';
+  /** Uma linha honesta quando a placa não manda girar. */
+  idleNote: string | null;
+}
+
+export function spindleButtons(input: { reportedRpm: number; spinningUp: boolean; pending: string | null }): SpindleButtons {
+  const running = input.reportedRpm > 0 || input.spinningUp;
+  return {
+    start: !running,
+    stop: running ? 'primary' : 'secondary',
+    idleNote: !running && !input.pending ? 'A placa não está mandando o spindle girar.' : null,
+  };
+}
