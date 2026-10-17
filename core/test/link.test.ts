@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { combineLinks, initialLink, onReport, viewLink } from '../src/link';
 
 // ADR-0007: a tela mostra a última coisa que sabemos e há quanto tempo sabemos.
+// Limiar de 2,5 s medido no spike S1: o Wi-Fi da placa tem pausas de até 1,6 s
+// (reenvio do TCP) que não são quedas.
 
 describe('viewLink', () => {
   it('nunca conectado é "sem sinal" e sem idade', () => {
@@ -10,20 +12,25 @@ describe('viewLink', () => {
     expect(v.ageMs).toBeNull();
   });
 
-  it('é "ao vivo" enquanto o último relatório tem menos de 1 s', () => {
+  it('é "ao vivo" enquanto o último relatório tem até 2,5 s', () => {
     const s = onReport(initialLink(), 1_000);
     expect(viewLink(s, 1_000).mode).toBe('live');
-    expect(viewLink(s, 1_999).mode).toBe('live');
+    expect(viewLink(s, 3_500).mode).toBe('live');
   });
 
-  it('vira "sem sinal" depois de 1 s sem relatório e informa a idade', () => {
+  it('uma pausa real de reenvio do TCP (1,6 s, medida no S1) não vira "sem sinal"', () => {
+    const s = onReport(initialLink(), 1_000);
+    expect(viewLink(s, 2_567).mode).toBe('live');
+  });
+
+  it('vira "sem sinal" depois de 2,5 s sem relatório e informa a idade', () => {
     const s = onReport(initialLink(), 1_000);
     const v = viewLink(s, 5_200);
     expect(v.mode).toBe('no-signal');
     expect(v.ageMs).toBe(4_200);
   });
 
-  it('o limite de 1 s é configurável', () => {
+  it('o limite é configurável', () => {
     const s = onReport(initialLink(), 0);
     expect(viewLink(s, 400, { staleAfterMs: 300, backNoticeMs: 1_500 }).mode).toBe('no-signal');
   });
@@ -52,8 +59,8 @@ describe('aviso de "de volta"', () => {
   it('o aviso some na hora se o sinal cair de novo', () => {
     let s = onReport(initialLink(), 1_000);
     s = onReport(s, 4_000);
-    expect(viewLink(s, 5_100).mode).toBe('no-signal');
-    expect(viewLink(s, 5_100).showBack).toBe(false);
+    expect(viewLink(s, 7_000).mode).toBe('no-signal');
+    expect(viewLink(s, 7_000).showBack).toBe(false);
   });
 });
 

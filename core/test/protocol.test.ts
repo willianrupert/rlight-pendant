@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import preamble from './fixtures/fluidnc-3.9.9/preamble.txt?raw';
 import statusAlarm from './fixtures/fluidnc-3.9.9/status-alarm.txt?raw';
+import statusHome from './fixtures/fluidnc-3.9.9/status-home.txt?raw';
+import statusJog from './fixtures/fluidnc-3.9.9/status-jog.txt?raw';
 import { applyReport, parseLine, parseStatus } from '../src/protocol';
 
 const lines = (s: string) => s.split('\n').filter(Boolean);
@@ -26,6 +28,25 @@ describe('relatório de estado: tráfego real', () => {
   it('o relatório com o offset da peça, que vem de tempos em tempos', () => {
     const r = parseStatus('<Alarm|MPos:0.000,0.000,0.000|FS:0,0|WCO:0.000,0.000,0.000>');
     expect(r?.wco).toEqual({ x: 0, y: 0, z: 0 });
+  });
+});
+
+describe('relatório de estado: homing e jog reais', () => {
+  it('o homing traz o estado Home, a velocidade de busca e o pino do fim de curso', () => {
+    const reports = lines(statusHome).map((l) => parseStatus(l));
+    expect(reports.every((r) => r !== null)).toBe(true);
+    expect(reports.some((r) => r!.state === 'Home')).toBe(true);
+    expect(reports.some((r) => r!.pins === 'X')).toBe(true);
+  });
+
+  it('um jog real do Z: posição descendo, avanço reportado e volta a Idle', () => {
+    const reports = lines(statusJog).map((l) => parseStatus(l)!);
+    const jog = reports.filter((r) => r.state === 'Jog');
+    expect(jog.length).toBeGreaterThan(50);
+    expect(jog.some((r) => r.feed === 100)).toBe(true);
+    const zs = jog.map((r) => r.mpos!.z);
+    for (let i = 1; i < zs.length; i++) expect(zs[i]!).toBeLessThanOrEqual(zs[i - 1]!);
+    expect(reports[reports.length - 1]!.state).toBe('Idle');
   });
 });
 

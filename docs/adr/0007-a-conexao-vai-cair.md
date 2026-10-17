@@ -34,11 +34,18 @@ Cada dado na tela carrega uma idade. A interface tem só dois modos:
 
 | Modo | Quando | Como aparece |
 |---|---|---|
-| **Ao vivo** | Último relatório tem menos de 1 s | Normal. **Nada indica que está tudo bem**, porque normal não precisa de aviso |
-| **Sem sinal** | Mais de 1 s sem relatório, em qualquer trecho | Os números esmaecem e param. Uma linha discreta: "Sem sinal da máquina · há 4 s". Os comandos somem |
+| **Ao vivo** | Último relatório tem até 2,5 s | Normal. **Nada indica que está tudo bem**, porque normal não precisa de aviso |
+| **Sem sinal** | Mais de 2,5 s sem relatório, em qualquer trecho | Os números esmaecem e param. Uma linha discreta: "Sem sinal da máquina · há 4 s". Os comandos somem |
 
 Ao voltar, a linha diz "De volta" por um instante e some. Os números voltam a
 ficar nítidos já com os valores atuais.
+
+**Por que 2,5 s, e não 1 s** (spike S1, 2026-10-17, uma hora na placa de
+referência): o Wi-Fi da placa perde um pacote de vez em quando (0,11 % dos
+pings, contra 0,01 % do roteador), e cada perda vira uma pausa de 1,1 a 1,6 s
+enquanto o TCP reenvia. Foram 4,7 pausas por hora com a WebUI fechada e 27,6 com
+ela aberta, nenhuma acima de 1,6 s e nenhuma desconexão. Com 1 s, a tela piscaria
+"sem sinal" a cada pausa dessas. Com 2,5 s, só uma queda de verdade aparece.
 
 **Um indicador, não três.** O operador não precisa saber qual trecho caiu para
 agir certo. Quem quiser saber toca na linha e vê a corrente:

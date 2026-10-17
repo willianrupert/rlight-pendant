@@ -109,16 +109,30 @@ describe('Board: queda e reconexão (ADR-0007)', () => {
     await until(() => board.isConnected);
   });
 
-  it('uma pausa curta da placa não derruba a conexão; só fica sem sinal', async () => {
-    await setup({ deadAfterMs: 3_000 });
+  it('uma pausa do tamanho das reais (1,6 s, spike S1) não vira "sem sinal"', async () => {
+    await setup();
     await until(() => board.view().mode === 'live');
-    fake.freeze(1_300);
-    await until(() => board.view().mode === 'no-signal', { what: 'sem sinal durante a pausa' });
+    fake.freeze(1_600);
+    const seen = new Set<string>();
+    const t0 = Date.now();
+    while (Date.now() - t0 < 2_200) {
+      seen.add(board.view().mode);
+      await sleep(50);
+    }
+    expect([...seen]).toEqual(['live']);
+    expect(board.sessions).toBe(1);
+  });
+
+  it('uma pausa longa fica "sem sinal" sem derrubar a conexão, e volta sozinha', async () => {
+    await setup({ deadAfterMs: 6_000 });
+    await until(() => board.view().mode === 'live');
+    fake.freeze(3_200);
+    await until(() => board.view().mode === 'no-signal', { what: 'sem sinal durante a pausa', timeoutMs: 4_000 });
     expect(board.isConnected).toBe(true);
-    await until(() => board.view().mode === 'live', { what: 'de volta depois da pausa' });
+    await until(() => board.view().mode === 'live', { what: 'de volta depois da pausa', timeoutMs: 4_000 });
     expect(board.sessions).toBe(1);
     expect(board.view().showBack).toBe(true);
-  });
+  }, 15_000);
 
   it('uma placa muda por tempo demais é dada como morta e reconectada', async () => {
     await setup({ deadAfterMs: 200 });

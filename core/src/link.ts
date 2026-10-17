@@ -10,7 +10,9 @@ export interface LinkConfig {
   backNoticeMs: number;
 }
 
-export const DEFAULT_LINK_CONFIG: LinkConfig = { staleAfterMs: 1_000, backNoticeMs: 1_500 };
+// 2,5 s: medido no spike S1 (2026-10-17). O Wi-Fi da placa perde um pacote de vez
+// em quando e o TCP leva até 1,6 s para reenviar; isso é pausa, não queda.
+export const DEFAULT_LINK_CONFIG: LinkConfig = { staleAfterMs: 2_500, backNoticeMs: 1_500 };
 
 export interface LinkState {
   readonly lastReportAt: number | null;
