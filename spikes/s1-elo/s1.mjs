@@ -124,7 +124,8 @@ function connect() {
     buf += chunk.toString('utf8');
     let i;
     while ((i = buf.search(/\r?\n/)) >= 0) {
-      const line = buf.slice(0, i).trim();
+      // Só o fim da linha é aparado: a saída de $CD é YAML, e a indentação é a estrutura.
+      const line = buf.slice(0, i).replace(/\s+$/, '');
       buf = buf.slice(buf[i] === '\r' ? i + 2 : i + 1);
       if (line) onLine(line);
     }
