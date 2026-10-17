@@ -92,11 +92,23 @@ export class Connection {
   }
 
   takeControl(): boolean {
-    return this.#send({ type: 'takeControl' });
+    return this.#send({ type: 'takeControl', token: this.#token });
   }
 
   releaseControl(): boolean {
+    this.#hadControl = false;
     return this.#send({ type: 'releaseControl' });
+  }
+
+  // Uma queda curta não tira o controle (server/src/control.ts): a aba guarda um
+  // token só dela e, se tinha o controle, pede para retomá-lo ao reconectar.
+  #token = tabToken();
+  #resuming = false;
+  get #hadControl(): boolean {
+    return session('rlight.hadControl') === '1';
+  }
+  set #hadControl(v: boolean) {
+    session('rlight.hadControl', v ? '1' : '');
   }
 
   /**
@@ -139,6 +151,7 @@ export class Connection {
     this.#ws = ws;
     ws.onopen = () => {
       this.#attempt = 0;
+      if (this.#hadControl) this.#resuming = this.#send({ type: 'resumeControl', token: this.#token });
     };
     ws.onmessage = (e) => {
       const now = performance.now();
@@ -151,6 +164,8 @@ export class Connection {
       }
       if (msg.type === 'state') {
         const s = msg as ServerState & { type: 'state' };
+        // Enquanto a resposta do retomar não chega (uma ida e volta), a tela não pisca para "assistir".
+        if (this.#resuming && this.state) s.control = { ...s.control, inControl: this.state.control.inControl };
         this.state = s;
         if (s.machine?.state !== 'Alarm') this.alarmCode = null;
         this.onState?.(s, now);
@@ -163,6 +178,9 @@ export class Connection {
         this.alarmCode = (msg as { code: number }).code;
       } else if (msg.type === 'control') {
         const c = msg as { inControl: boolean; reason?: string };
+        this.#resuming = false;
+        this.#hadControl = c.inControl;
+        if (this.state) this.state = { ...this.state, control: { ...this.state.control, inControl: c.inControl } };
         this.onControl?.(c.inControl, c.reason ?? null);
       } else if (msg.type === 'result') {
         const r = msg as { id?: string; ok: boolean; reason?: string; hitLimit?: boolean; undoable?: boolean };
@@ -188,6 +206,29 @@ export class Connection {
     };
     ws.onerror = () => ws.close();
   }
+}
+
+/** Um token aleatório por aba, que sobrevive a recarregar a página mas não a fechar a aba. */
+function tabToken(): string {
+  const saved = session('rlight.controlToken');
+  if (saved && saved.length >= 16) return saved;
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  const t = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  session('rlight.controlToken', t);
+  return t;
+}
+
+/** sessionStorage com tolerância: sem ele, o controle só não sobrevive a recarregar. */
+function session(key: string, value?: string): string | null {
+  try {
+    if (value === undefined) return sessionStorage.getItem(key);
+    if (value === '') sessionStorage.removeItem(key);
+    else sessionStorage.setItem(key, value);
+  } catch {
+    /* modo privado ou bloqueado */
+  }
+  return null;
 }
 
 /** O servidor mora no mesmo endereço da página, em /ws (proxy em dev, Nginx no Proxmox). */

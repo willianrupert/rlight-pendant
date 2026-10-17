@@ -130,6 +130,19 @@ describe('a régua parada segue a máquina, sem pular de volta', () => {
   });
 });
 
+describe('trocar de eixo', () => {
+  it('a régua recomeça na posição do eixo novo, sem passar pela do antigo', () => {
+    // Antes ela recomeçava no valor do eixo antigo e pulava no relatório seguinte,
+    // e o pulo aparecia como uma faixa azul de movimento que não existia.
+    const { m } = setup();
+    m.setAxis('y', 118.05);
+    expect(m.axis).toBe('y');
+    expect(m.value).toBeCloseTo(118.05, 6);
+    expect(m.reported).toBeCloseTo(118.05, 6);
+    expect(m.destination).toBeNull();
+  });
+});
+
 describe('o elástico na borda do alcance', () => {
   it('com o dedo parado no elástico nada sai; o próximo movimento manda o que a máquina já permite', () => {
     const { m, sent } = setup(1);

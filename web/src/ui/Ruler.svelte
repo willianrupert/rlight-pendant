@@ -15,9 +15,11 @@
     minStep: number;
     send: (req: CommandRequest) => void;
     clicker: Clicker;
+    /** A posição real de um eixo agora, para a régua recomeçar nele ao trocar de eixo. */
+    positionOf: (a: Axis) => number | null;
   }
 
-  let { axis, minStep, send, clicker }: Props = $props();
+  let { axis, minStep, send, clicker, positionOf }: Props = $props();
 
   const STEP_KEY = 'rlight.step.';
   const steps = $derived(stepLadder(minStep));
@@ -61,7 +63,7 @@
     shownAxis = a;
     step = savedStep(a, opts);
     model.step = step;
-    model.setAxis(a, model.reported ?? model.value);
+    model.setAxis(a, positionOf(a) ?? model.value);
     view?.invalidate();
   });
 

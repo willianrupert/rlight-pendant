@@ -23,7 +23,8 @@ export type CommandRequest =
   | { command: 'cancelJog' | 'unlock' | 'home' | 'softReset' | 'feedHold' | 'resume' };
 
 export type ClientMessage =
-  | { type: 'takeControl' }
+  | { type: 'takeControl'; token?: string }
+  | { type: 'resumeControl'; token: string }
   | { type: 'releaseControl' }
   | ({ type: 'command'; id?: string } & CommandRequest);
 
@@ -59,7 +60,11 @@ export function parseClientMessage(raw: string): ClientMessage | { invalid: stri
   }
   if (typeof m !== 'object' || m === null) return { invalid: 'Mensagem precisa ser um objeto' };
   const o = m as Record<string, unknown>;
-  if (o.type === 'takeControl' || o.type === 'releaseControl') return { type: o.type };
+  if (o.type === 'releaseControl') return { type: o.type };
+  // O token é o que identifica a tela para retomar o controle depois de uma queda.
+  const token = typeof o.token === 'string' && o.token.length >= 16 && o.token.length <= 128 ? o.token : undefined;
+  if (o.type === 'takeControl') return token ? { type: o.type, token } : { type: o.type };
+  if (o.type === 'resumeControl') return token ? { type: o.type, token } : { invalid: 'Token inválido' };
   if (o.type !== 'command') return { invalid: `Tipo desconhecido: ${String(o.type)}` };
   if (o.id !== undefined && typeof o.id !== 'string') return { invalid: 'id precisa ser texto' };
   const id = o.id === undefined ? {} : { id: o.id };

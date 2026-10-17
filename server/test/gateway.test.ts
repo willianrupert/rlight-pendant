@@ -150,6 +150,35 @@ describe('gateway: a sessão de controle', () => {
     await until(() => b.state()?.control.controlled === false);
   });
 
+  it('a tela que cai volta com o controle, sem tocar em nada', async () => {
+    await setup();
+    const a = await browser();
+    const watcher = await browser();
+    a.send({ type: 'takeControl', token: 'tok-a-0123456789abcdef' });
+    await until(() => a.of('control')[0]?.inControl);
+    a.ws.terminate();
+    await sleep(100);
+    expect(watcher.state()?.control.controlled).toBe(true); // reservado para a mesma tela
+    const again = await browser();
+    again.send({ type: 'resumeControl', token: 'tok-a-0123456789abcdef' });
+    await until(() => again.of('control')[0]?.inControl);
+    await until(() => live(again.state()) && again.of('profile')[0]);
+    const r = await again.command({ command: 'nudge', axis: 'x', delta: 1 });
+    expect(r).toMatchObject({ ok: true });
+  });
+
+  it('retomar com outro token não dá o controle, e diz que não', async () => {
+    await setup();
+    const a = await browser();
+    a.send({ type: 'takeControl', token: 'tok-a-0123456789abcdef' });
+    await until(() => a.of('control')[0]?.inControl);
+    a.ws.terminate();
+    const b = await browser();
+    b.send({ type: 'resumeControl', token: 'tok-b-0123456789abcdef' });
+    const m = await until(() => b.of('control')[0]);
+    expect(m).toEqual({ type: 'control', inControl: false });
+  });
+
   it('mensagem inválida volta com o motivo', async () => {
     await setup();
     const b = await browser();

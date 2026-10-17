@@ -120,12 +120,21 @@ Para todas as telas, quando a placa manda `ALARM:n`.
 ### Controle
 
 ```json
-{ "type": "takeControl" }
+{ "type": "takeControl", "token": "<16 a 128 caracteres, aleatório, um por aba>" }
+{ "type": "resumeControl", "token": "<o mesmo token>" }
 { "type": "releaseControl" }
 ```
 
 Assumir é sempre explícito e sempre funciona: quem tinha o controle recebe
-`control` com o motivo. Fechar a tela larga o controle.
+`control` com o motivo. `releaseControl` solta de vez.
+
+**Uma queda curta não tira o controle.** Se a conexão de quem tem o controle cai
+(tela apagada, Wi-Fi, reinício do servidor), o controle fica reservado para o
+token dela por 60 s; ninguém comanda nesse meio-tempo, e as outras telas veem
+`controlled: true`. A mesma aba, ao reconectar, manda `resumeControl` e recebe
+`control` com `inControl: true`, ou `false` se a janela passou ou outra tela
+assumiu. A reserva sobrevive a reinícios do servidor (`RLIGHT_STATE_DIR/control.json`).
+Sem `token`, cair solta na hora, como na primeira versão.
 
 ### `command`
 

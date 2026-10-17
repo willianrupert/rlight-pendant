@@ -126,8 +126,10 @@ export class RulerModel {
     this.#rebase(value);
   }
 
+  /** `value` é a posição real do eixo novo: o reportado do antigo não vale mais. */
   setAxis(axis: Axis, value: number): void {
     this.axis = axis;
+    this.reported = value;
     this.#batcher = new NudgeBatcher(axis, this.step);
     this.#expect = null;
     this.#reset(value);

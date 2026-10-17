@@ -4,6 +4,7 @@
 import { join } from 'node:path';
 import { Board } from './board';
 import { Gateway } from './gateway';
+import { fileControlMemory } from './control';
 import { fileHomingMemory } from './homing-memory';
 
 const env = process.env;
@@ -14,7 +15,12 @@ const board = new Board({
 const gateway = new Gateway({
   board,
   // RLIGHT_STATE_DIR: onde o servidor guarda o que precisa sobreviver a reinícios.
-  ...(env.RLIGHT_STATE_DIR ? { homingMemory: fileHomingMemory(join(env.RLIGHT_STATE_DIR, 'homing.json')) } : {}),
+  ...(env.RLIGHT_STATE_DIR
+    ? {
+        homingMemory: fileHomingMemory(join(env.RLIGHT_STATE_DIR, 'homing.json')),
+        controlMemory: fileControlMemory(join(env.RLIGHT_STATE_DIR, 'control.json')),
+      }
+    : {}),
   host: env.RLIGHT_HOST ?? '127.0.0.1',
   port: Number(env.RLIGHT_PORT ?? 8787),
 });

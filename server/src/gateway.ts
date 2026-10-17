@@ -9,7 +9,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { combineLinks, limitsOf, type AxisValues, type LinkView, type MachineState } from '@rlight/core';
 import { pollHzFor, type Board } from './board';
 import { DEFAULT_MOTION, planCommand, type MotionSettings, type ZeroMemory } from './commands';
-import { ControlSession, REASON_TAKEN } from './control';
+import { ControlSession, noControlMemory, REASON_TAKEN, type ControlMemory } from './control';
 import {
   parseClientMessage,
   PROTOCOL_VERSION,
@@ -29,6 +29,10 @@ export interface GatewayOptions {
   heartbeatMs?: number;
   /** Onde guardar que o homing foi visto, para sobreviver a reinícios do servidor. */
   homingMemory?: HomingMemory;
+  /** Onde guardar o token do controle, para um reinício não tirá-lo da tela. */
+  controlMemory?: ControlMemory;
+  /** Quanto tempo o controle espera pela tela que caiu. */
+  controlGraceMs?: number;
 }
 
 /** Depois de um jog, quanto tempo a frequência fica alta e o alvo não é ressincronizado. */
@@ -48,7 +52,8 @@ interface Client {
 export class Gateway {
   private wss: WebSocketServer | null = null;
   private readonly clients = new Map<string, Client>();
-  private readonly control = new ControlSession();
+  private readonly control: ControlSession;
+  private readonly controlMemory: ControlMemory;
   private nextId = 1;
   private commanded: AxisValues = {};
   private lastZero: ZeroMemory | null = null;
@@ -67,6 +72,10 @@ export class Gateway {
     this.board = options.board;
     this.homingMemory = options.homingMemory ?? noHomingMemory;
     this.sawHoming = this.homingMemory.read();
+    this.control = new ControlSession(options.controlGraceMs);
+    this.controlMemory = options.controlMemory ?? noControlMemory;
+    const saved = this.controlMemory.read();
+    if (saved) this.control.reserve(saved, this.board.now());
     this.motion = options.motion ?? DEFAULT_MOTION;
     this.minStateIntervalMs = 1000 / (options.maxStateHz ?? 10);
   }
@@ -166,8 +175,8 @@ export class Gateway {
   private drop(client: Client): void {
     if (client.timer) clearTimeout(client.timer);
     this.clients.delete(client.id);
-    // Quem sai leva o controle junto: ninguém comanda por uma tela fechada.
-    this.control.release(client.id);
+    // Ninguém comanda por uma tela fechada; mas a mesma tela, voltando logo, retoma.
+    this.control.drop(client.id, this.board.now());
     this.updatePoll();
     this.scheduleAll();
   }
@@ -183,15 +192,26 @@ export class Gateway {
 
   private handle(client: Client, msg: ClientMessage): void {
     if (msg.type === 'takeControl') {
-      const { previous } = this.control.take(client.id);
+      const { previous } = this.control.take(client.id, msg.token);
       const prev = previous ? this.clients.get(previous) : undefined;
       if (prev) this.send(prev, { type: 'control', inControl: false, reason: REASON_TAKEN });
       this.send(client, { type: 'control', inControl: true });
+      this.controlMemory.write(this.control.token);
+      this.scheduleAll();
+      return;
+    }
+    if (msg.type === 'resumeControl') {
+      const old = this.control.controller;
+      const ok = this.control.resume(client.id, msg.token, this.board.now());
+      // A conexão velha da mesma tela, se ainda aberta, deixa de comandar em silêncio.
+      if (ok && old && old !== client.id) this.clients.get(old)?.ws.terminate();
+      this.send(client, { type: 'control', inControl: ok });
       this.scheduleAll();
       return;
     }
     if (msg.type === 'releaseControl') {
       if (this.control.release(client.id)) this.send(client, { type: 'control', inControl: false });
+      this.controlMemory.write(this.control.token);
       this.scheduleAll();
       return;
     }
@@ -278,7 +298,7 @@ export class Gateway {
       link: combineLinks({ server: SERVER_HOP, machine: this.board.view() }),
       commanded: this.commanded,
       homed: this.homed,
-      control: { inControl: this.control.isController(client.id), controlled: this.control.controller !== null },
+      control: { inControl: this.control.isController(client.id), controlled: this.control.controlled(this.board.now()) },
     });
   }
 }

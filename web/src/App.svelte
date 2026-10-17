@@ -122,6 +122,18 @@
     send({ command: 'zero', axis: target });
   }
 
+  // Na troca entre assistir e controlar, os dígitos mudam de tamanho sem rolar (ver .resizing).
+  let resizing = $state(false);
+  let lastHands: boolean | null = null;
+  $effect.pre(() => {
+    const h = hands;
+    if (lastHands !== null && h !== lastHands) {
+      resizing = true;
+      requestAnimationFrame(() => requestAnimationFrame(() => (resizing = false)));
+    }
+    lastHands = h;
+  });
+
   function syncRuler(at: number) {
     const m = st?.machine;
     if (!ruler || !m?.mpos) return;
@@ -296,7 +308,7 @@
   });
 </script>
 
-<main class:stale={!live} class:hands>
+<main class:stale={!live} class:hands class:resizing>
   <header>
     <div class="title">
       <span class="name">{profile?.name ?? 'RLight'}</span>
@@ -378,7 +390,18 @@
   </section>
 
   {#if showRuler && profile}
-    <Ruler bind:this={ruler} {axis} minStep={profile.axes[axis]?.minStepMm ?? 0.01} {send} {clicker} />
+    <Ruler
+      bind:this={ruler}
+      {axis}
+      minStep={profile.axes[axis]?.minStepMm ?? 0.01}
+      {send}
+      {clicker}
+      positionOf={(a) => {
+        const m = st?.machine;
+        if (!m?.mpos) return null;
+        return m.state === 'Idle' ? m.mpos[a] : (st?.commanded[a] ?? m.mpos[a]);
+      }}
+    />
   {/if}
 
   {#if !hands}
@@ -562,6 +585,9 @@
   .letter { font-size: 17px; font-weight: 600; color: var(--fg-3); }
   .value { font-size: clamp(46px, 15.5vw, 74px); justify-self: end; transition: opacity 0.4s; }
   main.hands .value { font-size: clamp(34px, 11vw, 52px); }
+  /* Trocar entre assistir e controlar muda o tamanho dos números: sem isto, o
+     rolar dos dígitos (em em) animava a mudança de tamanho como se o valor mudasse. */
+  main.resizing :global(.digits .strip) { transition: none; }
   .unit { font-size: 14px; color: var(--fg-3); }
   /* Centrada; quando cabe, uma linha com um ponto médio entre as partes; quando não, quebra sem ponto solto. */
   .caption { margin: 6px 0 0; display: flex; flex-wrap: wrap; justify-content: center; column-gap: 0.5em; font-size: 12px; color: var(--fg-3); text-align: center; }
