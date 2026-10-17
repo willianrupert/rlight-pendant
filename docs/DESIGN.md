@@ -108,6 +108,9 @@ detalhes.
   respeitadas, sem nada sob a ilha nem sob a barra de gestos.
 - Alvos de no mínimo 60 pt. Os perigosos ficam longe dos comuns.
 
+### Números, fluidez e háptica
+As regras detalhadas estão no [ADR-0009](adr/0009-fluidez-sem-mentir.md): o toque responde no mesmo quadro, a posição desliza entre relatórios reais e nunca é prevista, e cada dígito rola sozinho com mola.
+
 ### Háptica e som
 Uma linguagem só ([VISION.md](VISION.md#mexer-um-pendant-que-parece-físico)):
 tique leve, tique firme, cliques crescendo, batida seca, pulso duplo, três

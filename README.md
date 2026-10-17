@@ -35,6 +35,11 @@ fresadora CNC RLight.
   - [0006 · Trabalhos rodam do SD, enviados e verificados pelo servidor](docs/adr/0006-trabalhos-rodam-do-sd.md)
   - [0007 · A conexão com a máquina vai cair: projetar para isso](docs/adr/0007-a-conexao-vai-cair.md)
   - [0008 · Qualquer máquina FluidNC: tudo vem da placa](docs/adr/0008-qualquer-maquina-fluidnc.md)
+  - [0009 · Fluidez sem mentir: zero atraso, números como na Apple, háptica a sério](docs/adr/0009-fluidez-sem-mentir.md)
+
+## Spikes
+
+- [spikes/s3-haptica](spikes/s3-haptica/index.html): laboratório de háptica, volante e números para rodar no próprio celular.
 
 ## Aviso
 

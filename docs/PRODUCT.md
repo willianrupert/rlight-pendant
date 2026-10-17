@@ -134,7 +134,7 @@ Cada spike tem o critério escrito **antes** de rodar.
 |---|---|---|---|
 | **S1** | Como se comporta o elo servidor → placa (Wi-Fi no painel)? | Relatório de estado a 10 Hz ou mais por 1 h com o painel energizado; **cada queda registrada** (quantas, quanto duram); reconexão sozinha em todas; tráfego gravado como fixture; WebUI no Mac junto sem conflito; um corte no ar do SD com e sem telemetria a 10 Hz leva o mesmo tempo, sem esvaziar a fila do planner. Mais de uma queda por hora → antena externa ou ponto de acesso antes da v1 | v0 |
 | **S2** | O movimento por intenções completas é exato e seguro com a rede caindo? | Parar em ≤ 0,3 s com link bom; com queda, a máquina termina exatamente no destino e não passa do alvo do volante; reenviar o último comando não move nada (ADR-0002) | v1 |
-| **S3** | Dá para ter háptica no iPhone? | Toque perceptível e consistente no iOS atual | Nada: sem ela, segue sem vibração no iPhone |
+| **S3** | Que háptica e que fluidez um PWA entrega? | No laboratório ([spikes/s3-haptica](../spikes/s3-haptica/index.html)): o vocabulário é sentido e distinguível, o volante dá um toque por detente em giro lento, a taxa máxima de toques fica medida, e os números interpolados parecem lisos no iPhone e no Android | Nada: sem háptica, o iPhone segue com som e movimento (ADR-0009) |
 | **S4** | O envio ao SD é confiável com o painel energizado? | 10 envios de 500 KB verificados, sem intervenção (ADR-0006) | v2 |
 
 **Pré-requisitos de rede:** reserva de DHCP para a placa (o IP já mudou uma
@@ -164,3 +164,4 @@ isolada.
 | [0006](adr/0006-trabalhos-rodam-do-sd.md) | Trabalhos rodam do SD, enviados e verificados pelo servidor |
 | [0007](adr/0007-a-conexao-vai-cair.md) | A conexão com a máquina vai cair: projetar para isso |
 | [0008](adr/0008-qualquer-maquina-fluidnc.md) | Qualquer máquina FluidNC: tudo vem da placa |
+| [0009](adr/0009-fluidez-sem-mentir.md) | Fluidez sem mentir: zero atraso, números como na Apple, háptica a sério |
