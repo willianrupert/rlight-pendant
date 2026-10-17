@@ -16,7 +16,7 @@ está no código. A máquina de referência, onde tudo é desenvolvido e testado
 fresadora CNC RLight.
 
 - **Ver:** estado, posição, avanço, rotação e trabalhos ao vivo, com o percurso sendo cortado e o tempo restante.
-- **Mexer:** um pendant que parece físico, com mapa, volante por anéis e zero com desfazer.
+- **Mexer:** um pendant que parece físico, com mapa, régua de ajuste fino e zero com desfazer.
 - **Confiar:** trabalhos rodam do SD, o servidor protege a máquina e avisa quando termina.
 
 > **Estado:** desenho. Ainda não há código. Os spikes de validação vêm antes.
@@ -36,10 +36,11 @@ fresadora CNC RLight.
   - [0007 · A conexão com a máquina vai cair: projetar para isso](docs/adr/0007-a-conexao-vai-cair.md)
   - [0008 · Qualquer máquina FluidNC: tudo vem da placa](docs/adr/0008-qualquer-maquina-fluidnc.md)
   - [0009 · Fluidez sem mentir: zero atraso, números como na Apple, háptica a sério](docs/adr/0009-fluidez-sem-mentir.md)
+  - [0010 · O ajuste fino é uma régua, com inércia de destino anunciado](docs/adr/0010-a-regua.md)
 
 ## Spikes
 
-- [spikes/s3-haptica](spikes/s3-haptica/index.html): laboratório de háptica, volante e números para rodar no próprio celular.
+- [spikes/s3-haptica](spikes/s3-haptica/index.html): laboratório de háptica, régua e números para rodar no próprio celular.
 
 ## Aviso
 

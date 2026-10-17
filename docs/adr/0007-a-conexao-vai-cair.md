@@ -59,7 +59,7 @@ agir certo. Quem quiser saber toca na linha e vê a corrente:
 |---|---|
 | Repouso | Nada muda |
 | Indo até o fantasma | Termina exatamente no destino escolhido e para ([ADR-0002](0002-movimento-por-intencoes-completas.md)) |
-| Volante | Termina os cliques já recebidos (no máximo 2 mm à frente) e para |
+| Régua | Termina o destino já recebido (no máximo 2 mm à frente) e para |
 | **Trabalho do SD** | **Continua cortando.** O trabalho não depende da rede ([ADR-0006](0006-trabalhos-rodam-do-sd.md)) |
 | Spindle ligado, sem trabalho | Continua ligado. A tela avisa disso em destaque ao voltar, e o histórico registra |
 

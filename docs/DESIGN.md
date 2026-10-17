@@ -21,7 +21,7 @@ que fazer. Nada aparece "por via das dúvidas".
 
 ### 2. Manipulação direta
 Você mexe na coisa, não num controle que representa a coisa. O spindle é um
-ponto que você arrasta na mesa. A precisão é um volante que você gira. Um eixo se
+ponto que você arrasta na mesa. A precisão é uma régua que você arrasta. Um eixo se
 zera segurando o número dele.
 
 ### 3. A tela nunca mente
@@ -115,7 +115,7 @@ As regras detalhadas estão no [ADR-0009](adr/0009-fluidez-sem-mentir.md): o toq
 Uma linguagem só ([VISION.md](VISION.md#mexer-um-pendant-que-parece-físico)):
 tique leve, tique firme, cliques crescendo, batida seca, pulso duplo, três
 batidas. Vibração no Android; no iPhone, que não deixa páginas vibrarem, o
-clique sonoro e o movimento do volante carregam a sensação; som em todos,
+clique sonoro e o movimento da régua carregam a sensação; som em todos,
 desligável ([ADR-0004](adr/0004-pwa-em-vez-de-app-nativo.md)). Nenhuma
 informação depende só de vibração.
 
@@ -125,7 +125,7 @@ seguindo o estado e a casca do app em cache: abre na hora, mesmo antes de
 conectar.
 
 ### Acessibilidade
-VoiceOver e TalkBack leem o estado, as coordenadas e cada ação. O volante tem
+VoiceOver e TalkBack leem o estado, as coordenadas e cada ação. A régua tem
 alternativa por botões para quem não pode girar. A cor nunca é a única pista.
 
 ### Desempenho

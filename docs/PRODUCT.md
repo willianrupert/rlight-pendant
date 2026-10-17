@@ -56,7 +56,7 @@ placa no meio aparece como "sem sinal", volta sozinha e não afeta o corte.
 - Assumir e devolver o controle.
 - Unlock, homing, soft reset, feed hold e resume.
 - Mapa: arrastar o fantasma, ver o caminho, soltar e a máquina vai; o mapa vira Parar durante o deslocamento ([ADR-0002](adr/0002-movimento-por-intencoes-completas.md)).
-- Volante por anéis (0,01 / 0,1 / 1 mm), com limites e a barreira do Z0.
+- Régua de ajuste fino (passo 0,01 / 0,1 / 1 mm), com inércia de destino anunciado, limites e a barreira do Z0 ([ADR-0010](adr/0010-a-regua.md)).
 - Zerar por eixo, com desfazer.
 - Spindle: mostrador, segurar para ligar, spin-up visível.
 - Z automático pela placa de toque, com a sequência segura (recolhe primeiro e
@@ -133,8 +133,8 @@ Cada spike tem o critério escrito **antes** de rodar.
 | # | Pergunta | Aprova se | Bloqueia |
 |---|---|---|---|
 | **S1** | Como se comporta o elo servidor → placa (Wi-Fi no painel)? | Relatório de estado a 10 Hz ou mais por 1 h com o painel energizado; **cada queda registrada** (quantas, quanto duram); reconexão sozinha em todas; tráfego gravado como fixture; WebUI no Mac junto sem conflito; um corte no ar do SD com e sem telemetria a 10 Hz leva o mesmo tempo, sem esvaziar a fila do planner. Mais de uma queda por hora → antena externa ou ponto de acesso antes da v1 | v0 |
-| **S2** | O movimento por intenções completas é exato e seguro com a rede caindo? | Parar em ≤ 0,3 s com link bom; com queda, a máquina termina exatamente no destino e não passa do alvo do volante; reenviar o último comando não move nada (ADR-0002) | v1 |
-| **S3** ✅ | Que háptica e que fluidez um PWA entrega? | **Concluído em 2026-10-16** ([laboratório](../spikes/s3-haptica/index.html)). iPhone (iOS 26.5): nenhuma vibração por código, nem em página direta. Números interpolados: lisos. Volante: preso ao dente (catraca) perdeu fluidez, então ele gira liso 1:1. Forma (roda ou régua) e tom do clique ainda em aberto. Android: a medir | Nada: o iPhone segue com som e movimento ([ADR-0009](adr/0009-fluidez-sem-mentir.md)) |
+| **S2** | O movimento por intenções completas é exato e seguro com a rede caindo? | Parar em ≤ 0,3 s com link bom; com queda, a máquina termina exatamente no destino e não passa do alvo da régua; reenviar o último comando não move nada (ADR-0002) | v1 |
+| **S3** ✅ | Que háptica e que fluidez um PWA entrega? | **Concluído em 2026-10-16** ([laboratório](../spikes/s3-haptica/index.html)). iPhone (iOS 26.5): nenhuma vibração por código, nem em página direta. Números interpolados: lisos. Ajuste fino: a régua venceu o volante (precisa e com uma mão); a fluidez é confirmada na rodada 4 ([ADR-0010](adr/0010-a-regua.md)). Android: a medir | Nada: o iPhone segue com som e movimento ([ADR-0009](adr/0009-fluidez-sem-mentir.md)) |
 | **S4** | O envio ao SD é confiável com o painel energizado? | 10 envios de 500 KB verificados, sem intervenção (ADR-0006) | v2 |
 
 **Pré-requisitos de rede:** reserva de DHCP para a placa (o IP já mudou uma
@@ -165,3 +165,4 @@ isolada.
 | [0007](adr/0007-a-conexao-vai-cair.md) | A conexão com a máquina vai cair: projetar para isso |
 | [0008](adr/0008-qualquer-maquina-fluidnc.md) | Qualquer máquina FluidNC: tudo vem da placa |
 | [0009](adr/0009-fluidez-sem-mentir.md) | Fluidez sem mentir: zero atraso, números como na Apple, háptica a sério |
+| [0010](adr/0010-a-regua.md) | O ajuste fino é uma régua, com inércia de destino anunciado |

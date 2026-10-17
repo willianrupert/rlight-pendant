@@ -28,8 +28,8 @@ monta o **perfil da máquina**:
 |---|---|
 | Nome da máquina | Título do app |
 | Eixos presentes | Quais números e controles aparecem |
-| Curso, soft limits e direção do homing | O mapa da mesa, as paredes do fantasma e do volante |
-| Homing configurado ou não | Se o fantasma existe (sem homing, a posição de máquina não significa nada e só o volante aparece) |
+| Curso, soft limits e direção do homing | O mapa da mesa, as paredes do fantasma e da régua |
+| Homing configurado ou não | Se o fantasma existe (sem homing, a posição de máquina não significa nada e só a régua aparece) |
 | Velocidade e aceleração máximas | Tetos dos movimentos e a simulação de tempo |
 | Spindle: tipo, faixa de rotação, spin-up e spin-down | O mostrador e a animação do spin-up |
 | Apalpador presente | Se o Z automático aparece |

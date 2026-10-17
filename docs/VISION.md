@@ -79,7 +79,7 @@ setas nem seletor de passo.
 │           Y  118,05         │   segurar = zera (com desfazer)
 │           Z   −3,20         │
 ├─────────────────────────────┤
-│  COMO     o volante         │   anel externo 0,01 · meio 0,1 · centro 1 mm
+│  COMO     a régua           │   arrastar para os lados · passo 0,01 · 0,1 · 1
 │  ● 12.000 rpm    ❙❙ PAUSAR   │
 └─────────────────────────────┘
 ```
@@ -92,9 +92,11 @@ setas nem seletor de passo.
    **O gesto nunca espera a rede:** tudo o que você sente acontece no aparelho, e
    a máquina recebe só intenções completas, com destino conhecido. O Wi-Fi da
    placa pode soluçar à vontade que nada gagueja ([ADR-0002](adr/0002-movimento-por-intencoes-completas.md)).
-2. **Girar o volante:** cada detente é um passo exato. **O anel em que o polegar
-   está escolhe a resolução.** O volante comanda distância, não velocidade: se a
-   conexão cair, a máquina faz no máximo o que você já girou.
+2. **Arrastar a régua:** os traços correm sob uma linha fixa e cada um é um passo
+   exato, com um clique suave. Um peteleco faz a régua deslizar com atrito, e ela
+   mostra onde vai parar antes de parar ([ADR-0010](adr/0010-a-regua.md)). A régua
+   comanda distância, não velocidade: se a
+   conexão cair, a máquina faz no máximo o que a régua já marcou.
 3. **Tocar e segurar nos números:** tocar escolhe o eixo, segurar zera, e logo
    aparece **"Desfazer"**. Zerar no lugar errado é o erro caro clássico, e aqui
    ele custa um toque.
@@ -111,8 +113,8 @@ ação**, nunca como `ALARM:1`.
 
 **Háptica onde o aparelho deixa.** No Android, o navegador vibra com padrões
 completos. No iPhone, o Safari não deixa páginas vibrarem (medido no iOS 26),
-então o volante fala por **som e movimento**: ele gira liso e cada detente tem
-um clique curto e suave. A interface funciona igual com ou
+então a régua fala por **som e movimento**: ela corre lisa e cada traço tem um
+clique curto e suave. A interface funciona igual com ou
 sem vibração.
 
 ---
@@ -187,7 +189,7 @@ vivo de qualquer tela, sem custo, é.**
 | Fase | Entrega | Já serve para |
 |---|---|---|
 | **v0 · Os olhos** | Servidor conectado à placa; app mostrando estado, posição, avanço e rotação ao vivo em qualquer tela; histórico | Acompanhar trabalhos iniciados pela WebUI, hoje |
-| **v1 · As mãos** | Pendant: mapa, volante, zero com desfazer, spindle, homing, unlock, Z pela placa de toque | Testes e preparação sem notebook |
+| **v1 · As mãos** | Pendant: mapa, régua, zero com desfazer, spindle, homing, unlock, Z pela placa de toque | Testes e preparação sem notebook |
 | **v2 · Os trabalhos** | Enviar arquivo, prévia, conferência, envio verificado ao SD, iniciar, tela de trabalho com percurso ao vivo e tempo restante, notificações | Rodar peças do começo ao fim pelo app |
 | **v3 · A câmera** | Vídeo da mesa ao vivo atrás do percurso | Acompanhar de longe |
 | **v4 · As receitas** | Os geradores de peça do Romney (aplainar, furos, recortes, texto) como funções puras | Peças simples sem CAM |

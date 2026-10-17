@@ -1,187 +1,91 @@
 <title>Laboratório RLight</title>
 <meta name="theme-color" content="#0b0d10">
 <style>
-/* Instrumento de oficina: uma coluna para o polegar, fundo grafite profundo, um único acento azul-aço.
-   Visual escuro deliberado (DESIGN.md: escuro por padrão). Fontes do sistema, como pede o DESIGN.md. */
+/* Instrumento de oficina: uma coluna para o polegar, grafite profundo, um acento azul-aço.
+   Visual escuro deliberado (DESIGN.md). Fontes do sistema, como pede o DESIGN.md. */
 :root{
   color-scheme: dark;
   --bg:#0b0d10; --panel:#14171c; --panel-2:#1b1f26; --line:#262b33;
   --fg:#eef1f5; --fg-2:#9aa3ae; --fg-3:#5f6873;
-  --acc:#7fb0ff; --acc-ink:#0b1a33; --ok:#7fd6a2; --warn:#ffcf7a; --bad:#ff8f8f;
+  --acc:#7fb0ff; --acc-ink:#0b1a33; --ok:#7fd6a2; --bad:#ff8f8f;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, "SF Mono", "Roboto Mono", Menlo, monospace;
   --spring: cubic-bezier(.2,.9,.25,1.06);
 }
-html,body{height:auto;background:var(--bg);color:var(--fg)}
-body{font-family:var(--sans);font-size:15px;line-height:1.5;padding-inline:16px;padding-block:20px 48px;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
-main{max-width:460px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--sans);font-size:15px;line-height:1.5;padding-inline:16px;padding-block:20px 48px;-webkit-tap-highlight-color:transparent;overscroll-behavior:none;-webkit-user-select:none;user-select:none}
+main{max-width:460px;margin:0 auto;display:flex;flex-direction:column;gap:24px}
 h1{font-size:28px;font-weight:600;letter-spacing:-.01em;margin:0;text-wrap:balance}
-h2{font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-2);margin:0 0 10px}
+h2{font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-2);margin:0}
 p{margin:0;color:var(--fg-2);max-width:65ch}
 .lead{display:flex;flex-direction:column;gap:8px}
 .card{background:var(--panel);border-radius:22px;padding:18px;display:flex;flex-direction:column;gap:14px}
-.diag{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px}
-.diag dt{color:var(--fg-3)} .diag dd{margin:0;font-family:var(--mono);font-size:12.5px;min-width:0;overflow-wrap:anywhere}
 .seg{display:flex;background:var(--panel-2);border-radius:12px;padding:3px;gap:3px}
-.seg button{flex:1;border:0;background:transparent;color:var(--fg-2);font:500 13px var(--sans);padding:9px 6px;border-radius:9px;cursor:pointer;min-height:40px}
+.seg button{flex:1;border:0;background:transparent;color:var(--fg-2);font:500 13px var(--sans);padding:9px 6px;border-radius:9px;cursor:pointer;min-height:40px;transition:background .2s,color .2s}
 .seg button[aria-pressed="true"]{background:var(--line);color:var(--fg)}
-.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-.hb{border:0;background:var(--panel-2);color:var(--fg);border-radius:16px;padding:14px;text-align:left;cursor:pointer;min-height:76px;display:flex;flex-direction:column;gap:4px;font:inherit;transition:transform .12s var(--spring),background .2s}
-.hb:active{transform:scale(.96);background:var(--line)}
-.hb b{font-weight:600;font-size:15px} .hb span{font-size:12px;color:var(--fg-3)}
-.res{display:flex;gap:6px;margin-top:4px}
-.res i{font-style:normal;font-size:11px;padding:3px 8px;border-radius:8px;background:var(--bg);color:var(--fg-3);cursor:pointer}
-.res i[data-on="sim"]{background:#173326;color:var(--ok)} .res i[data-on="nao"]{background:#3a1b1b;color:var(--bad)}
 button:focus-visible,.res i:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
-.native{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--panel-2);border-radius:16px;padding:12px 14px}
-.native input{transform:scale(1.25)}
-.wheelbox{display:flex;flex-direction:column;align-items:center;gap:10px}
-#ruler{width:100%;height:auto;aspect-ratio:900/360;max-width:100%;touch-action:none;cursor:grab;display:block;border-radius:16px;background:var(--panel-2)}
-.res i[data-on="A"],.res i[data-on="B"]{background:#16284a;color:var(--acc)}
-#wheel{width:min(280px,78vw);height:auto;aspect-ratio:1;max-width:100%;touch-action:none;cursor:grab;display:block}
-.meters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:100%}
-.meter{background:var(--panel-2);border-radius:14px;padding:10px 12px}
-.meter small{display:block;font-size:11px;color:var(--fg-3)}
-.meter strong{font:600 18px var(--mono);font-variant-numeric:tabular-nums}
-label.row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:14px}
+.res{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.res span{font-size:13px;color:var(--fg-3);margin-right:4px}
+.res i{font-style:normal;font-size:12px;padding:5px 10px;border-radius:9px;background:var(--panel-2);color:var(--fg-2);cursor:pointer}
+.res i[data-on]{background:#16284a;color:var(--acc)}
 /* DRO */
-.dro{display:flex;flex-direction:column;gap:6px;padding:6px 4px}
-.axis{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
-.axis .name{font:500 16px var(--sans);color:var(--fg-3);width:22px}
-.num{display:flex;align-items:baseline;font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:clamp(40px,13vw,56px);font-weight:600;letter-spacing:-.02em;line-height:1.1;transition:opacity .4s,filter .4s}
-.num.stale{opacity:.35}
+.num{display:flex;align-items:baseline;justify-content:center;font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:clamp(44px,15vw,64px);font-weight:600;letter-spacing:-.02em;line-height:1.1}
 .slot{display:inline-block;height:1.1em;overflow:hidden;width:.62em;text-align:center}
-.slot.sep{width:.36em}
-.strip{display:flex;flex-direction:column;transition:transform 420ms var(--spring)}
+.slot.sep{width:.34em}
+.strip{display:flex;flex-direction:column;transition:transform 380ms var(--spring);will-change:transform}
 .strip span{height:1.1em;display:block}
 .num.fast .strip{transition:none}
-.dec{color:var(--fg-2)} .unit{font:500 15px var(--sans);color:var(--fg-3);margin-left:6px}
-.track{position:relative;height:28px;background:var(--panel-2);border-radius:14px}
-.track .dot{position:absolute;top:50%;left:0;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;background:var(--fg);will-change:transform}
-.track .ghost{position:absolute;top:50%;left:0;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;border:1.5px dashed var(--fg-3)}
-.btns{display:flex;flex-wrap:wrap;gap:8px}
+.dec{color:var(--fg-2)} .unit{font:500 16px var(--sans);color:var(--fg-3);margin-left:8px}
+.ruler{position:relative;height:132px;border-radius:18px;background:var(--panel-2);overflow:hidden;touch-action:none;cursor:grab}
+.ruler canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.meters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.meter{background:var(--panel-2);border-radius:14px;padding:10px 12px}
+.meter small{display:block;font-size:11px;color:var(--fg-3)}
+.meter strong{font:600 17px var(--mono);font-variant-numeric:tabular-nums}
+label.row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:14px}
 .btn{border:0;background:var(--panel-2);color:var(--fg);font:500 14px var(--sans);padding:11px 14px;border-radius:14px;cursor:pointer;min-height:44px}
 .btn.pri{background:var(--acc);color:var(--acc-ink)}
 .status{font-size:12.5px;color:var(--fg-3);min-height:19px}
-textarea{width:100%;box-sizing:border-box;min-height:150px;background:var(--panel-2);color:var(--fg);border:1px solid var(--line);border-radius:14px;padding:12px;font:12px/1.5 var(--mono);resize:vertical}
-@media (prefers-reduced-motion:reduce){.strip,.hb{transition:none}}
+textarea{width:100%;box-sizing:border-box;min-height:140px;background:var(--panel-2);color:var(--fg);border:1px solid var(--line);border-radius:14px;padding:12px;font:12px/1.5 var(--mono);resize:vertical;-webkit-user-select:text;user-select:text}
+@media (prefers-reduced-motion:reduce){.strip{transition:none}}
 </style>
 
 <main>
   <header class="lead">
     <h1>Laboratório RLight</h1>
-    <p>Spike S3: o que dá para sentir e ver num PWA. Abra no <strong>Safari</strong> do iPhone ou no <strong>Chrome</strong> do Android, com o modo silencioso desligado, e marque o que você sentiu.</p>
+    <p>Rodada 4 do spike S3: a régua, agora com inércia. Abra no Safari do iPhone e use com uma mão.</p>
   </header>
 
-  <section class="card" aria-labelledby="h-diag">
-    <h2 id="h-diag">Aparelho</h2>
-    <dl class="diag">
-      <dt>Sistema</dt><dd id="d-os">…</dd>
-      <dt>Vibração web</dt><dd id="d-vib">…</dd>
-      <dt>Toque do switch</dt><dd id="d-sw">…</dd>
-      <dt>Navegador</dt><dd id="d-ua">…</dd>
-    </dl>
-    <div>
-      <h2>Método de háptica</h2>
-      <div class="seg" role="group" aria-label="Método de háptica" id="mode">
-        <button data-m="auto" aria-pressed="true">Automático</button>
-        <button data-m="ios">Switch iOS</button>
-        <button data-m="vib">Vibração</button>
-        <button data-m="off">Desligado</button>
-      </div>
+  <section class="card" aria-labelledby="h-r">
+    <h2 id="h-r">Régua · eixo X</h2>
+    <div class="num" id="dro" aria-live="off"></div>
+    <div class="ruler" id="ruler" aria-label="Régua de jog do eixo X"><canvas id="rc"></canvas></div>
+    <div class="seg" role="group" aria-label="Passo por traço" id="step">
+      <button data-s="0.01">0,01 mm</button><button data-s="0.1" aria-pressed="true">0,1 mm</button><button data-s="1">1 mm</button>
     </div>
-    <label class="row" for="snd"><span>Som junto com a háptica</span><input type="checkbox" id="snd"></label>
-  </section>
-
-  <section class="card" aria-labelledby="h-ref">
-    <h2 id="h-ref">1 · Referência</h2>
-    <p>Este é um switch nativo do sistema. Toque nele com o dedo. Se o iPhone vibrar aqui, o aparelho suporta o toque que os testes abaixo tentam acionar por código.</p>
-    <div class="native"><span>Switch nativo</span><input type="checkbox" switch id="nat" aria-label="Switch nativo de referência"></div>
-    <div class="res" data-k="referencia"><i tabindex="0" data-v="sim">Senti</i><i tabindex="0" data-v="nao">Não senti</i></div>
-  </section>
-
-  <section class="card" aria-labelledby="h-var">
-    <h2 id="h-var">1b · Variantes do toque por código</h2>
-    <p>Cada botão tenta acionar o toque do switch de um jeito diferente. Marque qual vibra. <span id="ctx"></span></p>
-    <div class="grid" id="var"></div>
-  </section>
-
-  <section class="card" aria-labelledby="h-voc">
-    <h2 id="h-voc">2 · Vocabulário</h2>
-    <p>A linguagem de háptica do RLight. Toque em cada um e marque se sentiu e se dá para distinguir dos outros.</p>
-    <div class="grid" id="voc"></div>
-  </section>
-
-  <section class="card" aria-labelledby="h-wheel">
-    <h2 id="h-wheel">3A · Volante</h2>
-    <p>Como o volante de uma CNC cara: gire com o polegar, a roda acompanha liso e cada traço que passa pela marca azul dá um clique suave. O anel externo é 0,01 mm, o do meio 0,1 e o interno 1 mm. Gire devagar e depois rápido.</p>
-    <div class="wheelbox">
-      <canvas id="wheel" width="560" height="560" aria-label="Volante de jog"></canvas>
-      <div class="meters">
-        <div class="meter"><small>posição</small><strong id="w-pos">0,00</strong></div>
-        <div class="meter"><small>detentes/s</small><strong id="w-rate">0</strong></div>
-        <div class="meter"><small>toques/s</small><strong id="w-fired">0</strong></div>
-      </div>
-    </div>
-    <div>
-      <h2>Intervalo mínimo entre toques</h2>
-      <div class="seg" role="group" aria-label="Intervalo mínimo" id="gap">
-        <button data-g="0">0 ms</button><button data-g="35" aria-pressed="true">35 ms</button><button data-g="60">60 ms</button><button data-g="100">100 ms</button>
-      </div>
-    </div>
-    <label class="row" for="rsnd"><span>Som do clique (volante e régua)</span><input type="checkbox" id="rsnd" checked></label>
-    <div class="res" data-k="A_fluido"><span class="status">Fluido?</span><i tabindex="0" data-v="sim">Sim</i><i tabindex="0" data-v="nao">Não</i></div>
-    <div class="res" data-k="A_preciso"><span class="status">Preciso no 0,01?</span><i tabindex="0" data-v="sim">Sim</i><i tabindex="0" data-v="nao">Não</i></div>
-    <div class="res" data-k="A_uma_mao"><span class="status">Confortável com uma mão?</span><i tabindex="0" data-v="sim">Sim</i><i tabindex="0" data-v="nao">Não</i></div>
-  </section>
-
-  <section class="card" aria-labelledby="h-ruler">
-    <h2 id="h-ruler">3B · Régua</h2>
-    <p>Como o ajuste de ângulo do app Fotos: arraste para os lados, os traços correm sob a linha azul e cada um dá um clique suave. A resolução fica abaixo.</p>
-    <canvas id="ruler" width="900" height="360" aria-label="Régua de jog"></canvas>
+    <p>Arraste devagar para o ajuste fino. Dê um peteleco para atravessar: a régua desliza com atrito e o marcador azul-claro mostra onde vai parar antes de parar. Toque para segurar. Nas pontas do curso ela resiste e volta.</p>
+    <label class="row" for="snd"><span>Clique sonoro</span><input type="checkbox" id="snd" checked></label>
     <div class="meters">
-      <div class="meter"><small>posição</small><strong id="r-pos">0,00</strong></div>
-      <div class="meter"><small>detentes/s</small><strong id="r-rate">0</strong></div>
-      <div class="meter"><small>passo</small><strong id="r-step">0,01</strong></div>
+      <div class="meter"><small>quadro médio</small><strong id="m-avg">–</strong></div>
+      <div class="meter"><small>quadros lentos</small><strong id="m-slow">0</strong></div>
+      <div class="meter"><small>taxa da tela</small><strong id="m-hz">–</strong></div>
     </div>
-    <div class="seg" role="group" aria-label="Resolução da régua" id="rstep">
-      <button data-s="0.01" aria-pressed="true">0,01 mm</button><button data-s="0.1">0,1 mm</button><button data-s="1">1 mm</button>
-    </div>
-    <div class="res" data-k="B_fluido"><span class="status">Fluido?</span><i tabindex="0" data-v="sim">Sim</i><i tabindex="0" data-v="nao">Não</i></div>
-    <div class="res" data-k="B_preciso"><span class="status">Preciso no 0,01?</span><i tabindex="0" data-v="sim">Sim</i><i tabindex="0" data-v="nao">Não</i></div>
-    <div class="res" data-k="B_uma_mao"><span class="status">Confortável com uma mão?</span><i tabindex="0" data-v="sim">Sim</i><i tabindex="0" data-v="nao">Não</i></div>
-    <div class="res" data-k="preferido"><span class="status">Preferido:</span><i tabindex="0" data-v="A">Volante</i><i tabindex="0" data-v="B">Régua</i></div>
   </section>
 
-  <section class="card" aria-labelledby="h-num">
-    <h2 id="h-num">4 · Números</h2>
-    <p>Uma máquina simulada manda 10 relatórios por segundo. Compare o modo cru com o interpolado, que desliza entre dois relatórios reais e nunca prevê nada. Ligue o Wi-Fi ruim para ver a honestidade.</p>
-    <div class="dro">
-      <div class="axis"><span class="name">X</span><div class="num" id="dro-x" aria-live="off"></div></div>
-      <div class="track" aria-hidden="true"><div class="ghost" id="ghost"></div><div class="dot" id="dot"></div></div>
-      <div class="status" id="age"></div>
-    </div>
-    <div class="seg" role="group" aria-label="Modo de exibição" id="rmode">
-      <button data-r="interp" aria-pressed="true">Interpolado</button><button data-r="raw">Cru</button>
-    </div>
-    <div class="seg" role="group" aria-label="Qualidade do Wi-Fi" id="net">
-      <button data-n="good" aria-pressed="true">Wi-Fi bom</button><button data-n="bad">Wi-Fi ruim</button><button data-n="down">Sem sinal</button>
-    </div>
-    <div class="btns">
-      <button class="btn pri" data-go="812.35">Ir para 812,35</button>
-      <button class="btn" data-go="0">Ir para 0</button>
-      <button class="btn" data-step="0.01">+0,01</button>
-      <button class="btn" data-step="-0.01">−0,01</button>
-      <button class="btn" data-step="1">+1</button>
-    </div>
-    <div class="res" data-k="numeros_fluidos"><span class="status">Parece liso?</span><i tabindex="0" data-v="sim">Sim</i><i tabindex="0" data-v="nao">Não</i></div>
+  <section class="card" aria-labelledby="h-q">
+    <h2 id="h-q">Como ficou</h2>
+    <div class="res" data-k="fluido"><span>Fluido?</span><i tabindex="0" data-v="sim">Sim</i><i tabindex="0" data-v="nao">Não</i></div>
+    <div class="res" data-k="preciso"><span>Para exato no 0,01?</span><i tabindex="0" data-v="sim">Sim</i><i tabindex="0" data-v="nao">Não</i></div>
+    <div class="res" data-k="inercia"><span>A inércia</span><i tabindex="0" data-v="ajuda">Ajuda</i><i tabindex="0" data-v="atrapalha">Atrapalha</i></div>
+    <div class="res" data-k="destino"><span>O marcador de destino</span><i tabindex="0" data-v="claro">Claro</i><i tabindex="0" data-v="confuso">Confuso</i></div>
+    <div class="res" data-k="clique"><span>O clique</span><i tabindex="0" data-v="bom">Bom</i><i tabindex="0" data-v="irritante">Irritante</i><i tabindex="0" data-v="nao_ouvi">Não ouvi</i></div>
+    <div class="res" data-k="pontas"><span>Resistência nas pontas</span><i tabindex="0" data-v="boa">Boa</i><i tabindex="0" data-v="estranha">Estranha</i></div>
   </section>
 
   <section class="card" aria-labelledby="h-out">
     <h2 id="h-out">Resultado</h2>
-    <p>Copie e cole no chat. Isso decide como a háptica entra no app.</p>
     <textarea id="out" readonly aria-label="Resultado do teste"></textarea>
-    <div class="btns"><button class="btn pri" id="copy">Copiar resultado</button></div>
+    <button class="btn pri" id="copy">Copiar resultado</button>
     <div class="status" id="copied"></div>
   </section>
 </main>
@@ -190,314 +94,179 @@ textarea{width:100%;box-sizing:border-box;min-height:150px;background:var(--pane
 (() => {
 const $ = s => document.querySelector(s);
 const ua = navigator.userAgent;
-const isIOS = !/Android/.test(ua) && (/iP(hone|ad|od)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
-// No iOS 26 o "OS 18_7" do user agent é congelado; a versão real está em "Version/26.x".
 const safariVer = (ua.match(/Version\/(\d+(?:\.\d+)?)/) || [])[1];
-const iosVer = safariVer && parseFloat(safariVer) >= 26 ? safariVer : ((ua.match(/OS (\d+)_(\d+)/) || []).slice(1).join('.') || null);
-const hasVib = typeof navigator.vibrate === 'function';
+const isIOS = !/Android/.test(ua) && (/iP(hone|ad|od)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+const canVibrate = !isIOS && typeof navigator.vibrate === 'function';
 const results = {};
-const metrics = { maxFiredPerSec: 0, iosTaps: 0, vibCalls: 0, errors: [] };
 
-$('#d-os').textContent = isIOS ? `iOS ${iosVer ?? '?'}` : /Android/.test(ua) ? 'Android' : 'Outro';
-$('#d-vib').textContent = hasVib ? 'disponível' : 'não existe neste navegador';
-$('#d-sw').textContent = isIOS ? (parseFloat(iosVer) >= 18 ? 'deve funcionar (iOS 18+)' : 'precisa de iOS 18+') : 'só no iPhone';
-$('#d-ua').textContent = ua;
+/* ---------- Máquina simulada: curso do X de 0 a 1215 mm ---------- */
+const MIN = 0, MAX = 1215;
+let step = 0.1;
 
-/* ---------- Haptics: a porta do produto ---------- */
-let mode = 'auto', sound = false, ctx = null;
-function effective() { return mode === 'auto' ? (isIOS ? 'ios' : hasVib ? 'vib' : 'off') : mode; }
-function iosTap() {
+/* ---------- Som: um buffer pronto, reutilizado; nada é criado por clique ---------- */
+let ctx = null, clickBuf = null, sound = true, lastClick = 0;
+function initAudio() {
+  if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
   try {
-    const l = document.createElement('label'); l.ariaHidden = 'true'; l.style.display = 'none';
-    const i = document.createElement('input'); i.type = 'checkbox'; i.setAttribute('switch', '');
-    l.appendChild(i); document.head.appendChild(l); l.click(); document.head.removeChild(l);
-    metrics.iosTaps++;
-  } catch (e) { metrics.errors.push(String(e)); }
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const sr = ctx.sampleRate, n = Math.floor(sr * 0.02); clickBuf = ctx.createBuffer(1, n, sr);
+    const ch = clickBuf.getChannelData(0);
+    for (let i = 0; i < n; i++) { const t = i / sr; ch[i] = Math.sin(2 * Math.PI * (1900 - 900 * t / 0.02) * t) * Math.exp(-t * 320) * 0.5; }
+  } catch (e) { ctx = null; }
 }
-function beep(ms) {
-  if (!sound) return;
-  try {
-    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
-    const o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime;
-    o.type = 'sine'; o.frequency.value = 180 + ms * 6;
-    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t + 0.002);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + Math.max(0.02, ms / 1000));
-    o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + 0.06);
-  } catch (e) {}
+function click(strong) {
+  const now = performance.now();
+  if (now - lastClick < 38) return; // acima de ~26/s os cliques se espaçam, como no seletor do iOS
+  lastClick = now;
+  if (canVibrate) navigator.vibrate(strong ? 12 : 6);
+  if (!sound || !ctx || !clickBuf) return;
+  const s = ctx.createBufferSource(), g = ctx.createGain(); s.buffer = clickBuf; g.gain.value = strong ? 0.5 : 0.28;
+  s.connect(g).connect(ctx.destination); s.start();
 }
-let firedWindow = [];
-function pulse(ms) {
-  const m = effective();
-  if (m === 'ios') iosTap();
-  else if (m === 'vib' && hasVib) { navigator.vibrate(ms); metrics.vibCalls++; }
-  beep(ms);
-  const now = performance.now(); firedWindow.push(now);
-}
-// pattern: [on, off, on, off, ...] em ms
-function play(p) {
-  const m = effective();
-  if (m === 'vib' && hasVib) { navigator.vibrate(p); metrics.vibCalls++; let t = 0; p.forEach((d, i) => { if (i % 2 === 0) setTimeout(() => beep(d), t); t += d; }); firedWindow.push(performance.now()); return; }
-  let t = 0; p.forEach((d, i) => { if (i % 2 === 0) { const dd = d; t === 0 ? pulse(dd) : setTimeout(() => pulse(dd), t); } t += d; });
-}
-const VOCAB = [
-  ['tick', 'Tique leve', 'um passo fino', [8]],
-  ['firme', 'Tique firme', 'um passo grosso', [18]],
-  ['crescendo', 'Crescendo', 'chegando ao limite', [6, 90, 8, 70, 11, 55, 15, 40, 20]],
-  ['parede', 'Parede', 'limite, Z0, máquina sem acompanhar', [35]],
-  ['confirmado', 'Confirmado', 'zero, Z medido, rpm no alvo', [10, 110, 10]],
-  ['alarme', 'Alarme', 'três batidas pesadas', [40, 140, 40, 140, 40]],
-];
-const voc = $('#voc');
-VOCAB.forEach(([k, name, sub, p]) => {
-  const wrap = document.createElement('div');
-  wrap.innerHTML = `<button class="hb" type="button"><b>${name}</b><span>${sub}</span></button><div class="res" data-k="voc_${k}"><i tabindex="0" data-v="sim">Senti</i><i tabindex="0" data-v="nao">Não senti</i></div>`;
-  wrap.querySelector('button').addEventListener('click', () => play(p));
-  voc.appendChild(wrap);
-});
-$('#nat').addEventListener('change', () => beep(8));
-
-/* ---------- Variantes do truque do switch ---------- */
-const inIframe = (() => { try { return window.top !== window.self; } catch { return true; } })();
-$('#ctx').textContent = inIframe ? 'Esta página está dentro de um iframe.' : 'Esta página está aberta direto, sem iframe.';
-function mkSwitch(parent, hide) {
-  const l = document.createElement('label'); l.ariaHidden = 'true';
-  const i = document.createElement('input'); i.type = 'checkbox'; i.setAttribute('switch', '');
-  l.appendChild(i);
-  if (hide === 'none') l.style.display = 'none';
-  if (hide === 'off') l.style.cssText = 'position:fixed;left:-200px;top:0;width:52px;height:32px;opacity:0.01;pointer-events:none';
-  parent.appendChild(l); return { l, i };
-}
-const persist = mkSwitch(document.body, 'off');
-const VARIANTS = [
-  ['A', 'Label no head, oculto', 'o método atual', () => { const s = mkSwitch(document.head, 'none'); s.l.click(); s.l.remove(); }],
-  ['B', 'Label no body, fora da tela', 'renderizado, mas invisível', () => { const s = mkSwitch(document.body, 'off'); s.l.click(); s.l.remove(); }],
-  ['C', 'Clique direto no input', 'sem label', () => { const s = mkSwitch(document.body, 'off'); s.i.click(); s.l.remove(); }],
-  ['D', 'Switch persistente', 'o mesmo elemento sempre', () => { persist.l.click(); }],
-];
-const varBox = $('#var');
-VARIANTS.forEach(([k, name, sub, fn]) => {
-  const wrap = document.createElement('div');
-  wrap.innerHTML = `<button class="hb" type="button"><b>${k} · ${name}</b><span>${sub}</span></button><div class="res" data-k="var_${k}"><i tabindex="0" data-v="sim">Senti</i><i tabindex="0" data-v="nao">Não senti</i></div>`;
-  wrap.querySelector('button').addEventListener('click', () => { try { fn(); metrics.iosTaps++; } catch (e) { metrics.errors.push(String(e)); } beep(8); });
-  varBox.appendChild(wrap);
-});
-
-function seg(el, attr, cb) {
-  el.addEventListener('click', e => {
-    const b = e.target.closest('button'); if (!b) return;
-    el.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
-    cb(b.dataset[attr]); pulse(8); summary();
-  });
-}
-seg($('#mode'), 'm', v => mode = v);
 $('#snd').addEventListener('change', e => { sound = e.target.checked; summary(); });
 
-document.addEventListener('click', e => {
-  const i = e.target.closest('.res i'); if (!i) return;
-  const k = i.parentElement.dataset.k;
-  i.parentElement.querySelectorAll('i').forEach(x => x.removeAttribute('data-on'));
-  i.setAttribute('data-on', i.dataset.v); results[k] = i.dataset.v; summary();
-});
-document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.res i')) { e.preventDefault(); e.target.click(); } });
-
-/* ---------- Volante ---------- */
-const cv = $('#wheel'), g = cv.getContext('2d'); const W = 560, C = W / 2;
-const R = { outer: 270, mid: 200, inner: 130, hub: 70 };
-let wAngle = 0, wLast = null, step = 0.01, wPos = 0, minGap = 35, lastFire = 0, detents = [];
-const DET = 15;
-// Catraca de verdade: a roda gira livre e lisa, 1:1 com o dedo; quem estala é a lingueta,
-// que salta a cada dente e volta com mola. Ao soltar, a roda assenta no dente mais próximo.
-let rawDeg = 0, lastN = 0, shownDeg = 0, ratchetSound = true, dragging = false;
-let pawl = 0, pawlDir = 1, dirty = true;
-function wheelLoop() {
-  if (dragging) { if (shownDeg !== rawDeg) { shownDeg = rawDeg; dirty = true; } }
-  else { const d = lastN * DET - shownDeg; if (Math.abs(d) > 0.01) { shownDeg += d * 0.3; dirty = true; } }
-  if (pawl > 0.01) { pawl *= 0.72; dirty = true; } else if (pawl) { pawl = 0; dirty = true; }
-  if (dirty) { wAngle = shownDeg * Math.PI / 180; drawWheel(); dirty = false; }
-  requestAnimationFrame(wheelLoop);
-}
-requestAnimationFrame(wheelLoop);
-// Clique de detente: curto e suave, no espírito do seletor de horas do iOS.
-function ratchet(strong) {
-  if (!ratchetSound) return;
-  try {
-    if (!ctx) { ctx = new (window.AudioContext || window.webkitAudioContext)(); try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch {} }
-    if (ctx.state === 'suspended') ctx.resume();
-    const t = ctx.currentTime;
-    const o = ctx.createOscillator(), og = ctx.createGain(), lp = ctx.createBiquadFilter();
-    o.type = 'triangle'; o.frequency.setValueAtTime(strong ? 1300 : 2100, t); o.frequency.exponentialRampToValueAtTime(strong ? 700 : 1200, t + 0.012);
-    lp.type = 'lowpass'; lp.frequency.value = 3500;
-    og.gain.setValueAtTime(0.0001, t); og.gain.exponentialRampToValueAtTime(strong ? 0.16 : 0.09, t + 0.0015); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.018);
-    o.connect(lp).connect(og).connect(ctx.destination); o.start(t); o.stop(t + 0.025);
-  } catch (e) {}
-}
-function drawWheel() {
-  g.clearRect(0, 0, W, W);
-  [[R.outer, '#14171c'], [R.mid, '#191d23'], [R.inner, '#1f242b']].forEach(([r, c]) => { g.beginPath(); g.arc(C, C, r, 0, 7); g.fillStyle = c; g.fill(); });
-  g.save(); g.translate(C, C); g.rotate(wAngle);
-  for (let i = 0; i < 360 / DET; i++) { const a = i * DET * Math.PI / 180; g.strokeStyle = i % 6 ? '#3a414b' : '#6b7480'; g.lineWidth = i % 6 ? 3 : 5;
-    g.beginPath(); g.moveTo(Math.sin(a) * 262, -Math.cos(a) * 262); g.lineTo(Math.sin(a) * 240, -Math.cos(a) * 240); g.stroke(); }
-  g.restore();
-  g.fillStyle = '#7fb0ff'; g.fillRect(C - 2, 4, 4, 30);
-  g.beginPath(); g.arc(C, C, R.hub, 0, 7); g.fillStyle = '#0b0d10'; g.fill();
-  g.fillStyle = '#5f6873'; g.font = '600 22px ui-monospace, monospace'; g.textAlign = 'center';
-  g.fillText('0,01', C, C - R.outer + 52); g.fillText('0,1', C, C - R.mid + 40); g.fillText('1', C, C - R.inner + 36);
-  g.fillStyle = '#eef1f5'; g.font = '600 34px system-ui, sans-serif'; g.fillText('X', C, C + 12);
-}
-function wp(e) { const b = cv.getBoundingClientRect(); const x = (e.clientX - b.left) * W / b.width - C, y = (e.clientY - b.top) * W / b.height - C; return { a: Math.atan2(x, -y), r: Math.hypot(x, y) }; }
-cv.addEventListener('pointerdown', e => { const p = wp(e); if (p.r < R.hub || p.r > R.outer) return; cv.setPointerCapture(e.pointerId); wLast = p.a; dragging = true; step = p.r > R.mid ? 0.01 : p.r > R.inner ? 0.1 : 1; });
-cv.addEventListener('pointermove', e => {
-  if (wLast === null) return; const p = wp(e); let d = p.a - wLast; if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI;
-  wLast = p.a; rawDeg += d * 180 / Math.PI;
-  const n = Math.round(rawDeg / DET);
-  while (n !== lastN) {
-    const s = Math.sign(n - lastN); lastN += s; wPos = Math.round((wPos + s * step) * 100) / 100;
-    pawl = 1; pawlDir = -s;
-    const now = performance.now(); detents.push(now);
-    if (now - lastFire >= minGap) { pulse(step >= 1 ? 18 : 8); ratchet(step >= 1); lastFire = now; }
-  }
-  $('#w-pos').textContent = fmt(wPos);
-});
-const endW = () => { wLast = null; dragging = false; rawDeg = lastN * DET; }; cv.addEventListener('pointerup', endW); cv.addEventListener('pointercancel', endW);
-seg($('#gap'), 'g', v => minGap = +v);
-$('#rsnd').addEventListener('change', e => { ratchetSound = e.target.checked; });
-setInterval(() => {
-  const now = performance.now(); detents = detents.filter(t => now - t < 1000); firedWindow = firedWindow.filter(t => now - t < 1000);
-  $('#w-rate').textContent = detents.length; $('#w-fired').textContent = firedWindow.length;
-  if (firedWindow.length > metrics.maxFiredPerSec) { metrics.maxFiredPerSec = firedWindow.length; summary(); }
-}, 250);
-drawWheel();
-
-/* ---------- Régua: linear, como o ajuste de ângulo do Fotos ---------- */
-const rc = $('#ruler'), rg = rc.getContext('2d'); const RW = 900, RH = 360, SP = 60;
-let rOff = 0, rShown = 0, rDrag = false, rLastX = null, rN = 0, rStep = 0.01, rPos = 0, rDet = [], rDirty = true;
-function drawRuler() {
-  rg.clearRect(0, 0, RW, RH);
-  const cx = RW / 2, first = Math.floor((rShown - cx) / SP) - 1, last = Math.ceil((rShown + cx) / SP) + 1;
-  for (let i = first; i <= last; i++) {
-    const x = cx + i * SP - rShown; const dist = Math.abs(x - cx) / cx; const a = Math.max(0, 1 - dist * dist);
-    const major = i % 10 === 0, mid = i % 5 === 0;
-    rg.globalAlpha = 0.25 + 0.75 * a; rg.fillStyle = major ? '#c9d1db' : '#5f6873';
-    const h = major ? 130 : mid ? 90 : 60; rg.fillRect(Math.round(x) - (major ? 4 : 3), RH / 2 - 40 - h / 2, major ? 8 : 6, h);
-    if (major) { rg.font = '600 44px ui-monospace, monospace'; rg.textAlign = 'center'; rg.fillStyle = '#9aa3ae'; rg.fillText(fmt(i * rStep), x, RH - 40); }
-  }
-  rg.globalAlpha = 1; rg.fillStyle = '#7fb0ff'; rg.fillRect(cx - 5, RH / 2 - 150, 10, 220);
-}
-function rulerLoop() {
-  if (rDrag) { if (rShown !== rOff) { rShown = rOff; rDirty = true; } }
-  else { const d = rN * SP - rShown; if (Math.abs(d) > 0.05) { rShown += d * 0.3; rDirty = true; } }
-  if (rDirty) { drawRuler(); rDirty = false; }
-  requestAnimationFrame(rulerLoop);
-}
-requestAnimationFrame(rulerLoop);
-rc.addEventListener('pointerdown', e => { rc.setPointerCapture(e.pointerId); rDrag = true; rLastX = e.clientX; });
-rc.addEventListener('pointermove', e => {
-  if (!rDrag) return; const b = rc.getBoundingClientRect(); const dx = (e.clientX - rLastX) * RW / b.width; rLastX = e.clientX;
-  rOff -= dx; const n = Math.round(rOff / SP);
-  while (n !== rN) {
-    const s = Math.sign(n - rN); rN += s; rPos = Math.round((rPos + s * rStep) * 100) / 100;
-    const now = performance.now(); rDet.push(now);
-    if (now - lastFire >= minGap) { pulse(rStep >= 1 ? 18 : 8); ratchet(rN % 10 === 0); lastFire = now; }
-  }
-  $('#r-pos').textContent = fmt(rPos);
-});
-const endR = () => { rDrag = false; rOff = rN * SP; }; rc.addEventListener('pointerup', endR); rc.addEventListener('pointercancel', endR);
-seg($('#rstep'), 's', v => { rStep = +v; rN = Math.round(rPos / rStep); rOff = rShown = rN * SP; rDirty = true; $('#r-step').textContent = fmt(rStep).replace(/,?0+$/, '') || '1'; });
-setInterval(() => { const now = performance.now(); rDet = rDet.filter(t => now - t < 1000); $('#r-rate').textContent = rDet.length; }, 250);
-
-/* ---------- Números: interpolar, nunca extrapolar ---------- */
+/* ---------- DRO com dígitos que rolam ---------- */
 function fmt(v) { const s = Math.abs(v).toFixed(2).split('.'); return (v < 0 ? '−' : '') + s[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + s[1]; }
-const dro = $('#dro-x');
-// slots: sinal, 4 inteiros, vírgula, 2 decimais
-const layout = ['sign', 'd', 'd', 'd', 'd', 'sep', 'dec', 'dec'];
-const strips = [];
-layout.forEach(k => {
+const dro = $('#dro'); const strips = [];
+['d', 'd', 'd', 'd', 'sep', 'dec', 'dec'].forEach(k => {
   const s = document.createElement('span'); s.className = 'slot' + (k === 'sep' ? ' sep' : '') + (k === 'dec' ? ' dec' : '');
   if (k === 'sep') s.textContent = ',';
-  else if (k === 'sign') { s.textContent = ''; s.dataset.sign = '1'; strips.push(s); }
   else { const st = document.createElement('span'); st.className = 'strip'; st.innerHTML = '0123456789'.split('').map(c => `<span>${c}</span>`).join('') + '<span>&nbsp;</span>'; s.appendChild(st); strips.push(st); }
   dro.appendChild(s);
 });
 const unit = document.createElement('span'); unit.className = 'unit'; unit.textContent = 'mm'; dro.appendChild(unit);
-let shownStr = '';
-function render(v) {
-  const neg = v < -0.004; const a = Math.abs(v); const [i, d] = a.toFixed(2).split('.');
-  const ip = i.padStart(4, ' ');
-  const str = (neg ? '−' : ' ') + ip + d; if (str === shownStr) return; shownStr = str;
-  strips[0].textContent = neg ? '−' : '';
-  const chars = (ip + d).split('');
-  chars.forEach((c, k) => { const st = strips[k + 1]; const idx = c === ' ' ? 10 : +c; st.style.transform = `translateY(${-idx * 1.1}em)`; });
+let shown = '', firstRender = true;
+function renderDRO(v, fast) {
+  dro.classList.toggle('fast', fast || firstRender); firstRender = false;
+  const [i, d] = Math.abs(v).toFixed(2).split('.'); const str = i.padStart(4, ' ') + d;
+  if (str === shown) return; shown = str;
+  str.split('').forEach((c, k) => { strips[k].style.transform = `translateY(${-(c === ' ' ? 10 : +c) * 1.1}em)`; });
 }
-// máquina simulada
-const sim = { x: 0, v: 0, target: 0, vmax: 2000 / 60, a: 250 };
-let reports = [], netMode = 'good', rmode = 'interp', lastReportAt = 0;
-function physics(dt) {
-  const dx = sim.target - sim.x; const dir = Math.sign(dx); const stopDist = sim.v * sim.v / (2 * sim.a);
-  if (Math.abs(dx) < 0.0005 && Math.abs(sim.v) < 0.5) { sim.x = sim.target; sim.v = 0; return; }
-  const want = Math.abs(dx) <= stopDist + 1e-6 ? 0 : sim.vmax;
-  let sp = Math.abs(sim.v); sp = sp < want ? Math.min(want, sp + sim.a * dt) : Math.max(want, sp - sim.a * dt);
-  sim.v = dir * sp; const nx = sim.x + sim.v * dt; if ((sim.target - nx) * dir < 0) { sim.x = sim.target; sim.v = 0; } else sim.x = nx;
+
+/* ---------- Régua com física de scroll do iOS ---------- */
+const box = $('#ruler'), cv = $('#rc'), g = cv.getContext('2d');
+let W = 0, H = 0, dpr = 1, SP = 22; // px CSS por traço
+function resize() {
+  dpr = Math.min(3, window.devicePixelRatio || 1); W = box.clientWidth; H = box.clientHeight;
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); g.setTransform(dpr, 0, 0, dpr, 0, 0); dirty = true;
 }
-let lastPhys = performance.now();
-setInterval(() => { const n = performance.now(); physics((n - lastPhys) / 1000); lastPhys = n; }, 5);
-function sendReport() {
-  if (netMode === 'down') return;
-  if (netMode === 'bad' && Math.random() < 0.18) return;
-  const delay = netMode === 'bad' ? Math.random() * 90 : 4;
-  const r = { t: performance.now(), x: Math.round(sim.x * 1000) / 1000 };
-  setTimeout(() => { reports.push({ ...r, arr: performance.now() }); lastReportAt = performance.now(); if (reports.length > 40) reports.shift(); }, delay);
+// estado em "traços" (float); valor = traços * passo
+let pos = 6000, vel = 0, dragging = false, mode = 'rest', lastTick = Math.round(pos), dirty = true;
+let samples = [], lastX = 0, target = null;
+const minT = () => MIN / step, maxT = () => MAX / step;
+const TAU = 325; // ms, a constante de desaceleração do UIScrollView "normal"
+function rubber(over, dim) { return (1 - 1 / (over * 0.55 / dim + 1)) * dim; }
+
+function onDown(e) {
+  initAudio(); try { box.setPointerCapture(e.pointerId); } catch {} dragging = true; mode = 'drag';
+  vel = 0; target = null; samples = [{ t: e.timeStamp, x: e.clientX }]; lastX = e.clientX;
 }
-setInterval(sendReport, 100);
-const DELAY = 110; let held = 0;
-const dot = $('#dot'), ghost = $('#ghost'), track = $('.track');
-function frame() {
-  const now = performance.now(); let v;
-  const age = now - lastReportAt;
-  if (!reports.length) v = 0;
-  else if (rmode === 'raw') v = reports[reports.length - 1].x;
-  else {
-    const rt = now - DELAY; let a = null, b = null;
-    for (let k = reports.length - 1; k > 0; k--) { if (reports[k - 1].arr <= rt) { a = reports[k - 1]; b = reports[k]; break; } }
-    if (a && rt <= b.arr) { const f = (rt - a.arr) / Math.max(1, b.arr - a.arr); v = a.x + (b.x - a.x) * f; }
-    else v = reports[reports.length - 1].x; // nunca extrapola: segura o último real
+function onMove(e) {
+  if (!dragging) return;
+  const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+  for (const ev of evs) {
+    const dx = ev.clientX - lastX; lastX = ev.clientX;
+    let d = -dx / SP;
+    if (pos < minT() || pos > maxT()) d *= 0.35; // resistência além do curso
+    pos += d; samples.push({ t: ev.timeStamp, x: ev.clientX });
   }
-  if (Math.abs(v - held) < 0.005 && Math.abs(sim.v) < 0.01) v = held; else held = v; // histerese
-  const moving = rmode === 'interp' ? Math.abs(sim.v) > 4 : false;
-  dro.classList.toggle('fast', moving);
-  dro.classList.toggle('stale', age > 1000);
-  $('#age').textContent = age > 1000 ? `Sem sinal da máquina · há ${Math.floor(age / 1000)} s` : '';
-  render(v);
-  const w = track.clientWidth - 28; dot.style.transform = `translateX(${14 + (v / 1000) * w}px)`; ghost.style.transform = `translateX(${14 + (sim.target / 1000) * w}px)`;
-  requestAnimationFrame(frame);
+  const now = e.timeStamp; while (samples.length > 2 && now - samples[0].t > 100) samples.shift();
+  dirty = true;
 }
-requestAnimationFrame(frame);
-seg($('#rmode'), 'r', v => rmode = v);
-seg($('#net'), 'n', v => netMode = v);
-document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => { sim.target = +b.dataset.go; pulse(8); }));
-document.querySelectorAll('[data-step]').forEach(b => b.addEventListener('click', () => { sim.target = Math.round((sim.target + +b.dataset.step) * 100) / 100; pulse(8); }));
+function onUp(e) {
+  if (!dragging) return; dragging = false;
+  const a = samples[0], b = samples[samples.length - 1]; const dt = Math.max(1, b.t - a.t);
+  const v = -(b.x - a.x) / SP / dt; // traços por ms
+  if (pos < minT() || pos > maxT()) { mode = 'settle'; target = Math.min(maxT(), Math.max(minT(), Math.round(pos))); vel = 0; }
+  else if (Math.abs(v) * 1000 > 6) { vel = v; mode = 'glide'; target = Math.round(Math.min(maxT(), Math.max(minT(), pos + vel * TAU))); }
+  else { mode = 'settle'; target = Math.round(pos); }
+  dirty = true;
+}
+box.addEventListener('pointerdown', onDown);
+box.addEventListener('pointermove', onMove);
+box.addEventListener('pointerup', onUp);
+box.addEventListener('pointercancel', onUp);
+
+/* ---------- Medidor de fluidez ---------- */
+let frames = [], slow = 0, lastFrame = performance.now();
+function step_(now) {
+  const dt = Math.min(64, now - lastFrame); lastFrame = now;
+  frames.push(dt); if (frames.length > 120) frames.shift();
+  if ((dragging || mode === 'glide') && dt > 22) slow++;
+  if (mode === 'glide') {
+    pos += vel * dt; vel *= Math.exp(-dt / TAU);
+    if (pos < minT() || pos > maxT()) { vel *= 0.6; if (Math.abs(vel) < 0.002) { mode = 'settle'; target = Math.min(maxT(), Math.max(minT(), Math.round(pos))); } }
+    if (Math.abs(vel) < 0.0025) { mode = 'settle'; target = Math.round(Math.min(maxT(), Math.max(minT(), pos))); }
+    dirty = true;
+  } else if (mode === 'settle') {
+    const d = target - pos; pos += d * (1 - Math.exp(-dt / 55));
+    if (Math.abs(d) < 0.002) { pos = target; mode = 'rest'; target = null; }
+    dirty = true;
+  }
+  const t = Math.round(Math.min(maxT(), Math.max(minT(), pos)));
+  if (t !== lastTick) { click(t % 10 === 0); lastTick = t; }
+  if (dirty) { draw(); dirty = false; }
+  requestAnimationFrame(step_);
+}
+setInterval(() => {
+  if (!frames.length) return; const avg = frames.reduce((a, b) => a + b, 0) / frames.length;
+  $('#m-avg').textContent = avg.toFixed(1) + ' ms'; $('#m-hz').textContent = Math.round(1000 / avg) + ' Hz'; $('#m-slow').textContent = slow; summary();
+}, 500);
+
+function draw() {
+  g.clearRect(0, 0, W, H);
+  const cx = W / 2, base = H * 0.62;
+  const first = Math.floor(pos - cx / SP) - 1, last = Math.ceil(pos + cx / SP) + 1;
+  for (let i = first; i <= last; i++) {
+    const x = cx + (i - pos) * SP; const outside = i < minT() || i > maxT();
+    const dist = Math.abs(x - cx) / cx; const a = Math.max(0, 1 - dist * dist);
+    const major = i % 10 === 0, mid = i % 5 === 0;
+    g.globalAlpha = (outside ? 0.12 : 0.22) + (outside ? 0.2 : 0.78) * a;
+    g.fillStyle = major ? '#d4dbe4' : '#6b7480';
+    const h = major ? 46 : mid ? 32 : 20; const w = major ? 2.5 : 2;
+    g.fillRect(Math.round(x * dpr) / dpr - w / 2, base - h, w, h);
+    if (major && !outside) { g.font = '600 13px ui-monospace, "SF Mono", monospace'; g.textAlign = 'center'; g.fillStyle = '#9aa3ae'; g.fillText(fmt(i * step), x, base + 22); }
+  }
+  g.globalAlpha = 1;
+  if (target !== null && mode === 'glide') {
+    const tx = cx + (target - pos) * SP;
+    if (tx > -10 && tx < W + 10) { g.fillStyle = 'rgba(127,176,255,.35)'; g.fillRect(tx - 1.5, base - 56, 3, 56); }
+  }
+  g.fillStyle = '#7fb0ff'; g.fillRect(cx - 1.5, base - 62, 3, 70);
+  const v = Math.min(MAX, Math.max(MIN, pos * step));
+  renderDRO(v, dragging || mode === 'glide');
+}
+
+document.getElementById('step').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const value = pos * step; step = +b.dataset.s; pos = Math.round(value / step); lastTick = pos; mode = 'rest'; target = null;
+  document.querySelectorAll('#step button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); dirty = true; summary();
+});
 
 /* ---------- Resultado ---------- */
+document.addEventListener('click', e => {
+  const i = e.target.closest('.res i'); if (!i) return;
+  i.parentElement.querySelectorAll('i').forEach(x => x.removeAttribute('data-on'));
+  i.setAttribute('data-on', ''); results[i.parentElement.dataset.k] = i.dataset.v; summary();
+});
+document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.res i')) { e.preventDefault(); e.target.click(); } });
 function summary() {
-  const lines = [
-    'RLight · spike S3',
-    `sistema: ${$('#d-os').textContent}`,
-    `contexto: ${inIframe ? 'iframe' : 'página direta'}`,
-    `vibração web: ${hasVib ? 'sim' : 'não'}`,
-    `método: ${mode} (efetivo: ${effective()}), som: ${sound ? 'sim' : 'não'}`,
-    `intervalo mínimo do volante: ${minGap} ms`,
-    `máx. toques/s medido: ${metrics.maxFiredPerSec}`,
-    `toques iOS disparados: ${metrics.iosTaps}, chamadas de vibração: ${metrics.vibCalls}`,
-    ...Object.entries(results).map(([k, v]) => `${k}: ${v === 'sim' ? 'sim' : v === 'nao' ? 'não' : v === 'A' ? 'volante' : 'régua'}`),
-    metrics.errors.length ? `erros: ${metrics.errors.slice(0, 3).join(' | ')}` : '',
-    `ua: ${ua}`,
-  ].filter(Boolean);
-  $('#out').value = lines.join('\n');
+  const avg = frames.length ? frames.reduce((a, b) => a + b, 0) / frames.length : 0;
+  $('#out').value = [
+    'RLight · spike S3 · rodada 4 (régua com inércia)',
+    `sistema: ${isIOS ? 'iOS ' + (safariVer || '?') : /Android/.test(ua) ? 'Android' : 'outro'}`,
+    `tela: ${avg ? Math.round(1000 / avg) + ' Hz' : '?'}, quadros lentos durante gestos: ${slow}`,
+    `passo: ${String(step).replace('.', ',')} mm, som: ${sound ? 'sim' : 'não'}`,
+    ...Object.entries(results).map(([k, v]) => `${k}: ${v.replace('nao', 'não').replace('_', ' ')}`),
+  ].join('\n');
 }
 $('#copy').addEventListener('click', async () => {
   summary();
-  try { await navigator.clipboard.writeText($('#out').value); $('#copied').textContent = 'Copiado.'; pulse(10); }
+  try { await navigator.clipboard.writeText($('#out').value); $('#copied').textContent = 'Copiado.'; }
   catch { $('#out').select(); $('#copied').textContent = 'Selecionei o texto. Use Copiar do sistema.'; }
 });
-summary();
+
+window.addEventListener('resize', resize);
+resize(); requestAnimationFrame(step_); summary();
 })();
 </script>

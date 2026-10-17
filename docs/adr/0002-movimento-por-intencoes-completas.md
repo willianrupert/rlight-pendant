@@ -38,7 +38,7 @@ ponto real desliza até o fantasma, ao vivo. Como soltar um alfinete no Mapas.
 - Durante o deslocamento, o mapa inteiro vira um botão **Parar** (cancelamento de
   jog, `0x85`).
 
-**2. Fino: o volante.**
+**2. Fino: a régua** ([ADR-0010](0010-a-regua.md)).
 Cada detente é sentido e desenhado na hora, localmente. O app junta os cliques
 de cada ~50 ms num único comando.
 
@@ -49,7 +49,7 @@ Com um movimento **relativo** (`X +0,1`), reenviar por engano dobra o movimento.
 Com um **absoluto** (`vá para X = 412,40`), reenviar não muda nada.
 
 **Todo movimento manual é absoluto, em coordenadas de máquina** (`$J=G53 …`).
-O servidor mantém o **alvo comandado**. O volante incrementa esse alvo, e o
+O servidor mantém o **alvo comandado**. A régua incrementa esse alvo, e o
 comando leva o alvo, não o incremento. Quando o sinal volta, o alvo é
 reiniciado pela posição real. Isso soma com o "nunca reenviar" do ADR-0007: mesmo
 uma ambiguidade não vira movimento a mais.
@@ -58,24 +58,24 @@ uma ambiguidade não vira movimento a mais.
 
 | Regra | Como se sente |
 |---|---|
-| O volante não pode ficar mais de 2 mm à frente da posição real | Os cliques extras são recusados com uma batida seca: a máquina "pesa" |
-| Destino fora do curso | O fantasma ou o volante param na parede |
+| A régua não pode ficar mais de 2 mm à frente da posição real | Ela resiste e não avança mais: a máquina "pesa" |
+| Destino fora do curso | O fantasma ou a régua param na parede |
 | Descendo o Z até o zero da peça | Barreira no Z0: para passar, solte e gire de novo |
-| Sem sinal | O fantasma e o volante saem de cena ([ADR-0007](0007-a-conexao-vai-cair.md)) |
+| Sem sinal | O fantasma e a régua saem de cena ([ADR-0007](0007-a-conexao-vai-cair.md)) |
 
 ### Se a conexão cair no meio
 
 | Movimento | O que a máquina faz |
 |---|---|
 | Indo até o fantasma | Termina no ponto que você escolheu e viu. Nada além |
-| Volante | Termina os cliques já recebidos (no máximo 2 mm à frente) e para |
+| Régua | Termina o destino já recebido (no máximo 2 mm à frente) e para |
 
 Nos dois casos ela faz **exatamente o que foi pedido e nada mais**. Ela nunca anda
 "até alguém mandar parar".
 
 ### Velocidade
 
-Ir até o fantasma usa 2000 mm/min (ajustável depois do S2). O volante usa uma
+Ir até o fantasma usa 2000 mm/min (ajustável depois do S2). A régua usa uma
 velocidade que acompanha o ritmo do giro, até o mesmo teto.
 
 ## Critério de aceitação (spike S2)
@@ -86,7 +86,7 @@ Motor desacoplado primeiro, depois acoplado.
   Dez vezes.
 - **Queda durante o deslocamento ao fantasma:** a máquina termina exatamente no
   destino (±0,01 mm) e não recebe nada depois da reconexão. Dez vezes.
-- **Queda durante o volante:** a máquina não passa do alvo comandado. Dez vezes.
+- **Queda durante a régua:** a máquina não passa do alvo comandado. Dez vezes.
 - **Comando duplicado de propósito:** reenviar o último jog não move a máquina.
 
 ## Consequências

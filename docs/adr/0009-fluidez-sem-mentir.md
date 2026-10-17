@@ -18,7 +18,7 @@ Duas forças puxam em direções opostas:
 ### 1. O toque responde no mesmo quadro, sempre
 
 Tudo o que o dedo faz tem resposta **local**, no mesmo quadro, antes de qualquer
-rede: o fantasma, o volante, o anel de segurar, os cliques e a háptica
+rede: o fantasma, a régua, o anel de segurar, os cliques e a háptica
 ([ADR-0002](0002-movimento-por-intencoes-completas.md)). A rede só carrega o
 resultado. Por isso a sensação de atraso zero não depende do Wi-Fi.
 
@@ -83,17 +83,10 @@ A háptica faz o vidro parecer mecanismo, e merece engenharia, não um detalhe:
   tentativas em quatro variantes do truque, e nenhuma vibrou. O truque que
   funcionava no iOS 18 foi fechado. No iPhone, a sensação mecânica vem do **som e
   do movimento**, desenhados para isso (abaixo).
-- **O que o teste já decidiu sobre o volante:** ele acompanha o dedo 1:1, liso,
-  sem nada que o segure. Uma versão "catraca", que prendia a roda no dente e
-  saltava entre eles, soou certa mas **perdeu a fluidez** e foi descartada. Sem
-  inércia: a máquina move exatamente o que foi girado.
-- **O que ainda está em aberto:** a forma (roda circular ou régua linear, como o
-  ajuste de ângulo do app Fotos) e o tom do clique. Decide-se no laboratório,
-  pelo tato.
-- **O volante limita os detentes sentidos** à taxa que o aparelho aguenta. Mais
-  rápido que isso, o volante continua contando, mas a háptica vira um "rolar"
-  espaçado, como a coroa do Apple Watch girada depressa.
-- **Som de detente** no volante, curto e suave, desligável. É o substituto da
+- **A forma do ajuste fino foi decidida no teste:** uma régua linear com
+  inércia de destino anunciado ([ADR-0010](0010-a-regua.md)). A catraca, que
+  prendia o controle no dente, perdeu a fluidez e saiu.
+- **Som de detente** na régua, curto e suave, desligável. É o substituto da
   háptica no iPhone e um reforço no Android.
 
 O laboratório do spike S3 fica em `spikes/s3-haptica/` e roda no próprio
