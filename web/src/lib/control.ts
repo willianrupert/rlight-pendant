@@ -62,12 +62,18 @@ export function machineActions(
 }
 
 /** O que o comando muda e por isso confirma quando o estado novo chega. */
-export function confirmedBy(command: CommandName, _before: MachineState | null, now: MachineSnapshot): boolean {
+export function confirmedBy(
+  command: CommandName,
+  _before: MachineState | null,
+  now: MachineSnapshot,
+  homing: { before: boolean; now: boolean } = { before: false, now: false },
+): boolean {
   switch (command) {
     case 'unlock':
       return now.state !== 'Alarm';
     case 'home':
-      return now.state === 'Home';
+      // Um homing rápido pode acabar entre dois relatórios: "agora tem homing" também confirma.
+      return now.state === 'Home' || (!homing.before && homing.now);
     case 'feedHold':
       return now.state === 'Hold';
     case 'resume':
@@ -95,6 +101,7 @@ export interface Pending {
   phase: PendingPhase;
   sentAt: number;
   before: MachineState | null;
+  homedBefore: boolean;
 }
 
 export type Outcome = { kind: 'confirmed'; command: CommandName } | { kind: 'failed'; command: CommandName; reason: string };
@@ -116,8 +123,8 @@ export class PendingTracker {
     return this.#items.some((p) => p.command === command);
   }
 
-  sent(id: string, command: CommandName, now: number, before: MachineState | null): void {
-    this.#items.push({ id, command, phase: 'sent', sentAt: now, before });
+  sent(id: string, command: CommandName, now: number, before: MachineState | null, homedBefore = false): void {
+    this.#items.push({ id, command, phase: 'sent', sentAt: now, before, homedBefore });
   }
 
   result(id: string, result: CommandResult): Outcome | null {
@@ -131,11 +138,11 @@ export class PendingTracker {
     return null;
   }
 
-  state(snapshot: MachineSnapshot): Outcome[] {
+  state(snapshot: MachineSnapshot, homed = false): Outcome[] {
     const out: Outcome[] = [];
     for (const p of [...this.#items]) {
       if (p.phase !== 'accepted') continue;
-      if (confirmedBy(p.command, p.before, snapshot)) {
+      if (confirmedBy(p.command, p.before, snapshot, { before: p.homedBefore, now: homed })) {
         this.#remove(p);
         out.push({ kind: 'confirmed', command: p.command });
       }

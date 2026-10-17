@@ -86,6 +86,36 @@ export class GhostModel {
 
 const NS = 'http://www.w3.org/2000/svg';
 
+/** Margem, em px, nas pontas da régua vertical do Z (o CSS usa a mesma). */
+const GAUGE_INSET = 10;
+
+/** Perto assim do zero da peça, o ponto ganha o anel de "na superfície". */
+export const AT_ZERO_MM = 0.05;
+
+/**
+ * Como a altura aparece vista de cima, sem 3D: o ponto encolhe e fica nítido
+ * descendo, cresce e amacia subindo, como uma sombra. `depth` vai de 0 (topo do
+ * curso) a 1 (fundo).
+ */
+export function zLook(z: number, limits: AxisLimits, zero: number | null): {
+  depth: number;
+  scale: number;
+  softness: number;
+  atZero: boolean;
+  zeroDepth: number | null;
+} {
+  const span = Math.max(1e-6, limits.max - limits.min);
+  const depth = Math.min(1, Math.max(0, (limits.max - z) / span));
+  const inside = zero !== null && zero >= limits.min && zero <= limits.max;
+  return {
+    depth,
+    scale: 1.3 - 0.55 * depth,
+    softness: 1 - depth,
+    atZero: zero !== null && Math.abs(z - zero) <= AT_ZERO_MM,
+    zeroDepth: inside ? (limits.max - zero!) / span : null,
+  };
+}
+
 /** A margem em volta da mesa, em mm, para o ponto na borda caber inteiro. */
 export function mapPad(limits: TableLimits): number {
   return Math.max(limits.x.max - limits.x.min, limits.y.max - limits.y.min) * 0.04;
@@ -102,6 +132,12 @@ export class MapView {
   readonly #ghost: SVGGElement;
   readonly #line: SVGLineElement;
   readonly #halo: SVGCircleElement;
+  readonly #zring: SVGCircleElement;
+  readonly #bz = new ReportBuffer();
+  #gauge: { root: HTMLElement; tool: HTMLElement; zero: HTMLElement; h: number; ro: ResizeObserver } | null = null;
+  /** O curso do Z e o zero da peça em coordenada de máquina, quando conhecidos. */
+  zLimits: AxisLimits | null = null;
+  zZero: number | null = null;
   readonly #bx = new ReportBuffer();
   readonly #by = new ReportBuffer();
   #limits: TableLimits;
@@ -134,7 +170,9 @@ export class MapView {
     const ring = document.createElementNS(NS, 'circle');
     ring.setAttribute('r', '1');
     this.#ghost.append(ring);
-    svg.append(grid, this.#line, this.#halo, this.#real, this.#ghost);
+    this.#zring = document.createElementNS(NS, 'circle');
+    this.#zring.setAttribute('class', 'zring');
+    svg.append(grid, this.#line, this.#halo, this.#zring, this.#real, this.#ghost);
     this.setLimits(limits);
     svg.addEventListener('pointerdown', this.#down);
     svg.addEventListener('pointermove', this.#move);
@@ -179,14 +217,30 @@ export class MapView {
     }
   }
 
-  push(p: Point, at: number): void {
+  push(p: Point & { z?: number }, at: number): void {
     this.#bx.push({ at, value: p.x });
     this.#by.push({ at, value: p.y });
+    if (p.z !== undefined) this.#bz.push({ at, value: p.z });
   }
 
   clear(): void {
     this.#bx.clear();
     this.#by.clear();
+    this.#bz.clear();
+  }
+
+  /** A régua vertical do Z ao lado do mapa: o curso, a ferramenta e o zero da peça. */
+  attachGauge(root: HTMLElement): void {
+    const tool = document.createElement('span');
+    tool.className = 'ztool';
+    const zero = document.createElement('span');
+    zero.className = 'zzero';
+    root.append(zero, tool);
+    const ro = new ResizeObserver(() => {
+      if (this.#gauge) this.#gauge.h = Math.max(0, root.clientHeight - 2 * GAUGE_INSET);
+    });
+    ro.observe(root);
+    this.#gauge = { root, tool, zero, h: Math.max(0, root.clientHeight - 2 * GAUGE_INSET), ro };
   }
 
   start(): void {
@@ -199,6 +253,7 @@ export class MapView {
 
   destroy(): void {
     cancelAnimationFrame(this.#raf);
+    this.#gauge?.ro.disconnect();
     this.#svg.removeEventListener('pointerdown', this.#down);
     this.#svg.removeEventListener('pointermove', this.#move);
     this.#svg.removeEventListener('pointerup', this.#up);
@@ -268,8 +323,27 @@ export class MapView {
         el.setAttribute('cx', String(rx));
         el.setAttribute('cy', String(-ry));
       }
-      this.#real.setAttribute('r', String(7 * k));
-      this.#halo.setAttribute('r', String(this.enabled ? 22 * k : 0));
+      const zs = this.#bz.items;
+      const rz = this.frozen ? zs[zs.length - 1]?.value : displayValue(zs, now, 120);
+      const look = rz != null && this.zLimits ? zLook(rz, this.zLimits, this.zZero) : null;
+      const scale = look?.scale ?? 1;
+      this.#real.setAttribute('r', String(7 * k * scale));
+      this.#halo.setAttribute('r', String((this.enabled ? 22 : 12 + 10 * (look?.softness ?? 0)) * k * scale));
+      this.#halo.style.opacity = String(this.enabled ? 0.22 : 0.06 + 0.14 * (look?.softness ?? 0));
+      this.#zring.setAttribute('cx', String(rx));
+      this.#zring.setAttribute('cy', String(-ry));
+      this.#zring.setAttribute('r', String(12 * k * scale));
+      this.#zring.style.display = look?.atZero ? '' : 'none';
+      const gauge = this.#gauge;
+      if (gauge && look) {
+        gauge.root.style.display = '';
+        gauge.tool.style.transform = `translateY(${look.depth * gauge.h}px)`;
+        gauge.zero.style.display = look.zeroDepth === null ? 'none' : '';
+        if (look.zeroDepth !== null) gauge.zero.style.transform = `translateY(${look.zeroDepth * gauge.h}px)`;
+        gauge.root.classList.toggle('at-zero', look.atZero);
+      } else if (gauge) {
+        gauge.root.style.display = 'none';
+      }
     }
     const g = this.model.ghost;
     if (g && rx != null && ry != null) {

@@ -70,9 +70,12 @@
     limits: AxisLimits | null;
     offset: number;
     canGlide: boolean;
+    /** Z0 da peça em coordenada de máquina, só na régua do Z. */
+    barrier: number | null;
     now: number;
   }): void {
     model.reported = input.reported;
+    model.barrier = input.barrier;
     model.limits = input.limits;
     model.canGlide = input.canGlide;
     const target = input.commanded ?? input.reported;

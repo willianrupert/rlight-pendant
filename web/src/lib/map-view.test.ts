@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GhostModel, destinationText, rubber } from './map-view';
+import { GhostModel, destinationText, rubber, zLook } from './map-view';
 
 const limits = { x: { min: 0, max: 1215 }, y: { min: 0, max: 604 } };
 
@@ -46,4 +46,28 @@ describe('elástico', () => {
 
 it('destino nas coordenadas do DRO', () => {
   expect(destinationText({ x: 410, y: 220 }, { x: 10, y: 20 })).toBe('X 400,00 · Y 200,00');
+});
+
+describe('o Z visto de cima', () => {
+  const z = { min: -158, max: 0 };
+
+  it('no topo o ponto é maior e macio; no fundo, menor e nítido', () => {
+    const top = zLook(0, z, null);
+    const bottom = zLook(-158, z, null);
+    expect(top.depth).toBe(0);
+    expect(bottom.depth).toBe(1);
+    expect(top.scale).toBeGreaterThan(bottom.scale);
+    expect(top.softness).toBeGreaterThan(bottom.softness);
+  });
+
+  it('o anel aparece só na superfície da peça', () => {
+    expect(zLook(-40.03, z, -40).atZero).toBe(true);
+    expect(zLook(-39.5, z, -40).atZero).toBe(false);
+    expect(zLook(-40, z, null).atZero).toBe(false);
+  });
+
+  it('o zero da peça na régua vertical, se cabe no curso', () => {
+    expect(zLook(-10, z, -79).zeroDepth).toBeCloseTo(0.5, 6);
+    expect(zLook(-10, z, 5).zeroDepth).toBeNull();
+  });
 });

@@ -91,7 +91,7 @@
       return;
     }
     if (TRACKED.has(req.command)) {
-      tracker.sent(id, req.command, performance.now(), machine?.state ?? null);
+      tracker.sent(id, req.command, performance.now(), machine?.state ?? null, st?.homed ?? false);
       pendingRev++;
     }
   }
@@ -116,6 +116,8 @@
       limits: conn.limits[axis] ?? null,
       offset: m.wco?.[axis] ?? 0,
       canGlide: st?.homed ?? false,
+      // A superfície da peça só existe com um zero de peça definido.
+      barrier: axis === 'z' && m.wco ? m.wco.z : null,
       now: at,
     });
   }
@@ -181,7 +183,7 @@
       if (pos) telemetry.push(pos, at);
       if (m?.mpos) map?.push(m.mpos, at);
       if (m && tracker.items.length) {
-        for (const o of tracker.state(m)) if (o.kind === 'failed') flash(o.reason);
+        for (const o of tracker.state(m, s.homed)) if (o.kind === 'failed') flash(o.reason);
         pendingRev++;
       }
       syncRuler(at);
@@ -289,6 +291,8 @@
       frozen={!live}
       {offset}
       hint={hands && !homed ? 'Faça o homing para mover pelo mapa' : null}
+      zLimits={limits.z ?? null}
+      zZero={machine?.wco ? machine.wco.z : null}
       onjog={(p) => {
         clicker.play('confirm');
         send({ command: 'jogTo', x: p.x, y: p.y });

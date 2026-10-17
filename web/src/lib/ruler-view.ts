@@ -8,6 +8,7 @@
 
 import {
   DEFAULT_MAX_LEAD_MM,
+  OVERSCROLL_RESISTANCE,
   clickFor,
   dragDelta,
   glidePosition,
@@ -30,7 +31,7 @@ export type RulerMode = 'rest' | 'drag' | 'glide' | 'settle';
 
 export interface RulerDeps {
   send: (req: CommandRequest) => void;
-  click: (kind: 'major' | 'minor') => void;
+  click: (kind: 'major' | 'minor' | 'wall') => void;
 }
 
 const r6 = (v: number) => Math.round(v * 1e6) / 1e6;
@@ -47,6 +48,12 @@ export class RulerModel {
   limits: AxisLimits | null = null;
   /** A última posição real da máquina neste eixo. */
   reported: number | null = null;
+  /**
+   * O zero da peça, em coordenada de máquina, quando a régua é a do Z. Um gesto
+   * que começou acima dele para nele; para descer além é preciso um gesto novo,
+   * de propósito, já na superfície (zBarrier do core, VISION.md).
+   */
+  barrier: number | null = null;
 
   #glideFrom = 0;
   #glideStart = 0;
@@ -57,6 +64,8 @@ export class RulerModel {
   #sentTick = 0;
   #batcher: NudgeBatcher;
   #expect: { value: number; until: number } | null = null;
+  #startAbove = false;
+  #atBarrier = false;
 
   constructor(
     axis: Axis,
@@ -125,8 +134,16 @@ export class RulerModel {
     this.#reset(this.reported ?? this.value);
   }
 
+  /** O traço da barreira, ou null sem barreira. Arredonda para cima: nunca passa da superfície. */
+  get barrierTick(): number | null {
+    if (this.barrier === null) return null;
+    return Math.ceil(r6((this.barrier - this.base) / this.step) - 1e-9);
+  }
+
   down(x: number, t: number): void {
     if (this.mode === 'glide') this.#catch();
+    this.#startAbove = this.barrier !== null && this.value > this.barrier + 1e-6;
+    this.#atBarrier = false;
     this.mode = 'drag';
     this.target = null;
     this.#samples = [{ t, x }];
@@ -137,7 +154,7 @@ export class RulerModel {
     if (this.mode !== 'drag') return;
     const d = dragDelta({ dxPx: x - this.#lastX, pxPerTick: PX_PER_TICK, pos: this.pos, minTick: this.minTick, maxTick: this.maxTick });
     this.#lastX = x;
-    this.pos = this.#leadClamp(this.pos + d, d);
+    this.pos = this.#barrierClamp(this.pos + this.#leadResist(d));
     this.#samples.push({ t, x });
     while (this.#samples.length > 2 && t - this.#samples[0]!.t > 120) this.#samples.shift();
     this.#queueTicks(t);
@@ -147,7 +164,8 @@ export class RulerModel {
     if (this.mode !== 'drag') return;
     const pxPerMs = velocityFromSamples(this.#samples);
     const velocity = this.canGlide ? -pxPerMs / PX_PER_TICK : 0;
-    const plan = planRelease({ pos: this.pos, velocity, minTick: this.minTick, maxTick: this.maxTick });
+    const bt = this.#startAbove ? this.barrierTick : null;
+    const plan = planRelease({ pos: this.pos, velocity, minTick: bt === null ? this.minTick : Math.max(this.minTick, bt), maxTick: this.maxTick });
     this.target = plan.target;
     if (plan.kind === 'glide') {
       // Um único comando absoluto para o destino anunciado (ADR-0002).
@@ -160,8 +178,10 @@ export class RulerModel {
       this.#expectValue(value, t);
       this.deps.send({ command: 'jogAxisTo', axis: this.axis, value });
     } else {
+      // Solto no elástico, a régua volta até onde a máquina pode ir agora.
+      this.target = this.#withinLead(plan.target);
       this.mode = 'settle';
-      this.#flushTo(plan.target, t);
+      this.#flushTo(this.target, t);
     }
   }
 
@@ -178,6 +198,8 @@ export class RulerModel {
       this.pos += d * (1 - Math.exp(-dt / SETTLE_MS));
       if (Math.abs(d) < 0.002) this.#settled();
     } else if (this.mode === 'drag') {
+      // A máquina alcança a régua: o que estava no elástico vai sendo mandado.
+      this.#queueTicks(now);
       const cmd = this.#batcher.flush(now);
       if (cmd) this.deps.send(cmd);
     }
@@ -204,7 +226,7 @@ export class RulerModel {
   }
 
   #queueTicks(t: number): void {
-    const tick = Math.round(Math.min(this.maxTick, Math.max(this.minTick, this.pos)));
+    const tick = this.#withinLead(Math.round(Math.min(this.maxTick, Math.max(this.minTick, this.pos))));
     if (tick === this.#sentTick) return;
     this.#batcher.add(tick - this.#sentTick, t);
     this.#sentTick = tick;
@@ -221,18 +243,42 @@ export class RulerModel {
   }
 
   /**
-   * A régua não fica mais de 2 mm à frente da máquina (ADR-0002): ela pesa e
-   * não avança mais. Voltar em direção à máquina sempre pode.
+   * A régua não fica mais de 2 mm à frente da máquina (ADR-0002): além disso ela
+   * pesa, com o elástico do iOS, e só o que está dentro dos 2 mm vai para a placa.
+   * Conforme a máquina anda, a janela anda junto. Voltar em direção à máquina
+   * sempre pode.
    */
-  #leadClamp(next: number, delta: number): number {
-    if (this.reported === null) return next;
-    const lead = Math.floor(r6((DEFAULT_MAX_LEAD_MM - 1e-6) / this.step));
+  #leadWindow(): { lo: number; hi: number } | null {
+    if (this.reported === null) return null;
+    const lead = r6(DEFAULT_MAX_LEAD_MM / this.step);
     const here = r6((this.reported - this.base) / this.step);
-    const lo = here - lead;
-    const hi = here + lead;
-    if (delta > 0 && next > hi) return Math.max(this.pos, hi);
-    if (delta < 0 && next < lo) return Math.min(this.pos, lo);
-    return next;
+    return { lo: Math.ceil(here - lead - 1e-9), hi: Math.floor(here + lead + 1e-9) };
+  }
+
+  #leadResist(d: number): number {
+    const w = this.#leadWindow();
+    if (!w) return d;
+    if ((d > 0 && this.pos >= w.hi) || (d < 0 && this.pos <= w.lo)) return d * OVERSCROLL_RESISTANCE;
+    return d;
+  }
+
+  #withinLead(tick: number): number {
+    const w = this.#leadWindow();
+    if (!w) return tick;
+    const lo = Math.min(w.lo, this.#sentTick);
+    const hi = Math.max(w.hi, this.#sentTick);
+    return Math.min(hi, Math.max(lo, tick));
+  }
+
+  #barrierClamp(next: number): number {
+    const bt = this.#startAbove ? this.barrierTick : null;
+    if (bt === null || next >= bt) {
+      if (bt !== null && next > bt + 0.5) this.#atBarrier = false;
+      return next;
+    }
+    if (!this.#atBarrier) this.deps.click('wall');
+    this.#atBarrier = true;
+    return bt;
   }
 
   #expectValue(value: number, t: number): void {
@@ -383,6 +429,19 @@ export class RulerView {
       }
     }
     g.globalAlpha = 1;
+    // A superfície da peça (Z0): uma parede âmbar com o nome dela.
+    if (m.barrier !== null) {
+      const bx = cx + ((m.barrier - m.base) / m.step - m.pos) * SP;
+      if (bx > -20 && bx < W + 20) {
+        g.fillStyle = '#ffb454';
+        g.fillRect(bx - 1.5, base - 52, 3, 60);
+        g.font = '600 11px ui-monospace, "SF Mono", monospace';
+        g.textAlign = 'left';
+        g.fillText('Z0', bx + 6, base - 40);
+        g.textAlign = 'center';
+        g.font = '600 13px ui-monospace, "SF Mono", monospace';
+      }
+    }
     g.fillStyle = '#7fb0ff';
     g.fillRect(cx - 1.5, base - 58, 3, 66);
     if (m.mode === 'glide' && m.target !== null) {
