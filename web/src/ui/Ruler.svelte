@@ -2,7 +2,7 @@
   // A régua (ADR-0010) com o seletor de passo. O gesto e o desenho moram em
   // lib/ruler-view.ts; aqui só a casca.
   import { onDestroy, onMount } from 'svelte';
-  import type { Axis, AxisLimits } from '@rlight/core';
+  import type { Axis, AxisLimits, MachineState } from '@rlight/core';
   import type { CommandRequest } from '../lib/connection';
   import type { Clicker } from '../lib/feel';
   import { formatMm } from '../lib/present';
@@ -76,9 +76,15 @@
     barrier: number | null;
     /** A máquina anda: um toque na régua é o Parar. */
     moving: boolean;
+    state: MachineState | null;
+    feed: number;
     now: number;
   }): void {
     model.machineMoving = input.moving;
+    if (view) {
+      view.state = input.state;
+      view.feed = input.feed;
+    }
     if (input.reported !== null) view?.pushReported(input.reported, input.now);
     model.reported = input.reported;
     model.barrier = input.barrier;

@@ -3,6 +3,8 @@
 // o desenho escreve direto em atributos do SVG num laço de rAF, fora do Svelte.
 
 import { ReportBuffer, displayValue, goTo, type AxisLimits } from '@rlight/core';
+import type { MachineState } from '@rlight/core';
+import { heading, speedText, speedVisible, trailPx } from './motion-look';
 import { formatMm } from './present';
 
 export interface TableLimits {
@@ -30,6 +32,11 @@ export class GhostModel {
   dragging = false;
   /** Onde o fantasma está desenhado (com o elástico fora da mesa). */
   ghost: Point | null = null;
+  /**
+   * Um toque na mesa põe o fantasma lá e espera o "Ir": um toque sozinho nunca
+   * move a máquina pela mesa (ADR-0005). Arrastar e soltar continua indo direto.
+   */
+  preview: Point | null = null;
   #from: Point = { x: 0, y: 0 };
   #grab: Point = { x: 0, y: 0 };
 
@@ -44,6 +51,7 @@ export class GhostModel {
   down(finger: Point, real: Point, grabRadiusMm: number): boolean {
     if (Math.hypot(finger.x - real.x, finger.y - real.y) > grabRadiusMm) return false;
     this.dragging = true;
+    this.preview = null;
     this.#from = { ...real };
     this.#grab = { ...finger };
     this.ghost = { ...real };
@@ -81,10 +89,34 @@ export class GhostModel {
   cancel(): void {
     this.dragging = false;
     this.ghost = null;
+    this.preview = null;
+  }
+
+  /**
+   * Um toque na mesa: sem prévia, põe o fantasma no ponto tocado (dentro da
+   * mesa); com prévia, um toque fora do "Ir" a desfaz.
+   */
+  tap(finger: Point, real: Point): Point | null {
+    if (this.preview) {
+      this.preview = null;
+      return null;
+    }
+    const dest = goTo(finger, this.limits).target;
+    if (Math.hypot(dest.x - real.x, dest.y - real.y) < MIN_MOVE_MM) return null;
+    this.preview = dest;
+    return dest;
+  }
+
+  /** "Ir": o destino da prévia, uma vez. */
+  go(): Point | null {
+    const dest = this.preview;
+    this.preview = null;
+    return dest;
   }
 }
 
 const NS = 'http://www.w3.org/2000/svg';
+const TAP_SLOP_PX = 8;
 
 /** Margem, em px, nas pontas da régua vertical do Z (o CSS usa a mesma). */
 const GAUGE_INSET = 10;
@@ -133,7 +165,15 @@ export class MapView {
   readonly #line: SVGLineElement;
   readonly #halo: SVGCircleElement;
   readonly #zring: SVGCircleElement;
+  readonly #trail: SVGLineElement;
+  readonly #speed: SVGTextElement;
+  #speedShown = '';
+  #recent: { x: number; y: number; t: number }[] = [];
+  #tapStart: { x: number; y: number } | null = null;
   readonly #bz = new ReportBuffer();
+  /** O estado e a velocidade que a placa reporta, para a velocidade e o rastro. */
+  state: MachineState | null = null;
+  feed = 0;
   #gauge: { root: HTMLElement; tool: HTMLElement; zero: HTMLElement; h: number; ro: ResizeObserver } | null = null;
   /** O curso do Z e o zero da peça em coordenada de máquina, quando conhecidos. */
   zLimits: AxisLimits | null = null;
@@ -151,6 +191,8 @@ export class MapView {
   onGhost: ((dest: Point | null) => void) | null = null;
   onRelease: ((dest: Point) => void) | null = null;
   onGrab: (() => void) | null = null;
+  /** O fantasma de um toque mudou (prévia posta ou desfeita). */
+  onPreview: ((dest: Point | null) => void) | null = null;
 
   constructor(svg: SVGSVGElement, limits: TableLimits) {
     this.#svg = svg;
@@ -173,7 +215,11 @@ export class MapView {
     this.#ghost.append(ring);
     this.#zring = document.createElementNS(NS, 'circle');
     this.#zring.setAttribute('class', 'zring');
-    svg.append(grid, this.#line, this.#halo, this.#zring, this.#real, this.#ghost);
+    this.#trail = document.createElementNS(NS, 'line');
+    this.#trail.setAttribute('class', 'trail');
+    this.#speed = document.createElementNS(NS, 'text');
+    this.#speed.setAttribute('class', 'speed');
+    svg.append(grid, this.#line, this.#trail, this.#halo, this.#zring, this.#real, this.#ghost, this.#speed);
     this.setLimits(limits);
     svg.addEventListener('pointerdown', this.#down);
     svg.addEventListener('pointermove', this.#move);
@@ -279,12 +325,29 @@ export class MapView {
     };
   }
 
+  /** Onde um ponto da mesa cai na vista, em px a partir do canto da vista. */
+  toScreen(p: Point): { x: number; y: number } {
+    const r = this.#svg.getBoundingClientRect();
+    const { x, y } = this.#limits;
+    const pad = mapPad(this.#limits);
+    return {
+      x: ((p.x - x.min + pad) / (x.max - x.min + 2 * pad)) * r.width,
+      y: ((y.max + pad - p.y) / (y.max - y.min + 2 * pad)) * r.height,
+    };
+  }
+
   #down = (e: PointerEvent) => {
     if (!this.enabled || !this.#shownReal) return;
     const k = this.#mmPerPx();
     // Raio de pega de 40 px de tela, para o polegar de luva.
     const radius = 40 * Math.max(k.x, k.y);
-    if (!this.model.down(this.#toTable(e), this.#shownReal, radius)) return;
+    const hadPreview = this.model.preview !== null;
+    if (!this.model.down(this.#toTable(e), this.#shownReal, radius)) {
+      // Longe do ponto: pode ser um toque na mesa (prévia com "Ir").
+      this.#tapStart = { x: e.clientX, y: e.clientY };
+      return;
+    }
+    if (hadPreview) this.onPreview?.(null);
     try {
       this.#svg.setPointerCapture(e.pointerId);
     } catch {
@@ -295,12 +358,20 @@ export class MapView {
   };
 
   #move = (e: PointerEvent) => {
+    if (this.#tapStart && Math.hypot(e.clientX - this.#tapStart.x, e.clientY - this.#tapStart.y) > TAP_SLOP_PX) this.#tapStart = null;
     if (!this.model.dragging) return;
     this.model.move(this.#toTable(e));
     this.onGhost?.(this.model.destination);
   };
 
-  #up = () => {
+  #up = (e: PointerEvent) => {
+    const tap = this.#tapStart;
+    this.#tapStart = null;
+    if (tap && this.#shownReal && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) <= TAP_SLOP_PX) {
+      this.model.tap(this.#toTable(e), this.#shownReal);
+      this.onPreview?.(this.model.preview);
+      return;
+    }
     if (!this.model.dragging) return;
     const dest = this.model.up();
     this.onGhost?.(null);
@@ -308,8 +379,11 @@ export class MapView {
   };
 
   #cancel = () => {
+    this.#tapStart = null;
+    const had = this.model.preview !== null;
     this.model.cancel();
     this.onGhost?.(null);
+    if (had) this.onPreview?.(null);
   };
 
   #draw(now: number): void {
@@ -352,7 +426,8 @@ export class MapView {
         gauge.root.style.display = 'none';
       }
     }
-    const g = this.model.ghost;
+    this.#drawMotion(now, rx ?? null, ry ?? null, k);
+    const g = this.model.ghost ?? this.model.preview;
     if (g && rx != null && ry != null) {
       this.#ghost.style.display = '';
       this.#ghost.setAttribute('transform', `translate(${g.x} ${-g.y}) scale(${16 * k})`);
@@ -365,6 +440,41 @@ export class MapView {
       this.#ghost.style.display = 'none';
       this.#line.style.display = 'none';
     }
+  }
+
+  /**
+   * A velocidade real ao lado do ponto e um rastro curto atrás dele,
+   * proporcional a ela. Nada previsto: é o FS: que a placa manda.
+   */
+  #drawMotion(now: number, rx: number | null, ry: number | null, k: number): void {
+    const visible = rx !== null && ry !== null && !this.frozen && speedVisible(this.state, this.feed);
+    this.#speed.classList.toggle('on', visible);
+    if (rx === null || ry === null) return;
+    this.#recent.push({ x: rx, y: ry, t: now });
+    while (this.#recent.length > 2 && now - this.#recent[0]!.t > 120) this.#recent.shift();
+    if (!visible) {
+      this.#trail.style.display = 'none';
+      return;
+    }
+    const text = speedText(this.feed);
+    if (text !== this.#speedShown) this.#speed.textContent = this.#speedShown = text;
+    // O rótulo fica ao lado do ponto, em px de tela, sem sair da mesa.
+    const right = rx < (this.#limits.x.min + this.#limits.x.max) / 2;
+    this.#speed.setAttribute('x', String(rx + (right ? 14 : -14) * k));
+    this.#speed.setAttribute('y', String(-ry - 12 * k));
+    this.#speed.setAttribute('text-anchor', right ? 'start' : 'end');
+    this.#speed.style.fontSize = `${12 * k}px`;
+    const dir = heading(this.#recent[0]!, { x: rx, y: ry });
+    const len = trailPx(this.feed) * k;
+    if (!dir || len <= 0) {
+      this.#trail.style.display = 'none';
+      return;
+    }
+    this.#trail.style.display = '';
+    this.#trail.setAttribute('x1', String(rx));
+    this.#trail.setAttribute('y1', String(-ry));
+    this.#trail.setAttribute('x2', String(rx - dir.x * len));
+    this.#trail.setAttribute('y2', String(-(ry - dir.y * len)));
   }
 }
 

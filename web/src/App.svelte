@@ -124,6 +124,8 @@
       // Parada, a máquina está onde diz; movendo, a régua segue o alvo comandado.
       commanded: m.state === 'Idle' ? null : (st?.commanded[axis] ?? null),
       moving: m.state === 'Jog',
+      state: m.state,
+      feed: m.feed,
       limits: conn.limits[axis] ?? null,
       offset: m.wco?.[axis] ?? 0,
       canGlide: st?.homed ?? false,
@@ -316,7 +318,14 @@
       stopPending={!!pending('cancelJog')}
       frozen={!live}
       {offset}
-      hint={hands && !homed ? 'Faça o homing para mover pelo mapa' : null}
+      needsHoming={hands && !homed && shown === 'Idle' && shows('home')}
+      homingPending={pending('home')}
+      machineState={machine?.state ?? null}
+      feed={machine?.feed ?? 0}
+      onhome={() => {
+        clicker.play('confirm');
+        send({ command: 'home' });
+      }}
       zLimits={limits.z ?? null}
       zZero={machine?.wco ? machine.wco.z : null}
       onjog={(p) => {

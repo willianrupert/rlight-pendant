@@ -36,6 +36,43 @@ describe('o fantasma', () => {
   });
 });
 
+describe('tocar na mesa: prévia e "Ir"', () => {
+  const real = { x: 100, y: 100 };
+
+  it('um toque põe o fantasma lá, sem mandar nada; "Ir" devolve o destino uma vez', () => {
+    const g = new GhostModel(limits);
+    expect(g.tap({ x: 600, y: 300 }, real)).toEqual({ x: 600, y: 300 });
+    expect(g.preview).toEqual({ x: 600, y: 300 });
+    expect(g.go()).toEqual({ x: 600, y: 300 });
+    expect(g.go()).toBeNull();
+  });
+
+  it('um toque fora da mesa vira um ponto na borda', () => {
+    const g = new GhostModel(limits);
+    expect(g.tap({ x: 1300, y: -20 }, real)).toEqual({ x: 1215, y: 0 });
+  });
+
+  it('com prévia, outro toque cancela', () => {
+    const g = new GhostModel(limits);
+    g.tap({ x: 600, y: 300 }, real);
+    expect(g.tap({ x: 50, y: 50 }, real)).toBeNull();
+    expect(g.preview).toBeNull();
+    expect(g.go()).toBeNull();
+  });
+
+  it('tocar no próprio ponto não é destino', () => {
+    const g = new GhostModel(limits);
+    expect(g.tap({ x: 100.3, y: 100 }, real)).toBeNull();
+  });
+
+  it('arrastar o ponto desfaz a prévia', () => {
+    const g = new GhostModel(limits);
+    g.tap({ x: 600, y: 300 }, real);
+    g.down({ x: 100, y: 100 }, real, 30);
+    expect(g.preview).toBeNull();
+  });
+});
+
 describe('elástico', () => {
   it('dentro é identidade, fora encolhe', () => {
     expect(rubber(50, 0, 100, 10)).toBe(50);
