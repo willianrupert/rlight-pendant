@@ -98,6 +98,12 @@ textarea{width:100%;box-sizing:border-box;min-height:150px;background:var(--pane
     <div class="res" data-k="referencia"><i tabindex="0" data-v="sim">Senti</i><i tabindex="0" data-v="nao">Não senti</i></div>
   </section>
 
+  <section class="card" aria-labelledby="h-var">
+    <h2 id="h-var">1b · Variantes do toque por código</h2>
+    <p>Cada botão tenta acionar o toque do switch de um jeito diferente. Marque qual vibra. <span id="ctx"></span></p>
+    <div class="grid" id="var"></div>
+  </section>
+
   <section class="card" aria-labelledby="h-voc">
     <h2 id="h-voc">2 · Vocabulário</h2>
     <p>A linguagem de háptica do RLight. Toque em cada um e marque se sentiu e se dá para distinguir dos outros.</p>
@@ -106,7 +112,7 @@ textarea{width:100%;box-sizing:border-box;min-height:150px;background:var(--pane
 
   <section class="card" aria-labelledby="h-wheel">
     <h2 id="h-wheel">3 · Volante</h2>
-    <p>Gire com o polegar. Cada traço é um detente. O anel externo é 0,01 mm, o do meio 0,1 e o interno 1 mm. Gire devagar e depois rápido.</p>
+    <p>Gire com o polegar, como uma catraca: o volante segura no dente e salta para o próximo. Cada traço é um detente. O anel externo é 0,01 mm, o do meio 0,1 e o interno 1 mm. Gire devagar e depois rápido.</p>
     <div class="wheelbox">
       <canvas id="wheel" width="560" height="560" aria-label="Volante de jog"></canvas>
       <div class="meters">
@@ -121,6 +127,8 @@ textarea{width:100%;box-sizing:border-box;min-height:150px;background:var(--pane
         <button data-g="0">0 ms</button><button data-g="35" aria-pressed="true">35 ms</button><button data-g="60">60 ms</button><button data-g="100">100 ms</button>
       </div>
     </div>
+    <label class="row" for="rsnd"><span>Som de catraca</span><input type="checkbox" id="rsnd" checked></label>
+    <div class="res" data-k="volante_catraca"><span class="status">Parece catraca?</span><i tabindex="0" data-v="sim">Sim</i><i tabindex="0" data-v="nao">Não</i></div>
     <div class="res" data-k="volante_devagar"><span class="status">Devagar:</span><i tabindex="0" data-v="sim">Cada clique</i><i tabindex="0" data-v="nao">Nada</i></div>
     <div class="res" data-k="volante_rapido"><span class="status">Rápido:</span><i tabindex="0" data-v="sim">Senti</i><i tabindex="0" data-v="nao">Falhou</i></div>
   </section>
@@ -162,8 +170,10 @@ textarea{width:100%;box-sizing:border-box;min-height:150px;background:var(--pane
 (() => {
 const $ = s => document.querySelector(s);
 const ua = navigator.userAgent;
-const isIOS = /iP(hone|ad|od)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-const iosVer = (ua.match(/OS (\d+)_(\d+)/) || []).slice(1).join('.') || null;
+const isIOS = !/Android/.test(ua) && (/iP(hone|ad|od)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+// No iOS 26 o "OS 18_7" do user agent é congelado; a versão real está em "Version/26.x".
+const safariVer = (ua.match(/Version\/(\d+(?:\.\d+)?)/) || [])[1];
+const iosVer = safariVer && parseFloat(safariVer) >= 26 ? safariVer : ((ua.match(/OS (\d+)_(\d+)/) || []).slice(1).join('.') || null);
 const hasVib = typeof navigator.vibrate === 'function';
 const results = {};
 const metrics = { maxFiredPerSec: 0, iosTaps: 0, vibCalls: 0, errors: [] };
@@ -226,6 +236,32 @@ VOCAB.forEach(([k, name, sub, p]) => {
 });
 $('#nat').addEventListener('change', () => beep(8));
 
+/* ---------- Variantes do truque do switch ---------- */
+const inIframe = (() => { try { return window.top !== window.self; } catch { return true; } })();
+$('#ctx').textContent = inIframe ? 'Esta página está dentro de um iframe.' : 'Esta página está aberta direto, sem iframe.';
+function mkSwitch(parent, hide) {
+  const l = document.createElement('label'); l.ariaHidden = 'true';
+  const i = document.createElement('input'); i.type = 'checkbox'; i.setAttribute('switch', '');
+  l.appendChild(i);
+  if (hide === 'none') l.style.display = 'none';
+  if (hide === 'off') l.style.cssText = 'position:fixed;left:-200px;top:0;width:52px;height:32px;opacity:0.01;pointer-events:none';
+  parent.appendChild(l); return { l, i };
+}
+const persist = mkSwitch(document.body, 'off');
+const VARIANTS = [
+  ['A', 'Label no head, oculto', 'o método atual', () => { const s = mkSwitch(document.head, 'none'); s.l.click(); s.l.remove(); }],
+  ['B', 'Label no body, fora da tela', 'renderizado, mas invisível', () => { const s = mkSwitch(document.body, 'off'); s.l.click(); s.l.remove(); }],
+  ['C', 'Clique direto no input', 'sem label', () => { const s = mkSwitch(document.body, 'off'); s.i.click(); s.l.remove(); }],
+  ['D', 'Switch persistente', 'o mesmo elemento sempre', () => { persist.l.click(); }],
+];
+const varBox = $('#var');
+VARIANTS.forEach(([k, name, sub, fn]) => {
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `<button class="hb" type="button"><b>${k} · ${name}</b><span>${sub}</span></button><div class="res" data-k="var_${k}"><i tabindex="0" data-v="sim">Senti</i><i tabindex="0" data-v="nao">Não senti</i></div>`;
+  wrap.querySelector('button').addEventListener('click', () => { try { fn(); metrics.iosTaps++; } catch (e) { metrics.errors.push(String(e)); } beep(8); });
+  varBox.appendChild(wrap);
+});
+
 function seg(el, attr, cb) {
   el.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
@@ -247,8 +283,36 @@ document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === 
 /* ---------- Volante ---------- */
 const cv = $('#wheel'), g = cv.getContext('2d'); const W = 560, C = W / 2;
 const R = { outer: 270, mid: 200, inner: 130, hub: 70 };
-let wAngle = 0, wLast = null, acc = 0, step = 0.01, wPos = 0, minGap = 35, lastFire = 0, detents = [];
+let wAngle = 0, wLast = null, step = 0.01, wPos = 0, minGap = 35, lastFire = 0, detents = [];
 const DET = 15;
+// Catraca: o dedo move o ângulo cru; o volante desenhado fica preso ao dente com uma mola
+// e salta para o próximo ao cruzar a metade.
+let rawDeg = 0, lastN = 0, shownDeg = 0, ratchetSound = true;
+const RESIST = 0.28;
+function targetDeg() { const n = Math.round(rawDeg / DET); return n * DET + (rawDeg - n * DET) * RESIST; }
+function wheelLoop() {
+  const t = targetDeg(); const d = t - shownDeg;
+  if (Math.abs(d) > 0.01) { shownDeg += d * 0.45; wAngle = shownDeg * Math.PI / 180; drawWheel(); }
+  requestAnimationFrame(wheelLoop);
+}
+requestAnimationFrame(wheelLoop);
+let noiseBuf = null;
+function ratchet(strong) {
+  if (!ratchetSound) return;
+  try {
+    if (!ctx) { ctx = new (window.AudioContext || window.webkitAudioContext)(); try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch {} }
+    if (ctx.state === 'suspended') ctx.resume();
+    if (!noiseBuf) { noiseBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.012), ctx.sampleRate); const ch = noiseBuf.getChannelData(0); for (let i = 0; i < ch.length; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / ch.length, 4); }
+    const t = ctx.currentTime;
+    const src = ctx.createBufferSource(); src.buffer = noiseBuf;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = strong ? 1800 : 3200; bp.Q.value = 2.5;
+    const gn = ctx.createGain(); gn.gain.value = strong ? 0.9 : 0.55;
+    src.connect(bp).connect(gn).connect(ctx.destination); src.start(t);
+    const o = ctx.createOscillator(), og = ctx.createGain(); o.frequency.setValueAtTime(strong ? 140 : 220, t); o.frequency.exponentialRampToValueAtTime(60, t + 0.03);
+    og.gain.setValueAtTime(strong ? 0.35 : 0.18, t); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.035);
+    o.connect(og).connect(ctx.destination); o.start(t); o.stop(t + 0.04);
+  } catch (e) {}
+}
 function drawWheel() {
   g.clearRect(0, 0, W, W);
   [[R.outer, '#14171c'], [R.mid, '#191d23'], [R.inner, '#1f242b']].forEach(([r, c]) => { g.beginPath(); g.arc(C, C, r, 0, 7); g.fillStyle = c; g.fill(); });
@@ -265,16 +329,18 @@ function wp(e) { const b = cv.getBoundingClientRect(); const x = (e.clientX - b.
 cv.addEventListener('pointerdown', e => { const p = wp(e); if (p.r < R.hub || p.r > R.outer) return; cv.setPointerCapture(e.pointerId); wLast = p.a; step = p.r > R.mid ? 0.01 : p.r > R.inner ? 0.1 : 1; });
 cv.addEventListener('pointermove', e => {
   if (wLast === null) return; const p = wp(e); let d = p.a - wLast; if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI;
-  wLast = p.a; wAngle += d; acc += d * 180 / Math.PI;
-  while (Math.abs(acc) >= DET) {
-    const s = Math.sign(acc); acc -= s * DET; wPos = Math.round((wPos + s * step) * 100) / 100;
+  wLast = p.a; rawDeg += d * 180 / Math.PI;
+  const n = Math.round(rawDeg / DET);
+  while (n !== lastN) {
+    const s = Math.sign(n - lastN); lastN += s; wPos = Math.round((wPos + s * step) * 100) / 100;
     const now = performance.now(); detents.push(now);
-    if (now - lastFire >= minGap) { pulse(step >= 1 ? 18 : 8); lastFire = now; }
+    if (now - lastFire >= minGap) { pulse(step >= 1 ? 18 : 8); ratchet(step >= 1); lastFire = now; }
   }
-  $('#w-pos').textContent = fmt(wPos); drawWheel();
+  $('#w-pos').textContent = fmt(wPos);
 });
-const endW = () => { wLast = null; acc = 0; }; cv.addEventListener('pointerup', endW); cv.addEventListener('pointercancel', endW);
+const endW = () => { wLast = null; rawDeg = lastN * DET; }; cv.addEventListener('pointerup', endW); cv.addEventListener('pointercancel', endW);
 seg($('#gap'), 'g', v => minGap = +v);
+$('#rsnd').addEventListener('change', e => { ratchetSound = e.target.checked; });
 setInterval(() => {
   const now = performance.now(); detents = detents.filter(t => now - t < 1000); firedWindow = firedWindow.filter(t => now - t < 1000);
   $('#w-rate').textContent = detents.length; $('#w-fired').textContent = firedWindow.length;
@@ -358,6 +424,7 @@ function summary() {
   const lines = [
     'RLight · spike S3',
     `sistema: ${$('#d-os').textContent}`,
+    `contexto: ${inIframe ? 'iframe' : 'página direta'}`,
     `vibração web: ${hasVib ? 'sim' : 'não'}`,
     `método: ${mode} (efetivo: ${effective()}), som: ${sound ? 'sim' : 'não'}`,
     `intervalo mínimo do volante: ${minGap} ms`,
