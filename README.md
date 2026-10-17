@@ -38,6 +38,7 @@ npm run typecheck # TypeScript estrito
 | [`core/src/motion.ts`](core/src/motion.ts) | Destinos absolutos, curso, avanço máximo, barreira no Z0, o comando `$J=` | [ADR-0002](docs/adr/0002-movimento-por-intencoes-completas.md) |
 | [`core/src/ruler.ts`](core/src/ruler.ts) | Arrasto, peteleco, destino anunciado, passo mínimo honesto, cliques | [ADR-0010](docs/adr/0010-a-regua.md) |
 | [`core/src/policy.ts`](core/src/policy.ts) | O que cada estado da máquina permite, e por quê | [ADR-0005](docs/adr/0005-seguranca-o-celular-nao-e-e-stop.md) |
+| [`core/src/interpolate.ts`](core/src/interpolate.ts) | O valor desenhado, um relatório atrás, sem nunca prever | [ADR-0009](docs/adr/0009-fluidez-sem-mentir.md) |
 
 ## Documentos
 
@@ -58,6 +59,7 @@ npm run typecheck # TypeScript estrito
 
 ## Spikes
 
+- [spikes/s1-elo](spikes/s1-elo/README.md): script somente leitura que mede a conexão com a placa e grava o tráfego real como fixture. Pronto para a bancada.
 - [spikes/s3-haptica](spikes/s3-haptica/index.html): laboratório de háptica, régua e números para rodar no próprio celular.
 
 ## Aviso
