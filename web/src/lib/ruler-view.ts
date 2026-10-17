@@ -108,6 +108,7 @@ export class RulerModel {
   setAxis(axis: Axis, value: number): void {
     this.axis = axis;
     this.#batcher = new NudgeBatcher(axis, this.step);
+    this.#expect = null;
     this.#reset(value);
   }
 
