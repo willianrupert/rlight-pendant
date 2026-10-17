@@ -1,6 +1,6 @@
 {
-  "name": "RLight",
-  "short_name": "RLight",
+  "name": "CNC RLight",
+  "short_name": "CNC",
   "description": "A máquina, ao vivo.",
   "start_url": "/",
   "display": "standalone",

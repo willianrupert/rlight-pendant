@@ -1,6 +1,6 @@
 # Ícone
 
-`icon.svg` é a fonte (o ponto da máquina sobre a mesa e a régua com a linha azul).
+`icon.svg` é a fonte: a fresa, de frente, tocando a superfície da peça (a linha azul).
 `icon-maskable.svg` é a mesma arte reduzida para a zona segura dos ícones
 adaptáveis do Android. Os PNGs em `public/icons/` saem destes SVGs com o Chrome
 em modo headless e o `sips`:
