@@ -97,6 +97,46 @@ describe('FakeFluidNC: movimento', () => {
   });
 });
 
+describe('FakeFluidNC: zero da peça e spindle', () => {
+  it('G10 L20 P0 zera onde está; o próximo relatório traz o WCO', async () => {
+    fake.state = 'Idle';
+    fake.mpos = { x: 10, y: 20, z: -5 };
+    client.send('G10 L20 P0 X0 Z0\n?');
+    await until(() => statusLines().length === 1);
+    expect(client.lines).toContain('ok');
+    expect(fake.wco).toEqual({ x: 10, y: 0, z: -5 });
+    expect(statusLines()[0]).toContain('WCO:10.000,0.000,-5.000');
+  });
+
+  it('G10 L2 P0 põe o offset de volta', async () => {
+    fake.state = 'Idle';
+    client.send('G10 L2 P0 X1.5 Y-2\n?');
+    await until(() => statusLines().length === 1);
+    expect(fake.wco).toEqual({ x: 1.5, y: -2, z: 0 });
+    expect(statusLines()[0]).toContain('WCO:1.500,-2.000,0.000');
+  });
+
+  it('em alarme, G10 e M3 são recusados', async () => {
+    client.send('G10 L20 P0 X0\nM3 S1000\n');
+    await until(() => client.lines.filter((l) => l === 'error:9').length === 2);
+    expect(fake.spindleOn).toBe(false);
+  });
+
+  it('M3, S e M5 aparecem em FS e em A:', async () => {
+    fake.state = 'Idle';
+    client.send('M3 S12000\n?');
+    await until(() => statusLines().length === 1);
+    expect(statusLines()[0]).toBe('<Idle|MPos:0.000,0.000,0.000|FS:0,12000|A:S>');
+    client.send('S9000\n?');
+    await until(() => statusLines().length === 2);
+    expect(statusLines()[1]).toContain('FS:0,9000|A:S');
+    client.send('M5\n?');
+    await until(() => statusLines().length === 3);
+    expect(statusLines()[2]).toBe('<Idle|MPos:0.000,0.000,0.000|FS:0,0>');
+    for (const l of statusLines()) expect(parseLine(l).kind).toBe('status');
+  });
+});
+
 describe('FakeFluidNC: falhas', () => {
   it('congela sem responder e depois atende o que chegou', async () => {
     fake.freeze(150);

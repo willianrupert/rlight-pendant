@@ -215,6 +215,41 @@ describe('gateway: mexer na máquina, de ponta a ponta', () => {
     await until(() => b.state()?.machine?.mpos?.x === 10 && b.state()?.machine?.mpos?.y === 5);
   });
 
+  it('zera X, vê o WCO mudar, desfaz e vê voltar; liga o spindle e vê a rotação', async () => {
+    await setup();
+    fake.wco = { x: 5, y: 6, z: -7 };
+    const b = await browser();
+    // O WCO vem de tempos em tempos no relatório; sem ele, não há como desfazer.
+    await until(() => live(b.state()) && b.of('profile')[0] && b.state()?.machine?.wco, {
+      what: 'o offset atual da peça',
+      timeoutMs: 5_000,
+    });
+    expect(b.state()?.machine?.wco).toEqual({ x: 5, y: 6, z: -7 });
+    b.send({ type: 'takeControl' });
+    await until(() => b.state()?.control.inControl);
+
+    expect(await b.command({ command: 'zero', axis: 'x' })).toEqual({ type: 'result', id: 'r1', ok: true, undoable: true });
+    expect(fake.received).toContain('G10 L20 P0 X0');
+    await until(() => b.state()?.machine?.wco?.x === 100, { what: 'o zero novo na tela' });
+    expect(b.state()?.machine?.wpos?.x).toBe(0);
+
+    expect(await b.command({ command: 'undoZero' })).toEqual({ type: 'result', id: 'r2', ok: true });
+    expect(fake.received).toContain('G10 L2 P0 X5.000');
+    await until(() => b.state()?.machine?.wco?.x === 5, { what: 'o zero de antes de volta' });
+    expect(await b.command({ command: 'undoZero' })).toMatchObject({ ok: false, reason: 'Nada para desfazer' });
+
+    expect(await b.command({ command: 'spindleOn', rpm: 12000 })).toEqual({ type: 'result', id: 'r4', ok: true });
+    await until(() => b.state()?.machine?.spindle === 12000, { what: 'a rotação na tela' });
+    expect(await b.command({ command: 'spindleOff' })).toMatchObject({ ok: true });
+    await until(() => b.state()?.machine?.spindle === 0, { what: 'o spindle parado' });
+    expect(fake.received.filter((l) => /^(G10|M3|M5)/.test(l))).toEqual([
+      'G10 L20 P0 X0',
+      'G10 L2 P0 X5.000',
+      'M3 S12000',
+      'M5',
+    ]);
+  }, 10_000);
+
   it('o alarme da placa chega a todas as telas', async () => {
     await setup();
     const a = await browser();

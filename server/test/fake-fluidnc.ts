@@ -51,6 +51,9 @@ export class FakeFluidNC {
   state: MachineState;
   mpos: Vec;
   wco: Vec = { x: 0, y: 0, z: 0 };
+  /** Spindle ligado no sentido horário (M3) e a rotação programada (S). */
+  spindleOn = false;
+  rpm = 0;
   /** Tudo o que chegou da conexão, na ordem: linhas e caracteres de tempo real. */
   readonly received: string[] = [];
   /** Quantas conexões a placa aceitou desde que ligou. */
@@ -65,6 +68,8 @@ export class FakeFluidNC {
   private readonly tickMs: number;
   private queue: Segment[] = [];
   private reports = 0;
+  /** Como a placa: depois de um G10, o próximo relatório traz o WCO. */
+  private wcoDirty = false;
   private frozenUntil = 0;
   private refusing = false;
   private homingTimer: NodeJS.Timeout | null = null;
@@ -211,6 +216,7 @@ export class FakeFluidNC {
     } else if (byte === 0x18) {
       this.queue = [];
       this.state = 'Alarm';
+      this.spindleOn = false;
       this.write(sock, 'Grbl 3.9 [FluidNC v3.9.9 (fake) \'$\' for help]');
     } else if (c === '!' && (this.state === 'Jog' || this.state === 'Run')) this.state = 'Hold';
     else if (c === '~' && this.state === 'Hold') this.state = this.queue.length ? 'Jog' : 'Idle';
@@ -219,9 +225,14 @@ export class FakeFluidNC {
   /** Um relatório como os gravados: WCO a cada 10, Ov logo depois, Pn durante o homing. */
   report(): string {
     const n = this.reports++;
-    const parts = [this.state, `MPos:${vec(this.mpos)}`, `FS:${this.queue[0]?.feedMmPerMin ?? 0},0`];
+    const rpm = this.spindleOn ? this.rpm : 0;
+    const parts = [this.state, `MPos:${vec(this.mpos)}`, `FS:${this.queue[0]?.feedMmPerMin ?? 0},${rpm}`];
     if (this.state === 'Home') parts.push('Pn:X');
-    if (n % 10 === 4) parts.push(`WCO:${vec(this.wco)}`);
+    if (n % 10 === 4 || this.wcoDirty) {
+      parts.push(`WCO:${vec(this.wco)}`);
+      this.wcoDirty = false;
+    }
+    if (this.spindleOn) parts.push('A:S');
     if (n % 10 === 5) parts.push('Ov:100,100,100');
     return `<${parts.join('|')}>`;
   }
@@ -239,7 +250,46 @@ export class FakeFluidNC {
       this.write(sock, '[MSG:Caution: Unlocked]', 'ok');
     } else if (cmd === '$H') this.home(sock);
     else if (cmd.startsWith('$J=')) this.jog(sock, cmd);
+    else if (cmd.startsWith('G10 ')) this.setOffset(sock, cmd);
+    else if (/^(M3|M5|S)/.test(cmd)) this.spindle(sock, cmd);
     else this.write(sock, 'error:20');
+  }
+
+  /** G10 L20 P0: a posição atual vira o valor dado. G10 L2 P0: o offset vira o valor dado. */
+  private setOffset(sock: net.Socket, cmd: string): void {
+    const m = /^G10 L(20|2) P0((?: [XYZ]-?\d+(?:\.\d+)?)+)$/.exec(cmd);
+    if (!m) {
+      this.write(sock, 'error:2');
+      return;
+    }
+    if (this.state === 'Alarm') {
+      this.write(sock, 'error:9');
+      return;
+    }
+    for (const word of m[2]!.trim().split(' ')) {
+      const axis = word[0]!.toLowerCase() as keyof Vec;
+      const v = Number(word.slice(1));
+      this.wco[axis] = m[1] === '20' ? this.mpos[axis] - v : v;
+    }
+    this.wcoDirty = true;
+    this.write(sock, 'ok');
+  }
+
+  /** M3 [S…] liga no sentido horário, M5 desliga, S… muda a rotação. */
+  private spindle(sock: net.Socket, cmd: string): void {
+    const m = /^(?:(M3|M5)\s*)?(?:S(\d+(?:\.\d+)?))?$/.exec(cmd);
+    if (!m || (!m[1] && m[2] === undefined)) {
+      this.write(sock, 'error:20');
+      return;
+    }
+    if (this.state === 'Alarm') {
+      this.write(sock, 'error:9');
+      return;
+    }
+    if (m[2] !== undefined) this.rpm = Number(m[2]);
+    if (m[1] === 'M3') this.spindleOn = true;
+    if (m[1] === 'M5') this.spindleOn = false;
+    this.write(sock, 'ok');
   }
 
   private home(sock: net.Socket): void {
