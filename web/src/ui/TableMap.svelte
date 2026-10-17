@@ -1,9 +1,11 @@
 <script lang="ts">
   // ONDE: a mesa vista de cima (VISION.md). Com homing e o controle, arrasta-se
-  // o fantasma e solta-se; movendo, o mapa inteiro vira Parar.
+  // o fantasma e solta-se (vai direto), ou toca-se na mesa e confirma no "Ir";
+  // movendo pelo mapa, o mapa inteiro vira Parar.
   import { onDestroy, onMount } from 'svelte';
-  import type { AxisLimits, Vec3 } from '@rlight/core';
+  import type { AxisLimits, MachineState, Vec3 } from '@rlight/core';
   import { MapView, destinationText, mapPad, type Point, type TableLimits } from '../lib/map-view';
+  import HoldButton from './HoldButton.svelte';
 
   interface Props {
     limits: TableLimits;
@@ -14,22 +16,29 @@
     stopPending: boolean;
     frozen: boolean;
     offset: Point;
-    /** Por que não há fantasma, quando há controle mas não há homing. */
-    hint: string | null;
+    /** Sem homing (e sem alarme): o mapa pede o homing, com o botão ali mesmo. */
+    needsHoming: boolean;
+    homingPending: string | null;
+    /** O estado e a velocidade reportados, para mostrar a velocidade real. */
+    state: MachineState | null;
+    feed: number;
     /** Curso do Z e zero da peça (coordenada de máquina), para a régua vertical. */
     zLimits: AxisLimits | null;
     zZero: number | null;
     onjog: (p: Point) => void;
     onstop: () => void;
     ongrab: () => void;
+    onhome: () => void;
   }
 
-  let { limits, ghost, stop, stopPending, frozen, offset, hint, zLimits, zZero, onjog, onstop, ongrab }: Props = $props();
+  let { limits, ghost, stop, stopPending, frozen, offset, needsHoming, homingPending, state, feed, zLimits, zZero, onjog, onstop, ongrab, onhome }: Props = $props();
   let gauge: HTMLElement;
 
   let svg: SVGSVGElement;
   let view: MapView | null = null;
   let dest = $state<Point | null>(null);
+  let preview = $state<Point | null>(null);
+  let pill = $state<{ x: number; y: number; w: number } | null>(null);
 
   export function push(mpos: Vec3, at: number): void {
     view?.push({ x: mpos.x, y: mpos.y, z: mpos.z }, at);
@@ -45,6 +54,14 @@
     view.onGhost = (p) => (dest = p);
     view.onRelease = (p) => onjog(p);
     view.onGrab = () => ongrab();
+    view.onPreview = (p) => {
+      preview = p;
+      if (p) {
+        ongrab();
+        const at = view!.toScreen(p);
+        pill = { ...at, w: svg.getBoundingClientRect().width };
+      } else pill = null;
+    };
     view.start();
   });
 
@@ -54,12 +71,29 @@
     if (!view) return;
     view.enabled = ghost && !stop;
     view.frozen = frozen;
-    if (!view.enabled) view.model.cancel();
+    if (!view.enabled) {
+      view.model.cancel();
+      preview = null;
+      pill = null;
+    }
   });
 
   $effect(() => {
     view?.setLimits(limits);
   });
+
+  $effect(() => {
+    if (!view) return;
+    view.state = state;
+    view.feed = feed;
+  });
+
+  function go() {
+    const p = view?.model.go();
+    preview = null;
+    pill = null;
+    if (p) onjog(p);
+  }
 
   $effect(() => {
     if (!view) return;
@@ -80,14 +114,27 @@
       <span>{stopPending ? 'Parando…' : 'Parar'}</span>
     </button>
   {/if}
-  {#if !stop && (dest || hint || ghost)}
-    <p class="caption" class:dest={!!dest}>
-      {#if dest}
-        {destinationText(dest, offset)}
-      {:else if hint}
-        {hint}
+  {#if pill && preview && !stop}
+    <!-- Um toque na mesa só prepara: quem move é o "Ir". -->
+    <button
+      class="go"
+      style:left="{Math.min(pill.w - 70, Math.max(6, pill.x + 18))}px"
+      style:top="{Math.max(6, pill.y - 24)}px"
+      onclick={go}
+      aria-label="Ir até {destinationText(preview, offset)}">Ir</button
+    >
+  {/if}
+  {#if needsHoming && !stop}
+    <div class="homing">
+      <p>Faça o homing para mover pelo mapa</p>
+      <HoldButton label="Homing" hold tone="primary" pending={homingPending} onfire={onhome} />
+    </div>
+  {:else if !stop && (dest || preview || ghost)}
+    <p class="caption" class:dest={!!(dest || preview)}>
+      {#if dest || preview}
+        {destinationText((dest ?? preview)!, offset)}
       {:else}
-        Arraste o ponto e solte para ir até lá
+        Arraste o ponto, ou toque na mesa
       {/if}
     </p>
   {/if}
@@ -144,4 +191,46 @@
   }
   .map:global(.point-low) .caption { bottom: auto; top: 8px; }
   .caption.dest { font: 600 15px var(--mono); color: var(--acc); }
+  .go {
+    position: absolute;
+    min-width: 64px;
+    height: 44px;
+    padding: 0 18px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--acc);
+    color: var(--acc-ink);
+    font: 700 17px var(--sans);
+    cursor: pointer;
+    touch-action: manipulation;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    animation: pop 0.32s var(--spring);
+  }
+  .homing {
+    position: absolute;
+    left: 0;
+    right: 34px;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 18px;
+    background: rgba(13, 15, 18, 0.55);
+  }
+  .homing p { margin: 0; font-size: 14px; color: var(--fg-2); }
+  .homing :global(button) { min-width: 140px; }
+  .map :global(.trail) { stroke: var(--fg); stroke-width: 3; stroke-linecap: round; opacity: 0.28; vector-effect: non-scaling-stroke; }
+  .map :global(.speed) {
+    fill: var(--fg); font-family: var(--mono); font-weight: 600; font-variant-numeric: tabular-nums;
+    opacity: 0; transition: opacity 0.3s;
+  }
+  .map :global(.speed.on) { opacity: 0.9; }
+  @keyframes pop { from { transform: scale(0.6); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .go { animation: none; }
+    .map :global(.speed) { transition: none; }
+  }
 </style>

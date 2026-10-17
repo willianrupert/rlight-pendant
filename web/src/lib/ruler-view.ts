@@ -19,7 +19,9 @@ import {
   type AxisLimits,
   type Sample,
 } from '@rlight/core';
+import type { MachineState } from '@rlight/core';
 import type { CommandRequest } from './connection';
+import { speedText, speedVisible, wallsFor } from './motion-look';
 import { NudgeBatcher } from './nudges';
 import { formatMm } from './present';
 import { BASE_PX_PER_TICK, approach, labelEvery, pxPerTick, reachOf, tickReachable, travelBand } from './ruler-geometry';
@@ -346,6 +348,9 @@ export class RulerView {
   #sp = PX_PER_TICK;
   #lastNow = 0;
   frozen = false;
+  /** Estado e velocidade reportados: nos passos grandes, a velocidade real aparece na régua. */
+  state: MachineState | null = null;
+  feed = 0;
   enabled = true;
   onFrame: ((model: RulerModel) => void) | null = null;
 
@@ -487,18 +492,19 @@ export class RulerView {
       }
     }
     g.globalAlpha = 1;
-    // A superfície da peça (Z0): uma parede âmbar com o nome dela.
-    if (m.barrier !== null) {
-      const bx = cx + ((m.barrier - m.base) / m.step - m.pos) * SP;
-      if (bx > -20 && bx < W + 20) {
-        g.fillStyle = '#ffb454';
-        g.fillRect(bx - 1.5, base - 52, 3, 60);
-        g.font = '600 11px ui-monospace, "SF Mono", monospace';
-        g.textAlign = 'left';
-        g.fillText('Z0', bx + 6, base - 40);
-        g.textAlign = 'center';
-        g.font = '600 13px ui-monospace, "SF Mono", monospace';
-      }
+    // As paredes, em âmbar: o início e o fim do curso em todo eixo e, no Z, a
+    // superfície da peça. O rótulo fica do lado de dentro.
+    for (const wall of wallsFor(m.limits, m.barrier)) {
+      const bx = cx + ((wall.value - m.base) / m.step - m.pos) * SP;
+      if (bx < -40 || bx > W + 40) continue;
+      g.fillStyle = '#ffb454';
+      g.fillRect(bx - 1.5, base - 52, 3, 60);
+      g.font = '600 11px ui-monospace, "SF Mono", monospace';
+      const inward = wall.kind === 'zero' || (m.limits !== null && wall.value === m.limits.min) ? 1 : -1;
+      g.textAlign = inward > 0 ? 'left' : 'right';
+      g.fillText(wall.kind === 'zero' ? 'Z0' : 'fim', bx + inward * 6, base - 40);
+      g.textAlign = 'center';
+      g.font = '600 13px ui-monospace, "SF Mono", monospace';
     }
     g.fillStyle = '#7fb0ff';
     g.fillRect(cx - 1.5, base - 58, 3, 66);
@@ -511,6 +517,16 @@ export class RulerView {
         g.beginPath();
         g.arc(mx, base - 38, 3.5, 0, Math.PI * 2);
         g.fill();
+      }
+      // Nos passos grandes o movimento é longo: a velocidade real, ao lado da máquina.
+      if (m.step >= 1 && !this.frozen && speedVisible(this.state, this.feed)) {
+        const sx = Math.min(W - 8, Math.max(8, mx));
+        g.font = '600 11px ui-monospace, "SF Mono", monospace';
+        g.fillStyle = 'rgba(242,244,247,.85)';
+        g.textAlign = sx < W / 2 ? 'left' : 'right';
+        g.fillText(speedText(this.feed), sx + (sx < W / 2 ? 8 : -8), base - 44);
+        g.textAlign = 'center';
+        g.font = '600 13px ui-monospace, "SF Mono", monospace';
       }
     }
     if (m.mode === 'glide' && m.target !== null) {
