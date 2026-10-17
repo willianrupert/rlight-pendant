@@ -1,109 +1,152 @@
 # Visão
 
-> **Você não opera a máquina pelo celular. Você sente a máquina na mão.**
+> **Usar esta CNC deve ser tão fácil quanto usar um micro-ondas.**
+> Coloca, escolhe, aperta. E vai fazer outra coisa.
 
-Todo pendant que existe é um teclado: setas, botões de passo, um seletor
-×1 ×10 ×100. A tela do celular copia isso e fica pior que o original, porque
-vidro não tem clique.
-
-A ideia aqui é o contrário: **pegar o que é físico numa máquina e devolver como
-toque, peso e resistência.** O volante de verdade tem detentes, e o nosso
-também. O fim do curso é uma parede, e você sente a parede. A superfície da
-peça se aproxima, e o volante fica mais pesado.
-
-**O simples é belo.** A interface inteira é **uma tela, três gestos e uma folha**.
+Ninguém que usa um micro-ondas pensa em magnetron, frequência ou potência em
+watts. Pensa em "pipoca". Hoje, operar uma CNC exige pensar em eixos,
+coordenadas, avanço e rotação. **O app existe para trocar a pergunta "como mexo
+nos eixos?" por "o que vamos fazer?".**
 
 ---
 
-## Uma tela
+## O que a impressão 3D acertou
+
+As impressoras 3D modernas, com seus apps de iPhone, deixaram de ser um hobby de
+ajuste fino e viraram eletrodoméstico. Seis lições valem para cá:
+
+| Na impressora 3D | Lição | Na RLight |
+|---|---|---|
+| Nivela a mesa sozinha antes de imprimir | **A máquina se calibra, não o usuário** | Homing e Z automático pela placa de toque antes de cada trabalho |
+| Você escolhe um objeto, não uma coordenada | **Pensar em peças, não em eixos** | Receitas: "aplainar esta chapa", "seis furos de 8 mm" |
+| O arquivo vai para a impressora e ela imprime sozinha | **O celular é monitor, não cordão umbilical** | O trabalho roda do cartão SD da placa; o celular pode até desligar |
+| Progresso e tempo restante na tela de bloqueio | **Saber sem olhar** | Live Activity com tempo restante; aviso de "Pronto" |
+| Perfis de material prontos | **Bons padrões para tudo** | Material escolhido define avanço, rotação e passes |
+| Uma prévia antes de começar | **Ver antes de cortar** | O percurso desenhado sobre a chapa, com tempo estimado |
+
+## O que a CNC tem e a impressora não
+
+É preciso ser honesto: a impressora é fácil porque o **hardware** é fechado e
+calibrado. A CNC tem três coisas que nenhum app resolve sozinho:
+
+1. **A chapa precisa ser presa**, e cada chapa vai num lugar diferente.
+2. **A ferramenta muda**, e cada fresa tem um comprimento diferente.
+3. **Ela é perigosa**: corta, levanta pó e pode arremessar peça.
+
+A resposta está em padronizar o físico, como o prato do micro-ondas:
+
+- **Um canto de referência na mesa**: um esquadro fixo numa posição de máquina
+  conhecida. A chapa sempre encosta nele, e então **ninguém precisa zerar X e Y**:
+  o zero já é o canto.
+- **A placa de toque** (a placa já tem a entrada de apalpador ligada) para o Z
+  automático. O Romney já fazia isso no Mach3, com uma rotina cuidadosa:
+  recolhe o Z primeiro e desce os últimos milímetros em avanço lento.
+- **Uma fresa padrão** que fica na máquina e que as receitas assumem, a menos que
+  você diga outra.
+
+**Com isso o app consegue ser micro-ondas. Sem isso, nenhum app consegue.**
+
+---
+
+## A jornada: cinco passos, um polegar
+
+```
+1  COLOQUE     "Encoste a chapa no canto."           ilustração da chapa no esquadro
+2  ESCOLHA     Aplainar · Furos · Recorte · Texto    receitas em cartões grandes
+               · Abrir arquivo
+3  AJUSTE      Só o que muda: tamanho, profundidade, material    como o tempo no micro-ondas
+4  CONFIRA     Prévia do percurso sobre a chapa · 12 min · checklist que a própria máquina verifica
+5  SEGURE      Segurar para iniciar. Pode sair de perto.
+```
+
+**No passo 4, quem confere é a máquina, não você.** O checklist marca sozinho o
+que ela consegue verificar: homing feito, Z medido, fresa padrão, percurso dentro
+do curso, profundidade sem atingir a mesa (a proteção de mesa por trabalho que o
+Romney tinha no Mach3). Você só confirma o que ela não vê: "chapa presa" e "óculos".
+
+**Durante o corte**, a tela vira um relógio de micro-ondas: tempo restante grande,
+o percurso sendo desenhado ao vivo sobre a chapa, e dois botões, *Pausar* e
+*Parar*. Na tela de bloqueio e na Ilha Dinâmica: `12.000 rpm · faltam 07:40`.
+
+**No fim**, como o "plim": uma vibração no pulso e uma notificação: "Pronto. O
+spindle parou. Pode retirar a peça."
+
+## As receitas
+
+Os geradores de peça que o Romney escreveu em doze anos de Mach3 são exatamente
+os botões de um micro-ondas. Eles voltam como receitas:
+
+| Receita | Pergunta só |
+|---|---|
+| **Aplainar** | Tamanho da área, quanto tirar |
+| **Furos** | Diâmetro, quantos, em grade ou em círculo |
+| **Recorte** | Retângulo, círculo ou polígono; medidas; espessura da chapa |
+| **Texto** | O texto, a altura, a fonte |
+| **Abrir arquivo** | Nada: chega pelo AirDrop ou pelo app Arquivos, vindo do Fusion ou de qualquer CAM |
+
+Cada receita é uma **função pura**: parâmetros entram, G-code sai. É o código mais
+fácil de testar do projeto, e a saída de cada uma pode ser comparada com a do
+gerador original do Mach3.
+
+**O material escolhido** (MDF, compensado, acrílico, alumínio) define avanço,
+rotação e profundidade por passe. Você nunca digita F ou S. Quem quiser ajustar,
+ajusta, mas o padrão é bom.
+
+---
+
+## O celular é monitor, não cordão umbilical
+
+O trabalho é enviado para o **cartão SD da placa** e roda de lá. Se o celular
+travar, a bateria acabar ou você sair da oficina, a máquina termina a peça. O
+celular só acompanha.
+
+**Pré-requisito físico:** hoje o Wi-Fi da placa, dentro do painel metálico, falha
+em envios acima de uns 3 KB. Um arquivo de trabalho tem centenas de KB. Antes da
+primeira receita é preciso uma antena externa fora do painel (ou outro caminho
+confiável) e um envio verificado por checksum. É o maior risco técnico desta
+visão.
+
+---
+
+## Modo manual: os botões do micro-ondas
+
+O micro-ondas também tem os botões de ajuste. Aqui eles são uma tela, três
+gestos e uma folha, para testar, posicionar e trocar ferramenta.
 
 ```
 ┌─────────────────────────────┐
-│  ONDE                       │   a mesa vista de cima, viva
-│  ┌───────────────────────┐  │   o ponto é o spindle, a cruz é o zero
-│  │        ·              │  │   arrastar o ponto = a máquina segue o dedo
-│  │   +                   │  │
-│  └───────────────────────┘  │
+│  ONDE   a mesa vista de cima│   arrastar o ponto = a máquina segue o dedo
 ├─────────────────────────────┤
-│  QUANTO                     │   X  412,30
-│                             │   Y  118,05      tocar = escolhe o eixo
-│                             │   Z   −3,20      segurar = zera (com desfazer)
+│  QUANTO   X  412,30         │   tocar = escolhe o eixo
+│           Y  118,05         │   segurar = zera (com desfazer)
+│           Z   −3,20         │
 ├─────────────────────────────┤
-│  COMO                       │
-│          ╭───────╮          │   o volante
-│        ╭─┤   Z   ├─╮        │   anel externo  0,01 mm por clique
-│        │ ╰───────╯ │        │   anel do meio  0,1
-│        ╰───────────╯        │   anel interno  1
-│                             │
-│  ● 12.000 rpm      ❙❙ PAUSAR │   spindle (abre a folha) · pausa sempre à mão
+│  COMO     o volante         │   anel externo 0,01 · meio 0,1 · centro 1 mm
+│  ● 12.000 rpm    ❙❙ PAUSAR   │
 └─────────────────────────────┘
 ```
 
-A cor de fundo é o estado da máquina: grafite em repouso, âmbar em pausa,
-vermelho em alarme. **Dá para ler a três metros**, sem ler nada.
+1. **Arrastar no mapa:** você encosta no ponto do spindle e a máquina real
+   segue o seu dedo pela mesa. Soltou, parou. É o movimento grosso, e por baixo é o
+   jog em pedaços do [ADR-0002](adr/0002-jog-continuo-em-pedacos.md).
+2. **Girar o volante:** cada detente é um clique que você sente e um passo exato.
+   **O raio escolhe a resolução**, sem seletor de passo. O volante comanda
+   distância, não velocidade: se a conexão cair, a máquina faz no máximo o que você
+   já girou. Se você girar mais rápido do que ela anda, o volante endurece.
+3. **Tocar e segurar nos números:** tocar escolhe o eixo, segurar zera, e logo
+   aparece **"Desfazer"**.
 
-## Três gestos
+**A folha do spindle** é um mostrador grande, como o do Timer. Para ligar, você
+segura e o anel enche, primeiro na confirmação e depois durante os 5 s de spin-up.
 
-### 1. Arrastar no mapa: a máquina segue o seu dedo
-Encoste no ponto do spindle e arraste pela mesa. **A máquina real segue o seu
-dedo**, em X e Y juntos, como arrastar uma janela. Um fantasma mostra para onde o
-dedo está pedindo e o ponto real vem atrás, na velocidade da máquina. Soltou,
-parou. Por baixo é o jog em pedaços do [ADR-0002](adr/0002-jog-continuo-em-pedacos.md).
-
-É o movimento **grosso**: atravessar a mesa, chegar perto.
-
-### 2. Girar o volante: precisão com clique
-Gire o polegar em círculo. **Cada detente é um clique que você sente** e um passo
-exato da máquina. Não existe seletor de passo: **o raio escolhe a resolução.**
-Perto da borda o passo é fino (0,01), no meio é médio (0,1), perto do centro é
-grosso (1 mm). É o mesmo princípio da barra de vídeo do iOS, onde afastar o dedo
-deixa o ajuste mais fino. É previsível, sem adivinhar pela velocidade.
-
-O volante comanda **distância, não velocidade**. Cada clique é um movimento
-pequeno e fechado. Se a conexão cair, a máquina faz no máximo o que você já
-girou. E se você girar mais rápido do que a máquina consegue andar, o volante
-**endurece**: os cliques extras são recusados com uma batida seca. Você sente
-a inércia da máquina.
-
-É o movimento **fino**: encostar a ferramenta na peça.
-
-### 3. Tocar e segurar nos números
-- **Tocar** em X, Y ou Z escolhe o eixo do volante.
-- **Segurar** zera aquele eixo. Logo depois aparece **"Desfazer"**, como no Mail.
-  Zerar no lugar errado é o erro caro clássico de quem opera CNC, e aqui ele
-  custa um toque.
-
-É isso. Não há setas, abas, menus nem tela de configuração.
-
-## Uma folha: o spindle
-
-Tocar na pílula do spindle abre um mostrador grande, como o do Timer.
-- Girar ajusta a rotação, com um clique a cada 1000 rpm e um ímã nos valores
-  comuns.
-- **Segurar para ligar**: o anel enche sob o dedo durante a confirmação e
-  continua enchendo durante os 5 s de spin-up do inversor. A confirmação e o
-  feedback são a mesma animação.
-- O tempo de spin-up é estimado pela configuração. O CFW300 não informa a rotação
-  real, e o app diz isso em vez de fingir que sabe.
+**A máquina tem forma:** chegando ao fim de curso, os cliques ficam mais fortes
+até virar uma parede. Descendo o Z em direção à peça, o volante pesa, e no Z0 há
+uma barreira: para passar abaixo da superfície é preciso girar de novo, de
+propósito. **Um alarme vem como uma frase e uma ação**, nunca como `ALARM:1`.
 
 ---
 
-## A máquina tem forma
-
-O que torna isso diferente de um controle remoto é que **o app conhece a
-máquina**, não só o protocolo:
-
-| Momento | O que acontece |
-|---|---|
-| **Fim de curso** | Chegando no soft limit, os cliques ficam mais fortes e mais próximos. No limite, uma parede: o volante para com uma batida e o mapa faz o efeito elástico do iOS |
-| **A peça chegando** | Descendo o Z em direção ao zero da peça, **o volante fica mais pesado**. No Z0 há uma barreira: para passar abaixo da superfície é preciso parar e girar de novo, de propósito |
-| **Homing** | O mapa mostra cada eixo indo para casa na ordem real da máquina (Z, depois X, depois Y), guiado pelo status, não por uma animação pronta |
-| **Alarme** | Em vez de "ALARM:1", uma frase e **uma ação**: "O fim de curso do X foi acionado. Afaste o X para a direita e desbloqueie." O botão faz exatamente isso |
-| **Conexão perdida** | Tudo esmaece e nada fica pendente. Quando volta, volta inteiro |
-
 ## Uma linguagem de háptica
-
-Cada sensação significa uma coisa só, sempre:
 
 | Sensação | Significa |
 |---|---|
@@ -111,71 +154,72 @@ Cada sensação significa uma coisa só, sempre:
 | Tique firme | Um passo grosso |
 | Cliques ficando mais fortes | Aproximando de um limite |
 | Batida seca | Parede: limite, Z0 ou máquina sem acompanhar |
-| Pulso duplo e suave | Confirmado (zero, spindle no alvo) |
+| Pulso duplo e suave | Confirmado: zero, Z medido, spindle no alvo |
+| O "plim" | Trabalho pronto |
 | Três batidas pesadas | Alarme |
 
 ## Fora da tela
 
-O melhor pendant é o que você **não precisa pegar**:
-
-- **Botão de Ação** (iPhone 15 Pro em diante): um aperto físico pausa a máquina.
-- **Ilha Dinâmica e tela de bloqueio**: com o spindle ligado aparece
-  `● 12.000 rpm · 02:14`, com um botão de pausar que funciona com o celular
-  bloqueado.
-- **Central de Controle**: Pausar e Desligar spindle, a um deslize.
-- **Siri**: "Pausa a CNC", com as mãos ocupadas. Por voz só se para; nunca se
-  liga nada.
-- **Apple Watch**: a Digital Crown, que já tem detentes físicos, **é o volante**.
-  Sentir o pulso quando o spin-up termina ou quando dispara um alarme, do outro
-  lado da oficina.
-- **Uma etiqueta NFC na máquina**: encostar o celular abre o pendant, já
-  conectado.
-- **Conexão zero**: o app encontra a placa sozinho na rede (Bonjour,
-  `fluidnc.local`). Não há campo de endereço.
+- **Live Activity e Ilha Dinâmica**: tempo restante e rotação, com *Pausar* na tela de bloqueio.
+- **Notificações**: "Pronto", "Pausado: troque a fresa", "Alarme".
+- **Botão de Ação e Central de Controle**: *Pausar*, com um aperto físico.
+- **Apple Watch**: o "plim" no pulso, o tempo restante no mostrador e a Crown como volante no modo manual.
+- **Siri**: "Pausa a CNC". Por voz só se para; nunca se liga nada.
+- **AirDrop**: do Mac direto para a máquina. Na tela, aparece a prévia.
+- **Etiqueta NFC na máquina** e **conexão zero** (o app acha a placa sozinho).
 
 ## Memória da máquina, sem pedir
 
-- **Horímetro do spindle**, para manutenção.
-- **Diário automático da sessão**: homing, zeros, alarmes, horas de spindle.
-  Útil quando algo dá errado e você quer saber o que aconteceu antes.
+Horímetro do spindle, histórico de trabalhos ("refazer aquele aplainamento") e um
+diário da sessão para quando algo dá errado.
 
 ---
 
 ## O que este app nunca vai ter
 
-Isso faz parte do design, não é uma lista de pendências:
-
 - Um botão de emergência. O E-stop é o vermelho, na máquina ([ADR-0005](adr/0005-seguranca-o-celular-nao-e-e-stop.md)).
-- Setas de jog e seletor de passo. O mapa e o volante substituem os dois.
-- Tela de configurações. O que precisa ser configurado vem da máquina.
-- Tutorial. Os gestos se explicam no primeiro toque.
-- Ligar qualquer coisa por voz, atalho ou relógio sem confirmação.
+- Um CAM completo. Desenhos complexos vêm de fora como arquivo.
+- Um editor de G-code.
+- Campos F e S à vista no caminho principal.
+- Tela de configurações e tutorial.
+- Iniciar um corte sem segurar para confirmar, seja por voz, atalho ou relógio.
+
+---
+
+## Fases
+
+| Fase | Entrega | Por quê nesta ordem |
+|---|---|---|
+| **v1 · O controle** | Conexão, estado, segurança, modo manual com háptica, spindle, Z automático pela placa de toque | Toda receita depende disso. É também o que já se usa hoje nos testes |
+| **v2 · O primeiro micro-ondas** | **Aplainar** de ponta a ponta: receita, prévia, checklist, envio ao SD, Live Activity, "Pronto" | Uma receita só, que prova o ciclo inteiro. Aplainar é a operação mais comum e a mais simples |
+| **v3 · O cardápio** | Furos, recorte, texto, abrir arquivo, materiais | As demais receitas são só funções puras novas sobre o mesmo ciclo |
+| **v4 · Os olhos** | Câmera apontada para a mesa, ao vivo no app | Bom de ter. Não muda a facilidade |
+
+Pré-requisitos físicos antes da v2: canto de referência na mesa, placa de toque e
+Wi-Fi confiável até a placa.
 
 ---
 
 ## O que isso implica para a plataforma
 
-Quase tudo o que faz esta visão ser **sentida** só existe para app nativo:
-
 | Ideia | PWA | Nativo |
 |---|---|---|
-| Mapa vivo, arrastar a máquina | ✅ | ✅ |
-| Volante por raio, desfazer zero, alarme explicado | ✅ | ✅ |
-| **Háptica: detentes, parede, peça chegando** | ❌ (um truque frágil, só em toque) | ✅ Core Haptics |
+| Receitas, prévia, mapa, volante, desfazer | ✅ | ✅ |
+| **Háptica: detentes, parede, "plim"** | ❌ | ✅ Core Haptics |
+| **Live Activity e Ilha Dinâmica** | ❌ | ✅ |
+| **Notificação local de "Pronto"** | ⚠️ só com servidor de push | ✅ |
+| **Receber arquivo por AirDrop e "Abrir com"** | ❌ | ✅ |
 | Botão de Ação, Central de Controle, Siri | ❌ | ✅ App Intents |
-| Ilha Dinâmica e tela de bloqueio | ❌ | ✅ Live Activities |
-| Apple Watch e Digital Crown | ❌ | ✅ |
+| Apple Watch | ❌ | ✅ |
 | Achar a placa sozinho (Bonjour) | ❌ | ✅ |
 | Falar direto com a placa, sem servidor | ❌ (mixed content) | ✅ |
 
-Isso muda a recomendação do [ADR-0004](adr/0004-pwa-em-vez-de-app-nativo.md).
-Sem háptica, o volante vira só um desenho, e o volante é a ideia central.
-O nativo também **simplifica** a arquitetura: o app fala direto com o ESP32, e a
-ponte e o servidor deixam de ser necessários.
+Os apps de impressora 3D que servem de inspiração são nativos, e não é por
+acaso. **O micro-ondas pede o nativo**, e o nativo ainda tira o servidor do
+caminho: o app fala direto com o ESP32.
 
-Os custos são reais: Swift em vez de TypeScript, o Apple Developer Program
-(US$ 99/ano, para não reinstalar a cada 7 dias e para usar o relógio com
-conforto) e um app só para Apple. A arquitetura em camadas e os testes primeiro
-([ADR-0003](adr/0003-arquitetura-em-camadas-e-testes-primeiro.md)) continuam
-iguais: um Swift Package de core puro com Swift Testing, um simulador e fixtures
-da placa real.
+Os custos: Swift no lugar de TypeScript, o Apple Developer Program (US$ 99/ano)
+e um app só para Apple. A arquitetura em camadas e os testes primeiro
+([ADR-0003](adr/0003-arquitetura-em-camadas-e-testes-primeiro.md)) seguem
+iguais: um Swift Package de core puro (protocolo, policy, jog, **receitas**),
+com Swift Testing, simulador e fixtures da placa real.
