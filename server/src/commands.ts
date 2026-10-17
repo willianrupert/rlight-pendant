@@ -27,7 +27,13 @@ export interface MotionSettings {
   maxLeadMm?: number;
 }
 
-export const DEFAULT_MOTION: MotionSettings = { nudgeFeedMmPerMin: 1_000, jogToFeedMmPerMin: 2_000 };
+// O fantasma e o destino da régua vão na velocidade máxima de cada eixo, lida da
+// placa (ADR-0008): o destino é mostrado antes, o S2 aprovou, e um deslocamento
+// longo deixa ver a rampa de aceleração do próprio planejador do FluidNC.
+export const DEFAULT_MOTION: MotionSettings = { nudgeFeedMmPerMin: 1_000, jogToFeedMmPerMin: Infinity };
+
+/** Sem velocidade máxima conhecida no eixo, um valor prudente. */
+const FALLBACK_FEED_MM_PER_MIN = 2_000;
 
 /**
  * Limite à frente e avanço da régua conforme o passo escolhido. Com só 2 mm à
@@ -88,7 +94,7 @@ function feedFor(profile: MachineProfile, axes: readonly Axis[], wanted: number)
     const max = profile.axes[axis]?.maxRateMmPerMin ?? 0;
     if (max > 0) feed = Math.min(feed, max);
   }
-  return feed;
+  return Number.isFinite(feed) ? feed : FALLBACK_FEED_MM_PER_MIN;
 }
 
 export function planCommand(req: CommandRequest, ctx: CommandContext): Plan {

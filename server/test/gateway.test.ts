@@ -1,3 +1,7 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { alarmKeepsHoming, fileHomingMemory, type HomingMemory } from '../src/homing-memory';
 import { afterEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import { Board } from '../src/board';
@@ -21,12 +25,13 @@ const opened: WebSocket[] = [];
 async function setup(
   fakeOpts: FakeOptions = { state: 'Idle', mpos: { x: 100, y: 200, z: -10 } },
   motion?: MotionSettings,
+  homingMemory?: HomingMemory,
 ) {
   fake = new FakeFluidNC(fakeOpts);
   const port = await fake.listen();
   board = new Board({ host: '127.0.0.1', port, backoffMs: [20, 40, 80], deadAfterMs: 5_000 });
   board.start();
-  gateway = new Gateway({ board, ...(motion ? { motion } : {}) });
+  gateway = new Gateway({ board, ...(motion ? { motion } : {}), ...(homingMemory ? { homingMemory } : {}) });
   wsPort = await gateway.start();
 }
 
@@ -213,6 +218,46 @@ describe('gateway: mexer na máquina, de ponta a ponta', () => {
     await until(() => b.state()?.homed && b.state()?.machine?.state === 'Idle', { what: 'homing feito' });
     expect(await b.command({ command: 'jogTo', x: 10, y: 5 })).toEqual({ type: 'result', id: 'r3', ok: true });
     await until(() => b.state()?.machine?.mpos?.x === 10 && b.state()?.machine?.mpos?.y === 5);
+  });
+
+  it('o homing sobrevive a um reinício do servidor', async () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'rlight-')), 'homing.json');
+    const memory = fileHomingMemory(file);
+    await setup({ state: 'Alarm', homePos: { x: 0, y: 0, z: 0 } }, undefined, memory);
+    let b = await browser();
+    await until(() => live(b.state()) && b.of('profile')[0]);
+    b.send({ type: 'takeControl' });
+    await until(() => b.state()?.control.inControl);
+    await b.command({ command: 'home' });
+    await until(() => b.state()?.homed && b.state()?.machine?.state === 'Idle', { what: 'homing feito' });
+    expect(memory.read()).toBe(true);
+
+    // O servidor reinicia (uma publicação nova); a placa segue referenciada, em Idle.
+    await gateway.close();
+    board.stop();
+    board = new Board({ host: '127.0.0.1', port: fake.port, backoffMs: [20, 40, 80], deadAfterMs: 5_000 });
+    board.start();
+    gateway = new Gateway({ board, homingMemory: memory });
+    wsPort = await gateway.start();
+    b = await browser();
+    await until(() => live(b.state()) && b.of('profile')[0], { what: 'de volta' });
+    expect(b.state()?.homed).toBe(true);
+  });
+
+  it('placa em alarme ao conectar: o homing guardado é esquecido', async () => {
+    const memory = fileHomingMemory(join(mkdtempSync(join(tmpdir(), 'rlight-')), 'homing.json'));
+    memory.write(true);
+    await setup({ state: 'Alarm' }, undefined, memory);
+    const b = await browser();
+    await until(() => live(b.state()) && b.of('profile')[0]);
+    expect(b.state()?.homed).toBe(false);
+    expect(memory.read()).toBe(false);
+  });
+
+  it('um alarme que perde a posição esquece o homing; o de soft limit não', () => {
+    expect(alarmKeepsHoming(1)).toBe(false);
+    expect(alarmKeepsHoming(3)).toBe(false);
+    expect(alarmKeepsHoming(2)).toBe(true);
   });
 
   it('zera X, vê o WCO mudar, desfaz e vê voltar; liga o spindle e vê a rotação', async () => {

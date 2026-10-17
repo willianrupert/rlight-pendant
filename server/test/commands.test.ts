@@ -89,11 +89,11 @@ describe('planCommand: movimento absoluto (ADR-0002)', () => {
     expect(p).toMatchObject({ ok: true, writes: [], hitLimit: true, moves: false });
   });
 
-  it('o fantasma é recortado pelo curso e usa o avanço do ADR-0002', () => {
+  it('o fantasma é recortado pelo curso e vai na velocidade máxima do eixo (S2 aprovado)', () => {
     const p = planCommand({ command: 'jogTo', x: 5000, y: 300 }, ctx());
     expect(p).toMatchObject({
       ok: true,
-      writes: [{ line: '$J=G53 G90 X1215.000 Y300.000 F2000' }],
+      writes: [{ line: '$J=G53 G90 X1215.000 Y300.000 F3000' }],
       hitLimit: true,
       commanded: { x: 1215, y: 300 },
     });
@@ -108,6 +108,15 @@ describe('planCommand: movimento absoluto (ADR-0002)', () => {
     const jog = snap('<Jog|MPos:100,200,-10|FS:1000,0>');
     const p = planCommand({ command: 'cancelJog' }, ctx({ snapshot: jog, commanded: { x: 101 } }));
     expect(p).toMatchObject({ ok: true, writes: [{ realtime: 0x85 }], commanded: {} });
+  });
+});
+
+describe('planCommand: velocidade do fantasma sem perfil de velocidade', () => {
+  it('sem velocidade máxima conhecida no eixo, cai para 2000 mm/min', () => {
+    const semVelocidade = { ...profile, axes: { x: { ...profile.axes.x!, maxRateMmPerMin: 0 }, y: { ...profile.axes.y!, maxRateMmPerMin: 0 }, z: profile.axes.z! } };
+    expect(planCommand({ command: 'jogTo', x: 10, y: 10 }, ctx({ profile: semVelocidade }))).toMatchObject({
+      writes: [{ line: '$J=G53 G90 X10.000 Y10.000 F2000' }],
+    });
   });
 });
 
@@ -154,7 +163,7 @@ describe('planCommand: ir até um ponto num eixo (jogAxisTo)', () => {
     const p = planCommand({ command: 'jogAxisTo', axis: 'z', value: -12.5 }, ctx());
     expect(p).toEqual({
       ok: true,
-      writes: [{ line: '$J=G53 G90 Z-12.500 F2000' }],
+      writes: [{ line: '$J=G53 G90 Z-12.500 F4000' }],
       commanded: { z: -12.5 },
       hitLimit: false,
       moves: true,
@@ -163,14 +172,14 @@ describe('planCommand: ir até um ponto num eixo (jogAxisTo)', () => {
 
   it('sem o limite de 2 mm à frente: o destino já foi mostrado', () => {
     const p = planCommand({ command: 'jogAxisTo', axis: 'x', value: 600 }, ctx({ commanded: { x: 101, y: 3 } }));
-    expect(p).toMatchObject({ ok: true, writes: [{ line: '$J=G53 G90 X600.000 F2000' }], commanded: { x: 600, y: 3 } });
+    expect(p).toMatchObject({ ok: true, writes: [{ line: '$J=G53 G90 X600.000 F3000' }], commanded: { x: 600, y: 3 } });
   });
 
   it('o curso recorta o destino e avisa', () => {
     const p = planCommand({ command: 'jogAxisTo', axis: 'z', value: -500 }, ctx());
-    expect(p).toMatchObject({ ok: true, writes: [{ line: '$J=G53 G90 Z-158.000 F2000' }], hitLimit: true, commanded: { z: -158 } });
+    expect(p).toMatchObject({ ok: true, writes: [{ line: '$J=G53 G90 Z-158.000 F4000' }], hitLimit: true, commanded: { z: -158 } });
     const q = planCommand({ command: 'jogAxisTo', axis: 'x', value: -3 }, ctx());
-    expect(q).toMatchObject({ writes: [{ line: '$J=G53 G90 X0.000 F2000' }], hitLimit: true });
+    expect(q).toMatchObject({ writes: [{ line: '$J=G53 G90 X0.000 F3000' }], hitLimit: true });
   });
 
   it('o avanço nunca passa do máximo do eixo', () => {

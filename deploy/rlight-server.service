@@ -7,6 +7,7 @@ Wants=network-online.target
 User=rlight
 WorkingDirectory=/opt/rlight/app/server
 EnvironmentFile=/etc/rlight/rlight.env
+Environment=RLIGHT_STATE_DIR=/opt/rlight/state
 ExecStart=/opt/rlight/app/node_modules/.bin/vite-node src/main.ts
 Restart=always
 RestartSec=3
@@ -14,7 +15,7 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=/opt/rlight/app
+ReadWritePaths=/opt/rlight/app /opt/rlight/state
 
 [Install]
 WantedBy=multi-user.target

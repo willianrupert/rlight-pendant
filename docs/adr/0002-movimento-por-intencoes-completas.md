@@ -75,7 +75,7 @@ Nos dois casos ela faz **exatamente o que foi pedido e nada mais**. Ela nunca an
 
 ### Velocidade
 
-Ir até o fantasma usa 2000 mm/min (ajustável depois do S2). A régua usa uma
+Ir até o fantasma usa a velocidade máxima de cada eixo, lida da placa (desde 2026-10-17, com o S2 aprovado; antes, 2000 mm/min). Num deslocamento longo, a rampa de aceleração e frenagem do planejador do FluidNC fica visível, e o app mostra a velocidade real ao lado do ponto. A régua usa uma
 velocidade que acompanha o ritmo do giro, até o mesmo teto.
 
 ### Revisão de 2026-10-17: o limite acompanha o passo

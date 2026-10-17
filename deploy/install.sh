@@ -18,8 +18,8 @@ id rlight >/dev/null 2>&1 || useradd --system --home /opt/rlight --shell /usr/sb
 id caddy  >/dev/null 2>&1 || useradd --system --home /var/lib/caddy --create-home --shell /usr/sbin/nologin caddy
 
 echo "== código"
-mkdir -p /opt/rlight
-chown rlight:rlight /opt/rlight
+mkdir -p /opt/rlight /opt/rlight/state
+chown rlight:rlight /opt/rlight /opt/rlight/state
 # O Git roda como o dono do repositório (como root, ele recusa: "dubious ownership").
 as_rlight() { runuser -u rlight -- "$@"; }
 if [ -d "$APP/.git" ]; then
