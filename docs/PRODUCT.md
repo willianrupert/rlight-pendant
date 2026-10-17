@@ -89,6 +89,16 @@ zerar, testar o spindle) acontece sem abrir o notebook.
 **Pronto quando:** uma peça real vai do Fusion à máquina e termina, com o
 celular fechado no meio, e o tempo estimado erra menos de 10 %.
 
+### Ideias anotadas
+
+- **O alvo fica no mapa até a máquina chegar.** Depois do "Ir", o ponto escolhido
+  não some: fica na mesa como um anel vazado na cor de destaque (o azul do
+  fantasma, `--acc`), com a linha tracejada do caminho encolhendo à medida que a
+  máquina se aproxima. Sai com um esmaecer curto quando a posição real chega ao
+  alvo. Se o movimento parar antes (Parar, alarme, queda), o anel some na hora:
+  o mapa nunca mostra um destino que a máquina não vai mais buscar.
+  *(Pedido do usuário, 17/10/2026.)*
+
 ### Depois
 
 - **v3 · Câmera:** vídeo da mesa atrás do percurso.
