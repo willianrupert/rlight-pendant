@@ -16,6 +16,10 @@ export const PROTOCOL_VERSION = 1;
 export type CommandRequest =
   | { command: 'nudge'; axis: Axis; delta: number }
   | { command: 'jogTo'; x: number; y: number }
+  | { command: 'jogAxisTo'; axis: Axis; value: number }
+  | { command: 'zero'; axis: Axis | 'all' }
+  | { command: 'spindleOn' | 'spindleSpeed'; rpm: number }
+  | { command: 'undoZero' | 'spindleOff' }
   | { command: 'cancelJog' | 'unlock' | 'home' | 'softReset' | 'feedHold' | 'resume' };
 
 export type ClientMessage =
@@ -36,12 +40,13 @@ export type ServerMessage =
       control: { inControl: boolean; controlled: boolean };
     }
   | { type: 'control'; inControl: boolean; reason?: string }
-  | { type: 'result'; id?: string; ok: true; hitLimit?: boolean }
+  | { type: 'result'; id?: string; ok: true; hitLimit?: boolean; undoable?: boolean }
   | { type: 'result'; id?: string; ok: false; reason: string }
   | { type: 'alarm'; code: number }
   | { type: 'invalid'; reason: string };
 
-const SIMPLE = new Set(['cancelJog', 'unlock', 'home', 'softReset', 'feedHold', 'resume']);
+const SIMPLE = new Set(['cancelJog', 'unlock', 'home', 'softReset', 'feedHold', 'resume', 'undoZero', 'spindleOff']);
+const isAxis = (v: unknown): v is Axis => v === 'x' || v === 'y' || v === 'z';
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
 /** Lê uma mensagem do navegador, ou diz por que ela não vale. */
@@ -66,6 +71,19 @@ export function parseClientMessage(raw: string): ClientMessage | { invalid: stri
   if (o.command === 'jogTo') {
     if (!isNum(o.x) || !isNum(o.y)) return { invalid: 'Destino inválido' };
     return { type: 'command', ...id, command: 'jogTo', x: o.x, y: o.y };
+  }
+  if (o.command === 'jogAxisTo') {
+    if (!isAxis(o.axis)) return { invalid: 'Eixo inválido' };
+    if (!isNum(o.value)) return { invalid: 'Destino inválido' };
+    return { type: 'command', ...id, command: 'jogAxisTo', axis: o.axis, value: o.value };
+  }
+  if (o.command === 'zero') {
+    if (!isAxis(o.axis) && o.axis !== 'all') return { invalid: 'Eixo inválido' };
+    return { type: 'command', ...id, command: 'zero', axis: o.axis };
+  }
+  if (o.command === 'spindleOn' || o.command === 'spindleSpeed') {
+    if (!isNum(o.rpm)) return { invalid: 'Rotação inválida' };
+    return { type: 'command', ...id, command: o.command, rpm: o.rpm };
   }
   if (typeof o.command === 'string' && SIMPLE.has(o.command)) {
     return { type: 'command', ...id, command: o.command as 'cancelJog' };

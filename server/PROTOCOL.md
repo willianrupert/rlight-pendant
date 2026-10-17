@@ -77,11 +77,14 @@ própria não traz motivo.
 ```json
 { "type": "result", "id": "r7", "ok": true }
 { "type": "result", "id": "r7", "ok": true, "hitLimit": true }
+{ "type": "result", "id": "r9", "ok": true, "undoable": true }
 { "type": "result", "id": "r8", "ok": false, "reason": "Sem sinal da máquina" }
 ```
 
 `id` repete o do pedido, se houver. `hitLimit` diz que o destino foi recortado
-pelo curso (a régua ou o fantasma bateu na parede). Os motivos são texto para
+pelo curso (a régua ou o fantasma bateu na parede), ou que a rotação foi
+recortada pela faixa do spindle. `undoable` vem no `zero`: dá para desfazer
+com `undoZero` nos próximos 30 s. Os motivos são texto para
 mostrar ao operador, vindos da policy do core ou do servidor:
 
 | Motivo | Quando |
@@ -90,6 +93,10 @@ mostrar ao operador, vindos da policy do core ou do servidor:
 | `Outra tela está no controle` | Quem pediu não tem o controle |
 | `Desbloqueie a máquina primeiro`, `Espere o movimento terminar`, ... | O estado da máquina não permite ([ADR-0005](../docs/adr/0005-seguranca-o-celular-nao-e-e-stop.md)) |
 | `Faça o homing para mover pelo mapa` | `jogTo` sem homing |
+| `Faça o homing para mover até um ponto` | `jogAxisTo` sem homing |
+| `Ainda não sei o zero atual da peça; tente de novo em instantes` | `zero` antes de a placa informar o `WCO` (sem ele não há como desfazer) |
+| `Nada para desfazer` | `undoZero` sem zero recente, depois de 30 s ou pela segunda vez |
+| `Esta máquina não tem spindle configurado` | `spindleOn`/`spindleSpeed` com `profile.spindle` nulo |
 | `A régua está à frente da máquina` | O alvo ficaria mais de 2 mm à frente da posição real ([ADR-0002](../docs/adr/0002-movimento-por-intencoes-completas.md)) |
 | `Lendo a configuração da máquina` | Movimento antes de o `$CD` chegar |
 | `Posição desconhecida` | A placa não informou `MPos` |
@@ -105,7 +112,7 @@ Para todas as telas, quando a placa manda `ALARM:n`.
 ### `invalid`: mensagem que o servidor não entendeu
 
 ```json
-{ "type": "invalid", "reason": "Comando desconhecido: spindleOn" }
+{ "type": "invalid", "reason": "Comando desconhecido: probeZ" }
 ```
 
 ## Da tela para o servidor
@@ -138,15 +145,15 @@ a resposta é imediata e nada é enfileirado nem reenviado depois
 | `{ "type": "command", "command": "resume" }` | `~` |
 | `{ "type": "command", "command": "softReset" }` | `0x18` |
 
-### Comandos da v1 (a implementar)
+### Comandos da v1
 
 | Pedido | Vai para a placa | Notas |
 |---|---|---|
 | `{ "type": "command", "command": "jogAxisTo", "axis": "z", "value": -12.5 }` | `$J=G53 G90 Z-12.500 F<avanço>` | O destino anunciado da régua ao soltar com inércia ([ADR-0010](../docs/adr/0010-a-regua.md)). Recortado pelo curso; **sem** o limite de 2 mm à frente, porque o destino foi mostrado antes. Exige homing. Avanço de `jogToFeedMmPerMin`, limitado pelo eixo |
 | `{ "type": "command", "command": "zero", "axis": "x" }` (ou `"all"`) | `G10 L20 P0 X0` (ou `X0 Y0 Z0`) | A posição atual vira o zero da peça no sistema ativo. O servidor guarda o offset anterior (`machine.wco`) para o desfazer. A resposta traz `"undoable": true` |
 | `{ "type": "command", "command": "undoZero" }` | `G10 L2 P0 X<wco anterior> ...` | Desfaz o último zero, nos mesmos eixos. Vale por 30 s e uma vez só. Sem nada a desfazer: `ok: false`, `reason: "Nada para desfazer"` |
-| `{ "type": "command", "command": "spindleOn", "rpm": 12000 }` | `M3 S12000` | Rotação recortada pela faixa do perfil (`profile.spindle`). Sem spindle no perfil: `ok: false`, `reason: "Esta máquina não tem spindle configurado"` |
-| `{ "type": "command", "command": "spindleSpeed", "rpm": 9000 }` | `S9000` | Muda a rotação com o spindle ligado |
+| `{ "type": "command", "command": "spindleOn", "rpm": 12000 }` | `M3 S12000` | Rotação recortada pela faixa do perfil (`profile.spindle`), com `hitLimit`. Sem spindle no perfil: `ok: false`, `reason: "Esta máquina não tem spindle configurado"` |
+| `{ "type": "command", "command": "spindleSpeed", "rpm": 9000 }` | `S9000` | Muda a rotação com o spindle ligado. Mesmo recorte do `spindleOn` |
 | `{ "type": "command", "command": "spindleOff" }` | `M5` | |
 
 `probeZ` fica para depois (precisa da espessura da placa de toque e da

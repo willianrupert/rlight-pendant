@@ -7,7 +7,7 @@ import type { AddressInfo } from 'node:net';
 import { WebSocketServer, WebSocket } from 'ws';
 import { combineLinks, limitsOf, type AxisValues, type LinkView, type MachineState } from '@rlight/core';
 import { pollHzFor, type Board } from './board';
-import { DEFAULT_MOTION, planCommand, type MotionSettings } from './commands';
+import { DEFAULT_MOTION, planCommand, type MotionSettings, type ZeroMemory } from './commands';
 import { ControlSession, REASON_TAKEN } from './control';
 import {
   parseClientMessage,
@@ -48,6 +48,7 @@ export class Gateway {
   private readonly control = new ControlSession();
   private nextId = 1;
   private commanded: AxisValues = {};
+  private lastZero: ZeroMemory | null = null;
   private lastJogAt = -Infinity;
   private sawHoming = false;
   private firstReport = true;
@@ -195,6 +196,8 @@ export class Gateway {
       homed: this.homed,
       commanded: this.commanded,
       motion: this.motion,
+      now: this.board.now(),
+      lastZero: this.lastZero,
     });
     if (!plan.ok) {
       this.send(client, { type: 'result', ...ids, ok: false, reason: plan.reason });
@@ -209,8 +212,9 @@ export class Gateway {
       }
     }
     this.commanded = plan.commanded;
+    if (plan.lastZero !== undefined) this.lastZero = plan.lastZero;
     if (plan.moves) this.lastJogAt = this.board.now();
-    this.send(client, { type: 'result', ...ids, ok: true, ...(plan.hitLimit ? { hitLimit: true } : {}) });
+    this.send(client, { type: 'result', ...ids, ok: true, ...(plan.hitLimit ? { hitLimit: true } : {}), ...(plan.undoable ? { undoable: true } : {}) });
     this.updatePoll();
     this.scheduleAll();
   }

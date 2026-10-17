@@ -8,6 +8,8 @@ import { parseClientMessage } from '../src/messages';
 const profile = profileFromConfig(configDump);
 const snap = (line: string): MachineSnapshot => applyReport(null, parseStatus(line)!);
 const idleAt = (x: number, y: number, z: number) => snap(`<Idle|MPos:${x},${y},${z}|FS:0,0>`);
+/** Parada, com o offset da peça já informado pela placa. */
+const idleWithWco = (wco: string) => snap(`<Idle|MPos:100,200,-10|FS:0,0|WCO:${wco}>`);
 
 const ctx = (over: Partial<CommandContext> = {}): CommandContext => ({
   snapshot: idleAt(100, 200, -10),
@@ -17,6 +19,8 @@ const ctx = (over: Partial<CommandContext> = {}): CommandContext => ({
   homed: true,
   commanded: {},
   motion: DEFAULT_MOTION,
+  now: 1_000_000,
+  lastZero: null,
   ...over,
 });
 
@@ -107,6 +111,163 @@ describe('planCommand: movimento absoluto (ADR-0002)', () => {
   });
 });
 
+describe('planCommand: ir até um ponto num eixo (jogAxisTo)', () => {
+  it('vai ao destino anunciado, absoluto, no avanço do fantasma', () => {
+    const p = planCommand({ command: 'jogAxisTo', axis: 'z', value: -12.5 }, ctx());
+    expect(p).toEqual({
+      ok: true,
+      writes: [{ line: '$J=G53 G90 Z-12.500 F2000' }],
+      commanded: { z: -12.5 },
+      hitLimit: false,
+      moves: true,
+    });
+  });
+
+  it('sem o limite de 2 mm à frente: o destino já foi mostrado', () => {
+    const p = planCommand({ command: 'jogAxisTo', axis: 'x', value: 600 }, ctx({ commanded: { x: 101, y: 3 } }));
+    expect(p).toMatchObject({ ok: true, writes: [{ line: '$J=G53 G90 X600.000 F2000' }], commanded: { x: 600, y: 3 } });
+  });
+
+  it('o curso recorta o destino e avisa', () => {
+    const p = planCommand({ command: 'jogAxisTo', axis: 'z', value: -500 }, ctx());
+    expect(p).toMatchObject({ ok: true, writes: [{ line: '$J=G53 G90 Z-158.000 F2000' }], hitLimit: true, commanded: { z: -158 } });
+    const q = planCommand({ command: 'jogAxisTo', axis: 'x', value: -3 }, ctx());
+    expect(q).toMatchObject({ writes: [{ line: '$J=G53 G90 X0.000 F2000' }], hitLimit: true });
+  });
+
+  it('o avanço nunca passa do máximo do eixo', () => {
+    const motion = { ...DEFAULT_MOTION, jogToFeedMmPerMin: 9000 };
+    const p = planCommand({ command: 'jogAxisTo', axis: 'x', value: 10 }, ctx({ motion }));
+    expect(p).toMatchObject({ writes: [{ line: '$J=G53 G90 X10.000 F3000' }] });
+  });
+
+  it('exige homing, pela policy do core', () => {
+    const p = planCommand({ command: 'jogAxisTo', axis: 'x', value: 10 }, ctx({ homed: false }));
+    expect(p).toEqual({ ok: false, reason: 'Faça o homing para mover até um ponto' });
+  });
+
+  it('sem perfil da placa, não sai', () => {
+    const p = planCommand({ command: 'jogAxisTo', axis: 'x', value: 10 }, ctx({ profile: null }));
+    expect(p).toEqual({ ok: false, reason: 'Lendo a configuração da máquina' });
+  });
+});
+
+describe('planCommand: zerar a peça e desfazer', () => {
+  it('zera um eixo e guarda o offset anterior para desfazer', () => {
+    const p = planCommand({ command: 'zero', axis: 'x' }, ctx({ snapshot: idleWithWco('10,20,-5') }));
+    expect(p).toEqual({
+      ok: true,
+      writes: [{ line: 'G10 L20 P0 X0' }],
+      commanded: {},
+      hitLimit: false,
+      moves: false,
+      undoable: true,
+      lastZero: { wco: { x: 10 }, at: 1_000_000 },
+    });
+  });
+
+  it('zera os três eixos de uma vez', () => {
+    const p = planCommand({ command: 'zero', axis: 'all' }, ctx({ snapshot: idleWithWco('10,20,-5') }));
+    expect(p).toMatchObject({
+      ok: true,
+      writes: [{ line: 'G10 L20 P0 X0 Y0 Z0' }],
+      undoable: true,
+      lastZero: { wco: { x: 10, y: 20, z: -5 }, at: 1_000_000 },
+    });
+  });
+
+  it('sem saber o offset atual, não zera: não haveria como desfazer', () => {
+    const p = planCommand({ command: 'zero', axis: 'z' }, ctx());
+    expect(p).toEqual({ ok: false, reason: 'Ainda não sei o zero atual da peça; tente de novo em instantes' });
+  });
+
+  it('zerar passa pela policy: não durante um movimento', () => {
+    const jog = snap('<Jog|MPos:100,200,-10|FS:1000,0|WCO:0,0,0>');
+    expect(planCommand({ command: 'zero', axis: 'x' }, ctx({ snapshot: jog }))).toEqual({
+      ok: false,
+      reason: 'Espere o movimento terminar',
+    });
+  });
+
+  it('desfazer devolve o offset anterior, nos mesmos eixos, uma vez só', () => {
+    const lastZero = { wco: { x: 10, z: -5.25 }, at: 1_000_000 };
+    const p = planCommand({ command: 'undoZero' }, ctx({ lastZero, now: 1_000_000 + 29_999 }));
+    expect(p).toEqual({
+      ok: true,
+      writes: [{ line: 'G10 L2 P0 X10.000 Z-5.250' }],
+      commanded: {},
+      hitLimit: false,
+      moves: false,
+      lastZero: null,
+    });
+  });
+
+  it('depois de 30 s, não há o que desfazer', () => {
+    const lastZero = { wco: { x: 10 }, at: 1_000_000 };
+    const p = planCommand({ command: 'undoZero' }, ctx({ lastZero, now: 1_000_000 + 30_001 }));
+    expect(p).toEqual({ ok: false, reason: 'Nada para desfazer' });
+  });
+
+  it('sem zero recente, não há o que desfazer', () => {
+    expect(planCommand({ command: 'undoZero' }, ctx())).toEqual({ ok: false, reason: 'Nada para desfazer' });
+  });
+
+  it('desfazer também passa pela policy', () => {
+    const lastZero = { wco: { x: 10 }, at: 1_000_000 };
+    expect(planCommand({ command: 'undoZero' }, ctx({ lastZero, inControl: false }))).toEqual({
+      ok: false,
+      reason: 'Outra tela está no controle',
+    });
+  });
+});
+
+describe('planCommand: spindle', () => {
+  it('liga no sentido horário com a rotação pedida', () => {
+    const p = planCommand({ command: 'spindleOn', rpm: 12000 }, ctx());
+    expect(p).toEqual({ ok: true, writes: [{ line: 'M3 S12000' }], commanded: {}, hitLimit: false, moves: false });
+  });
+
+  it('a rotação é recortada pela faixa do perfil (0 a 18000 na RLight)', () => {
+    expect(planCommand({ command: 'spindleOn', rpm: 30000 }, ctx())).toMatchObject({
+      writes: [{ line: 'M3 S18000' }],
+      hitLimit: true,
+    });
+    expect(planCommand({ command: 'spindleOn', rpm: -5 }, ctx())).toMatchObject({
+      writes: [{ line: 'M3 S0' }],
+      hitLimit: true,
+    });
+    const narrow = { ...profile, spindle: { ...profile.spindle!, minRpm: 6000 } };
+    expect(planCommand({ command: 'spindleSpeed', rpm: 1000 }, ctx({ profile: narrow }))).toMatchObject({
+      writes: [{ line: 'S6000' }],
+      hitLimit: true,
+    });
+  });
+
+  it('muda a rotação e desliga', () => {
+    expect(planCommand({ command: 'spindleSpeed', rpm: 9000.4 }, ctx())).toMatchObject({
+      ok: true,
+      writes: [{ line: 'S9000' }],
+      hitLimit: false,
+    });
+    expect(planCommand({ command: 'spindleOff' }, ctx())).toMatchObject({ ok: true, writes: [{ line: 'M5' }] });
+  });
+
+  it('máquina sem spindle no perfil recusa ligar e mudar a rotação', () => {
+    const none = { ...profile, spindle: null };
+    const reason = 'Esta máquina não tem spindle configurado';
+    expect(planCommand({ command: 'spindleOn', rpm: 1000 }, ctx({ profile: none }))).toEqual({ ok: false, reason });
+    expect(planCommand({ command: 'spindleSpeed', rpm: 1000 }, ctx({ profile: none }))).toEqual({ ok: false, reason });
+  });
+
+  it('a policy vale também para o spindle', () => {
+    const alarm = snap('<Alarm|MPos:0,0,0|FS:0,0>');
+    expect(planCommand({ command: 'spindleOn', rpm: 1000 }, ctx({ snapshot: alarm }))).toEqual({
+      ok: false,
+      reason: 'Desbloqueie a máquina primeiro',
+    });
+  });
+});
+
 describe('ControlSession: uma tela comanda', () => {
   it('assumir é explícito e devolve quem tinha o controle', () => {
     const s = new ControlSession();
@@ -143,6 +304,39 @@ describe('parseClientMessage', () => {
     });
   });
 
+  it('aceita os comandos da v1', () => {
+    expect(parseClientMessage('{"type":"command","command":"jogAxisTo","axis":"z","value":-12.5}')).toEqual({
+      type: 'command',
+      command: 'jogAxisTo',
+      axis: 'z',
+      value: -12.5,
+    });
+    expect(parseClientMessage('{"type":"command","command":"zero","axis":"all"}')).toEqual({
+      type: 'command',
+      command: 'zero',
+      axis: 'all',
+    });
+    expect(parseClientMessage('{"type":"command","command":"undoZero"}')).toEqual({
+      type: 'command',
+      command: 'undoZero',
+    });
+    expect(parseClientMessage('{"type":"command","id":"s","command":"spindleOn","rpm":12000}')).toEqual({
+      type: 'command',
+      id: 's',
+      command: 'spindleOn',
+      rpm: 12000,
+    });
+    expect(parseClientMessage('{"type":"command","command":"spindleSpeed","rpm":9000}')).toEqual({
+      type: 'command',
+      command: 'spindleSpeed',
+      rpm: 9000,
+    });
+    expect(parseClientMessage('{"type":"command","command":"spindleOff"}')).toEqual({
+      type: 'command',
+      command: 'spindleOff',
+    });
+  });
+
   it('recusa o que não entende, com o motivo', () => {
     expect(parseClientMessage('não é json')).toEqual({ invalid: 'JSON inválido' });
     expect(parseClientMessage('{"type":"command","command":"nudge","axis":"a","delta":1}')).toEqual({
@@ -151,8 +345,13 @@ describe('parseClientMessage', () => {
     expect(parseClientMessage('{"type":"command","command":"jogTo","x":"1","y":2}')).toEqual({
       invalid: 'Destino inválido',
     });
-    expect(parseClientMessage('{"type":"command","command":"spindleOn"}')).toEqual({
-      invalid: 'Comando desconhecido: spindleOn',
+    expect(parseClientMessage('{"type":"command","command":"probeZ"}')).toEqual({
+      invalid: 'Comando desconhecido: probeZ',
+    });
+    expect(parseClientMessage('{"type":"command","command":"spindleOn"}')).toEqual({ invalid: 'Rotação inválida' });
+    expect(parseClientMessage('{"type":"command","command":"zero","axis":"a"}')).toEqual({ invalid: 'Eixo inválido' });
+    expect(parseClientMessage('{"type":"command","command":"jogAxisTo","axis":"z","value":"1"}')).toEqual({
+      invalid: 'Destino inválido',
     });
   });
 });
