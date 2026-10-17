@@ -116,8 +116,13 @@ se configura por cliques, não por arquivo. Assim o RLight fica inteiro num
 container, reproduzível pelo [`deploy/install.sh`](../../deploy/install.sh).
 
 Os outros serviços da casa saem pela Cloudflare Tunnel, acessíveis pela internet.
-**O RLight não:** o domínio só existe no DNS do roteador, e o certificado vem por
-DNS-01, que não exige exposição.
+**O RLight não:** o domínio aponta para um IP interno (`cnc` → `192.168.88.47`, registro
+A sem proxy). De fora de casa ele não leva a lugar nenhum; dentro, funciona em
+qualquer aparelho sem mexer no roteador, inclusive com o Private Relay do iPhone.
+O certificado vem por DNS-01, que não exige exposição.
+
+Instalado em 2026-10-17: CT 107 `rlight-cnc` (Debian 12, 1 núcleo, 512 MB, 4 GB),
+`https://cnc.rlight.com.br`, certificado do Let's Encrypt renovado pelo Caddy.
 
 ## Decisão futura: tirar a WebUI do ESP32
 

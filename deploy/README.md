@@ -12,8 +12,9 @@ iPhone ──https──▶ Caddy (TLS por DNS-01) ──▶ app estático
 
 1. **Container:** Debian 12, sem privilégios, 1 núcleo, 512 MB, 4 GB, IP estático,
    *start at boot*. Chave SSH de quem vai instalar.
-2. **DNS local** no roteador apontando o domínio para o IP do container. Nenhum
-   registro público: o endereço só existe dentro de casa.
+2. **DNS:** um registro A apontando o domínio para o IP interno do container, sem
+   proxy (na Cloudflare, nuvem cinza). De fora de casa ele não leva a nada. Também
+   serve uma entrada estática no DNS do roteador.
 3. **Token da Cloudflare** com permissão *Edit zone DNS* só na zona do domínio, para
    o certificado do Let's Encrypt. Gravado no container por quem administra:
 

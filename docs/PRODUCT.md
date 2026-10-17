@@ -40,8 +40,9 @@ está no código:** o app os lê da placa, como leria de qualquer outra máquina
 > **Estado em 2026-10-17:** a tela roda e foi validada na máquina de referência,
 > servida pelo Mac: jogs pela WebUI e um percurso de 225 jogs no ar (X, Y e Z
 > juntos) acompanhados no iPhone, "muito fluida". Queda forçada testada contra o
-> simulador. **Falta para fechar a v0:** instalar no Proxmox (HTTPS, sempre
-> ligado), conferir no Android e o histórico mínimo.
+> simulador. Instalada no Proxmox em `https://cnc.rlight.com.br` (CT 107, sempre
+> ligada, HTTPS válido). **Falta para fechar a v0:** conferir no Android e o
+> histórico mínimo.
 
 O servidor conectado à placa e o app só mostrando. Nenhum comando.
 
