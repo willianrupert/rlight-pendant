@@ -320,7 +320,7 @@
       {offset}
       needsHoming={hands && !homed && shown === 'Idle' && shows('home')}
       homingPending={pending('home')}
-      state={machine?.state ?? null}
+      machineState={machine?.state ?? null}
       feed={machine?.feed ?? 0}
       onhome={() => {
         clicker.play('confirm');

@@ -20,7 +20,7 @@
     needsHoming: boolean;
     homingPending: string | null;
     /** O estado e a velocidade reportados, para mostrar a velocidade real. */
-    state: MachineState | null;
+    machineState: MachineState | null;
     feed: number;
     /** Curso do Z e zero da peça (coordenada de máquina), para a régua vertical. */
     zLimits: AxisLimits | null;
@@ -31,7 +31,7 @@
     onhome: () => void;
   }
 
-  let { limits, ghost, stop, stopPending, frozen, offset, needsHoming, homingPending, state, feed, zLimits, zZero, onjog, onstop, ongrab, onhome }: Props = $props();
+  let { limits, ghost, stop, stopPending, frozen, offset, needsHoming, homingPending, machineState, feed, zLimits, zZero, onjog, onstop, ongrab, onhome }: Props = $props();
   let gauge: HTMLElement;
 
   let svg: SVGSVGElement;
@@ -84,7 +84,7 @@
 
   $effect(() => {
     if (!view) return;
-    view.state = state;
+    view.state = machineState;
     view.feed = feed;
   });
 
@@ -175,13 +175,12 @@
     height: 100%;
     border: 0;
     border-radius: 18px;
-    background: rgba(10, 26, 51, 0.55);
+    /* Leve, sem desfoque: o ponto andando e a velocidade continuam à vista. */
+    background: rgba(10, 26, 51, 0.28);
     color: var(--fg);
     font: 700 28px var(--sans);
     cursor: pointer;
     touch-action: manipulation;
-    -webkit-backdrop-filter: blur(2px);
-    backdrop-filter: blur(2px);
   }
   .stop span { padding: 14px 30px; border-radius: 999px; background: var(--fg); color: var(--moving); }
   /* A legenda mora dentro do mapa, embaixo: não empurra a tela. */
