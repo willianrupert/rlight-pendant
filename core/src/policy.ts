@@ -14,9 +14,11 @@ export const COMMANDS = [
   'feedHold',
   'resume',
   'jogTo',
+  'jogAxisTo',
   'nudge',
   'cancelJog',
   'zero',
+  'undoZero',
   'spindleOn',
   'spindleOff',
   'spindleSpeed',
@@ -35,8 +37,8 @@ export interface PolicyContext {
 export type Decision = { ok: true } | { ok: false; reason: string };
 
 const PERMITTED: Record<MachineState, readonly Command[]> = {
-  Idle: ['home', 'softReset', 'jogTo', 'nudge', 'zero', 'spindleOn', 'spindleOff', 'spindleSpeed', 'probeZ'],
-  Jog: ['softReset', 'feedHold', 'cancelJog', 'jogTo', 'nudge'],
+  Idle: ['home', 'softReset', 'jogTo', 'jogAxisTo', 'nudge', 'zero', 'undoZero', 'spindleOn', 'spindleOff', 'spindleSpeed', 'probeZ'],
+  Jog: ['softReset', 'feedHold', 'cancelJog', 'jogTo', 'jogAxisTo', 'nudge'],
   Run: ['softReset', 'feedHold', 'spindleSpeed'],
   Hold: ['softReset', 'resume', 'spindleOff'],
   Alarm: ['unlock', 'home', 'softReset'],
@@ -66,5 +68,6 @@ export function allowed(command: Command, state: MachineState, ctx: PolicyContex
     return { ok: false, reason };
   }
   if (command === 'jogTo' && !ctx.homed) return { ok: false, reason: 'Faça o homing para mover pelo mapa' };
+  if (command === 'jogAxisTo' && !ctx.homed) return { ok: false, reason: 'Faça o homing para mover até um ponto' };
   return { ok: true };
 }

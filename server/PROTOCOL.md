@@ -138,6 +138,20 @@ a resposta é imediata e nada é enfileirado nem reenviado depois
 | `{ "type": "command", "command": "resume" }` | `~` |
 | `{ "type": "command", "command": "softReset" }` | `0x18` |
 
+### Comandos da v1 (a implementar)
+
+| Pedido | Vai para a placa | Notas |
+|---|---|---|
+| `{ "type": "command", "command": "jogAxisTo", "axis": "z", "value": -12.5 }` | `$J=G53 G90 Z-12.500 F<avanço>` | O destino anunciado da régua ao soltar com inércia ([ADR-0010](../docs/adr/0010-a-regua.md)). Recortado pelo curso; **sem** o limite de 2 mm à frente, porque o destino foi mostrado antes. Exige homing. Avanço de `jogToFeedMmPerMin`, limitado pelo eixo |
+| `{ "type": "command", "command": "zero", "axis": "x" }` (ou `"all"`) | `G10 L20 P0 X0` (ou `X0 Y0 Z0`) | A posição atual vira o zero da peça no sistema ativo. O servidor guarda o offset anterior (`machine.wco`) para o desfazer. A resposta traz `"undoable": true` |
+| `{ "type": "command", "command": "undoZero" }` | `G10 L2 P0 X<wco anterior> ...` | Desfaz o último zero, nos mesmos eixos. Vale por 30 s e uma vez só. Sem nada a desfazer: `ok: false`, `reason: "Nada para desfazer"` |
+| `{ "type": "command", "command": "spindleOn", "rpm": 12000 }` | `M3 S12000` | Rotação recortada pela faixa do perfil (`profile.spindle`). Sem spindle no perfil: `ok: false`, `reason: "Esta máquina não tem spindle configurado"` |
+| `{ "type": "command", "command": "spindleSpeed", "rpm": 9000 }` | `S9000` | Muda a rotação com o spindle ligado |
+| `{ "type": "command", "command": "spindleOff" }` | `M5` | |
+
+`probeZ` fica para depois (precisa da espessura da placa de toque e da
+sequência segura do Romney).
+
 Todo movimento é **absoluto, em coordenadas de máquina**: reenviar o mesmo
 pedido por engano não move a máquina a mais. O avanço nunca passa do
 `max_rate_mm_per_min` do eixo. O alvo comandado volta a seguir a posição real

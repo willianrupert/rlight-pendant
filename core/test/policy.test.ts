@@ -7,8 +7,8 @@ const ctx = { link: 'live', inControl: true, homed: true } as const;
 
 // O que cada estado permite, com conexão viva e controle nas mãos.
 const TABLE: Record<MachineState, readonly Command[]> = {
-  Idle: ['home', 'softReset', 'jogTo', 'nudge', 'zero', 'spindleOn', 'spindleOff', 'spindleSpeed', 'probeZ'],
-  Jog: ['softReset', 'feedHold', 'cancelJog', 'jogTo', 'nudge'],
+  Idle: ['home', 'softReset', 'jogTo', 'jogAxisTo', 'nudge', 'zero', 'undoZero', 'spindleOn', 'spindleOff', 'spindleSpeed', 'probeZ'],
+  Jog: ['softReset', 'feedHold', 'cancelJog', 'jogTo', 'jogAxisTo', 'nudge'],
   Run: ['softReset', 'feedHold', 'spindleSpeed'],
   Hold: ['softReset', 'resume', 'spindleOff'],
   Alarm: ['unlock', 'home', 'softReset'],
@@ -52,6 +52,13 @@ describe('regras que valem para todos os estados', () => {
       reason: 'Faça o homing para mover pelo mapa',
     });
     expect(allowed('nudge', 'Idle', { ...ctx, homed: false }).ok).toBe(true);
+  });
+
+  it('o destino absoluto da régua também exige homing', () => {
+    expect(allowed('jogAxisTo', 'Idle', { ...ctx, homed: false })).toEqual({
+      ok: false,
+      reason: 'Faça o homing para mover até um ponto',
+    });
   });
 });
 
