@@ -19,18 +19,22 @@ id caddy  >/dev/null 2>&1 || useradd --system --home /var/lib/caddy --create-hom
 
 echo "== código"
 mkdir -p /opt/rlight
+chown rlight:rlight /opt/rlight
+# O Git roda como o dono do repositório (como root, ele recusa: "dubious ownership").
+as_rlight() { runuser -u rlight -- "$@"; }
 if [ -d "$APP/.git" ]; then
-  git -C "$APP" fetch -q origin main && git -C "$APP" reset -q --hard origin/main
+  chown -R rlight:rlight "$APP"
+  as_rlight git -C "$APP" fetch -q origin main
+  as_rlight git -C "$APP" reset -q --hard origin/main
 else
-  git clone -q "$REPO" "$APP"
+  as_rlight git clone -q "$REPO" "$APP"
 fi
-chown -R rlight:rlight /opt/rlight
+echo "   versão: $(as_rlight git -C "$APP" log --oneline -1)"
 
 echo "== dependências e build do app"
-sudo_rlight() { runuser -u rlight -- "$@"; }
 cd "$APP"
-sudo_rlight npm ci --no-audit --no-fund --loglevel=error
-sudo_rlight npm run build -w web --silent
+as_rlight npm ci --no-audit --no-fund --loglevel=error
+as_rlight npm run build -w web --silent
 
 echo "== Caddy com o módulo DNS da Cloudflare (build oficial de caddyserver.com)"
 if [ ! -x /usr/local/bin/caddy ] || ! /usr/local/bin/caddy list-modules 2>/dev/null | grep -q dns.providers.cloudflare; then
