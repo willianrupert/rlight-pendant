@@ -9,6 +9,7 @@ liga e ajusta o spindle e pausa a execução. Roda só na rede local, em
 
 ## Documentos
 
+- **[docs/VISION.md](docs/VISION.md)**: o que o app é e por que ele é diferente. Comece por aqui.
 - **[docs/PRODUCT.md](docs/PRODUCT.md)**: o produto, o escopo da v1, a segurança, os princípios de experiência e os spikes.
 - **Decisões (ADRs):**
   - [0001 · Hospedagem: ponte no Proxmox, só na LAN](docs/adr/0001-hospedagem-ponte-no-proxmox.md)
