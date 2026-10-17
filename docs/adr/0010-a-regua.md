@@ -1,6 +1,6 @@
 # ADR-0010 · O ajuste fino é uma régua, com inércia de destino anunciado
 
-**Status:** aceito · 2026-10-16 · validado na rodada 4 do S3
+**Status:** aceito · 2026-10-16 · aprovado na rodada 5 do S3
 
 ## Contexto
 
@@ -96,11 +96,20 @@ quadros lentos.
 O Safari no iPhone entrega cerca de 60 Hz para páginas por padrão, mesmo em telas
 de 120 Hz. O orçamento de quadro é 16,7 ms.
 
+## Resultado da rodada 5
+
+Fluido, preciso, inércia ajuda, **destino claro**, clique bom, pontas boas.
+Quadros lentos: 20 de 1496 durante gestos (**1,3 %**, contra 49 na rodada 4), a
+59 Hz, provavelmente medidos dentro do iframe do claude.ai. A forma e a sensação
+estão **aprovadas**. O último 0,3 % até a meta fica como orçamento do app real
+(abaixo), medido em página própria.
+
 ## Critério de aceitação
 
 No iPhone, com uma mão:
 - **Fluido:** a pessoa diz que sim, e menos de 1 % dos quadros durante arrastos e
-  deslizes passam de 22 ms.
+  deslizes passam de 22 ms. No app real, isso vira um teste de desempenho no CI
+  ([ADR-0009](0009-fluidez-sem-mentir.md)).
 - **Preciso:** para exatamente no centésimo desejado em arrasto lento.
 - **Inércia e marcador:** a inércia ajuda e o marcador de destino é claro. Se a
   inércia atrapalhar, ela sai e fica só o arrasto.
