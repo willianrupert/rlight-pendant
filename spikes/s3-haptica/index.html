@@ -36,6 +36,8 @@ button:focus-visible,.res i:focus-visible{outline:2px solid var(--acc);outline-o
 .native{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--panel-2);border-radius:16px;padding:12px 14px}
 .native input{transform:scale(1.25)}
 .wheelbox{display:flex;flex-direction:column;align-items:center;gap:10px}
+#ruler{width:100%;height:auto;aspect-ratio:900/360;max-width:100%;touch-action:none;cursor:grab;display:block;border-radius:16px;background:var(--panel-2)}
+.res i[data-on="A"],.res i[data-on="B"]{background:#16284a;color:var(--acc)}
 #wheel{width:min(280px,78vw);height:auto;aspect-ratio:1;max-width:100%;touch-action:none;cursor:grab;display:block}
 .meters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:100%}
 .meter{background:var(--panel-2);border-radius:14px;padding:10px 12px}
@@ -111,8 +113,8 @@ textarea{width:100%;box-sizing:border-box;min-height:150px;background:var(--pane
   </section>
 
   <section class="card" aria-labelledby="h-wheel">
-    <h2 id="h-wheel">3 · Volante</h2>
-    <p>Gire com o polegar. A roda gira livre e lisa; a lingueta no topo estala a cada dente, como numa catraca. Cada traço é um detente. O anel externo é 0,01 mm, o do meio 0,1 e o interno 1 mm. Gire devagar e depois rápido.</p>
+    <h2 id="h-wheel">3A · Volante</h2>
+    <p>Como o volante de uma CNC cara: gire com o polegar, a roda acompanha liso e cada traço que passa pela marca azul dá um clique suave. O anel externo é 0,01 mm, o do meio 0,1 e o interno 1 mm. Gire devagar e depois rápido.</p>
     <div class="wheelbox">
       <canvas id="wheel" width="560" height="560" aria-label="Volante de jog"></canvas>
       <div class="meters">
@@ -127,10 +129,28 @@ textarea{width:100%;box-sizing:border-box;min-height:150px;background:var(--pane
         <button data-g="0">0 ms</button><button data-g="35" aria-pressed="true">35 ms</button><button data-g="60">60 ms</button><button data-g="100">100 ms</button>
       </div>
     </div>
-    <label class="row" for="rsnd"><span>Som de catraca</span><input type="checkbox" id="rsnd" checked></label>
-    <div class="res" data-k="volante_catraca"><span class="status">Parece catraca?</span><i tabindex="0" data-v="sim">Sim</i><i tabindex="0" data-v="nao">Não</i></div>
-    <div class="res" data-k="volante_devagar"><span class="status">Devagar:</span><i tabindex="0" data-v="sim">Cada clique</i><i tabindex="0" data-v="nao">Nada</i></div>
-    <div class="res" data-k="volante_rapido"><span class="status">Rápido:</span><i tabindex="0" data-v="sim">Senti</i><i tabindex="0" data-v="nao">Falhou</i></div>
+    <label class="row" for="rsnd"><span>Som do clique (volante e régua)</span><input type="checkbox" id="rsnd" checked></label>
+    <div class="res" data-k="A_fluido"><span class="status">Fluido?</span><i tabindex="0" data-v="sim">Sim</i><i tabindex="0" data-v="nao">Não</i></div>
+    <div class="res" data-k="A_preciso"><span class="status">Preciso no 0,01?</span><i tabindex="0" data-v="sim">Sim</i><i tabindex="0" data-v="nao">Não</i></div>
+    <div class="res" data-k="A_uma_mao"><span class="status">Confortável com uma mão?</span><i tabindex="0" data-v="sim">Sim</i><i tabindex="0" data-v="nao">Não</i></div>
+  </section>
+
+  <section class="card" aria-labelledby="h-ruler">
+    <h2 id="h-ruler">3B · Régua</h2>
+    <p>Como o ajuste de ângulo do app Fotos: arraste para os lados, os traços correm sob a linha azul e cada um dá um clique suave. A resolução fica abaixo.</p>
+    <canvas id="ruler" width="900" height="360" aria-label="Régua de jog"></canvas>
+    <div class="meters">
+      <div class="meter"><small>posição</small><strong id="r-pos">0,00</strong></div>
+      <div class="meter"><small>detentes/s</small><strong id="r-rate">0</strong></div>
+      <div class="meter"><small>passo</small><strong id="r-step">0,01</strong></div>
+    </div>
+    <div class="seg" role="group" aria-label="Resolução da régua" id="rstep">
+      <button data-s="0.01" aria-pressed="true">0,01 mm</button><button data-s="0.1">0,1 mm</button><button data-s="1">1 mm</button>
+    </div>
+    <div class="res" data-k="B_fluido"><span class="status">Fluido?</span><i tabindex="0" data-v="sim">Sim</i><i tabindex="0" data-v="nao">Não</i></div>
+    <div class="res" data-k="B_preciso"><span class="status">Preciso no 0,01?</span><i tabindex="0" data-v="sim">Sim</i><i tabindex="0" data-v="nao">Não</i></div>
+    <div class="res" data-k="B_uma_mao"><span class="status">Confortável com uma mão?</span><i tabindex="0" data-v="sim">Sim</i><i tabindex="0" data-v="nao">Não</i></div>
+    <div class="res" data-k="preferido"><span class="status">Preferido:</span><i tabindex="0" data-v="A">Volante</i><i tabindex="0" data-v="B">Régua</i></div>
   </section>
 
   <section class="card" aria-labelledby="h-num">
@@ -297,21 +317,18 @@ function wheelLoop() {
   requestAnimationFrame(wheelLoop);
 }
 requestAnimationFrame(wheelLoop);
-let noiseBuf = null;
+// Clique de detente: curto e suave, no espírito do seletor de horas do iOS.
 function ratchet(strong) {
   if (!ratchetSound) return;
   try {
     if (!ctx) { ctx = new (window.AudioContext || window.webkitAudioContext)(); try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch {} }
     if (ctx.state === 'suspended') ctx.resume();
-    if (!noiseBuf) { noiseBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.012), ctx.sampleRate); const ch = noiseBuf.getChannelData(0); for (let i = 0; i < ch.length; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / ch.length, 4); }
     const t = ctx.currentTime;
-    const src = ctx.createBufferSource(); src.buffer = noiseBuf;
-    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = strong ? 1800 : 3200; bp.Q.value = 2.5;
-    const gn = ctx.createGain(); gn.gain.value = strong ? 0.9 : 0.55;
-    src.connect(bp).connect(gn).connect(ctx.destination); src.start(t);
-    const o = ctx.createOscillator(), og = ctx.createGain(); o.frequency.setValueAtTime(strong ? 140 : 220, t); o.frequency.exponentialRampToValueAtTime(60, t + 0.03);
-    og.gain.setValueAtTime(strong ? 0.35 : 0.18, t); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.035);
-    o.connect(og).connect(ctx.destination); o.start(t); o.stop(t + 0.04);
+    const o = ctx.createOscillator(), og = ctx.createGain(), lp = ctx.createBiquadFilter();
+    o.type = 'triangle'; o.frequency.setValueAtTime(strong ? 1300 : 2100, t); o.frequency.exponentialRampToValueAtTime(strong ? 700 : 1200, t + 0.012);
+    lp.type = 'lowpass'; lp.frequency.value = 3500;
+    og.gain.setValueAtTime(0.0001, t); og.gain.exponentialRampToValueAtTime(strong ? 0.16 : 0.09, t + 0.0015); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.018);
+    o.connect(lp).connect(og).connect(ctx.destination); o.start(t); o.stop(t + 0.025);
   } catch (e) {}
 }
 function drawWheel() {
@@ -321,11 +338,7 @@ function drawWheel() {
   for (let i = 0; i < 360 / DET; i++) { const a = i * DET * Math.PI / 180; g.strokeStyle = i % 6 ? '#3a414b' : '#6b7480'; g.lineWidth = i % 6 ? 3 : 5;
     g.beginPath(); g.moveTo(Math.sin(a) * 262, -Math.cos(a) * 262); g.lineTo(Math.sin(a) * 240, -Math.cos(a) * 240); g.stroke(); }
   g.restore();
-  if (typeof pawl === 'number') {
-    g.save(); g.translate(C, 18); g.rotate(pawlDir * pawl * 0.5);
-    g.beginPath(); g.moveTo(-11, -14); g.lineTo(11, -14); g.lineTo(0, 22); g.closePath();
-    g.fillStyle = pawl > 0.3 ? '#7fb0ff' : '#c9d1db'; g.fill(); g.restore();
-  }
+  g.fillStyle = '#7fb0ff'; g.fillRect(C - 2, 4, 4, 30);
   g.beginPath(); g.arc(C, C, R.hub, 0, 7); g.fillStyle = '#0b0d10'; g.fill();
   g.fillStyle = '#5f6873'; g.font = '600 22px ui-monospace, monospace'; g.textAlign = 'center';
   g.fillText('0,01', C, C - R.outer + 52); g.fillText('0,1', C, C - R.mid + 40); g.fillText('1', C, C - R.inner + 36);
@@ -354,6 +367,43 @@ setInterval(() => {
   if (firedWindow.length > metrics.maxFiredPerSec) { metrics.maxFiredPerSec = firedWindow.length; summary(); }
 }, 250);
 drawWheel();
+
+/* ---------- Régua: linear, como o ajuste de ângulo do Fotos ---------- */
+const rc = $('#ruler'), rg = rc.getContext('2d'); const RW = 900, RH = 360, SP = 60;
+let rOff = 0, rShown = 0, rDrag = false, rLastX = null, rN = 0, rStep = 0.01, rPos = 0, rDet = [], rDirty = true;
+function drawRuler() {
+  rg.clearRect(0, 0, RW, RH);
+  const cx = RW / 2, first = Math.floor((rShown - cx) / SP) - 1, last = Math.ceil((rShown + cx) / SP) + 1;
+  for (let i = first; i <= last; i++) {
+    const x = cx + i * SP - rShown; const dist = Math.abs(x - cx) / cx; const a = Math.max(0, 1 - dist * dist);
+    const major = i % 10 === 0, mid = i % 5 === 0;
+    rg.globalAlpha = 0.25 + 0.75 * a; rg.fillStyle = major ? '#c9d1db' : '#5f6873';
+    const h = major ? 130 : mid ? 90 : 60; rg.fillRect(Math.round(x) - (major ? 4 : 3), RH / 2 - 40 - h / 2, major ? 8 : 6, h);
+    if (major) { rg.font = '600 44px ui-monospace, monospace'; rg.textAlign = 'center'; rg.fillStyle = '#9aa3ae'; rg.fillText(fmt(i * rStep), x, RH - 40); }
+  }
+  rg.globalAlpha = 1; rg.fillStyle = '#7fb0ff'; rg.fillRect(cx - 5, RH / 2 - 150, 10, 220);
+}
+function rulerLoop() {
+  if (rDrag) { if (rShown !== rOff) { rShown = rOff; rDirty = true; } }
+  else { const d = rN * SP - rShown; if (Math.abs(d) > 0.05) { rShown += d * 0.3; rDirty = true; } }
+  if (rDirty) { drawRuler(); rDirty = false; }
+  requestAnimationFrame(rulerLoop);
+}
+requestAnimationFrame(rulerLoop);
+rc.addEventListener('pointerdown', e => { rc.setPointerCapture(e.pointerId); rDrag = true; rLastX = e.clientX; });
+rc.addEventListener('pointermove', e => {
+  if (!rDrag) return; const b = rc.getBoundingClientRect(); const dx = (e.clientX - rLastX) * RW / b.width; rLastX = e.clientX;
+  rOff -= dx; const n = Math.round(rOff / SP);
+  while (n !== rN) {
+    const s = Math.sign(n - rN); rN += s; rPos = Math.round((rPos + s * rStep) * 100) / 100;
+    const now = performance.now(); rDet.push(now);
+    if (now - lastFire >= minGap) { pulse(rStep >= 1 ? 18 : 8); ratchet(rN % 10 === 0); lastFire = now; }
+  }
+  $('#r-pos').textContent = fmt(rPos);
+});
+const endR = () => { rDrag = false; rOff = rN * SP; }; rc.addEventListener('pointerup', endR); rc.addEventListener('pointercancel', endR);
+seg($('#rstep'), 's', v => { rStep = +v; rN = Math.round(rPos / rStep); rOff = rShown = rN * SP; rDirty = true; $('#r-step').textContent = fmt(rStep).replace(/,?0+$/, '') || '1'; });
+setInterval(() => { const now = performance.now(); rDet = rDet.filter(t => now - t < 1000); $('#r-rate').textContent = rDet.length; }, 250);
 
 /* ---------- Números: interpolar, nunca extrapolar ---------- */
 function fmt(v) { const s = Math.abs(v).toFixed(2).split('.'); return (v < 0 ? '−' : '') + s[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + s[1]; }
@@ -437,7 +487,7 @@ function summary() {
     `intervalo mínimo do volante: ${minGap} ms`,
     `máx. toques/s medido: ${metrics.maxFiredPerSec}`,
     `toques iOS disparados: ${metrics.iosTaps}, chamadas de vibração: ${metrics.vibCalls}`,
-    ...Object.entries(results).map(([k, v]) => `${k}: ${v === 'sim' ? 'sim' : 'não'}`),
+    ...Object.entries(results).map(([k, v]) => `${k}: ${v === 'sim' ? 'sim' : v === 'nao' ? 'não' : v === 'A' ? 'volante' : 'régua'}`),
     metrics.errors.length ? `erros: ${metrics.errors.slice(0, 3).join(' | ')}` : '',
     `ua: ${ua}`,
   ].filter(Boolean);
