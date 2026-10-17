@@ -139,8 +139,9 @@
   .stop span { padding: 14px 30px; border-radius: 999px; background: var(--fg); color: var(--moving); }
   /* A legenda mora dentro do mapa, embaixo: não empurra a tela. */
   .caption {
-    position: absolute; left: 0; right: 0; bottom: 8px; margin: 0; pointer-events: none;
+    position: absolute; left: 0; right: 34px; bottom: 8px; margin: 0; pointer-events: none;
     font-size: 12px; color: var(--fg-3); text-align: center;
   }
+  .map:global(.point-low) .caption { bottom: auto; top: 8px; }
   .caption.dest { font: 600 15px var(--mono); color: var(--acc); }
 </style>

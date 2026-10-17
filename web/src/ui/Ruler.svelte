@@ -79,6 +79,7 @@
     now: number;
   }): void {
     model.machineMoving = input.moving;
+    if (input.reported !== null) view?.pushReported(input.reported, input.now);
     model.reported = input.reported;
     model.barrier = input.barrier;
     model.limits = input.limits;

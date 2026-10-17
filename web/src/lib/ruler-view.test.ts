@@ -49,12 +49,12 @@ describe('arrastar = nudges em lotes', () => {
     expect(clicks.length).toBe(4);
   });
 
-  it('não passa de 2 mm à frente da máquina: a régua pesa', () => {
+  it('não passa do alcance (leadForStep: 4 traços no passo 1): a régua pesa', () => {
     const { m, sent } = setup(1);
-    slowDrag(m, 5);
+    slowDrag(m, 6);
     const total = sent.filter((s) => s.command === 'nudge').reduce((a, n) => a + (n as { delta: number }).delta, 0);
-    expect(total).toBe(2);
-    expect(m.target).toBe(2); // solto no elástico, volta até os 2 mm
+    expect(total).toBe(4);
+    expect(m.target).toBe(4); // solto no elástico, volta até a borda do alcance
   });
 
   it('não passa do curso', () => {
@@ -130,14 +130,14 @@ describe('a régua parada segue a máquina, sem pular de volta', () => {
   });
 });
 
-describe('o elástico dos 2 mm', () => {
+describe('o elástico na borda do alcance', () => {
   it('com o dedo parado no elástico nada sai; o próximo movimento manda o que a máquina já permite', () => {
     const { m, sent } = setup(1);
     const total = () => sent.filter((s) => s.command === 'nudge').reduce((a, n) => a + (n as { delta: number }).delta, 0);
     let t = 0;
     let x = 200;
     m.down(x, t);
-    for (let k = 0; k < 4; k++) {
+    for (let k = 0; k < 6; k++) {
       t += 30;
       x -= 2 * PX_PER_TICK;
       m.move(x, t);
@@ -145,21 +145,21 @@ describe('o elástico dos 2 mm', () => {
     }
     t += 150;
     m.frame(t);
-    expect(total()).toBe(2);
-    m.reported = 414.3; // a máquina chegou aos 2 mm
+    expect(total()).toBe(4);
+    m.reported = 416.3; // a máquina chegou à borda
     for (let k = 0; k < 5; k++) m.frame((t += 50));
-    expect(total()).toBe(2);
+    expect(total()).toBe(4);
     m.move(x - 1, (t += 10));
     m.frame((t += 120));
-    expect(total()).toBeGreaterThan(2);
-    expect(total()).toBeLessThanOrEqual(4);
+    expect(total()).toBeGreaterThan(4);
+    expect(total()).toBeLessThanOrEqual(8);
   });
 
-  it('nos passos grandes a folga é de dois traços', () => {
+  it('nos passos grandes o alcance é de quatro traços', () => {
     const { m, sent } = setup(10);
-    slowDrag(m, 5);
+    slowDrag(m, 6);
     const total = sent.filter((s) => s.command === 'nudge').reduce((a, n) => a + (n as { delta: number }).delta, 0);
-    expect(total).toBe(20);
+    expect(total).toBe(40);
   });
 
   it('cada nudge leva o passo', () => {
@@ -240,5 +240,21 @@ describe('a régua é o Parar', () => {
     m.down(200, 0);
     m.up(100);
     expect(sent).toEqual([]);
+  });
+});
+
+describe('o alcance que a régua desenha', () => {
+  it('em traços a partir da régua, com o curso', () => {
+    const { m } = setup(100);
+    m.sync(375, 0);
+    m.reported = 375;
+    // 375 ± 400, recortado pelo curso 0..1215: do traço −3 (75) ao +4 (775)
+    expect(m.reachTicks()).toEqual({ lo: -3, hi: 4 });
+  });
+
+  it('anda com a máquina', () => {
+    const { m } = setup(1);
+    m.reported = 414.3;
+    expect(m.reachTicks()).toEqual({ lo: -2, hi: 6 });
   });
 });
