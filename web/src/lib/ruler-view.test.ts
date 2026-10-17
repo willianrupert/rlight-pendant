@@ -53,7 +53,8 @@ describe('arrastar = nudges em lotes', () => {
     const { m, sent } = setup(1);
     slowDrag(m, 5);
     const total = sent.filter((s) => s.command === 'nudge').reduce((a, n) => a + (n as { delta: number }).delta, 0);
-    expect(total).toBe(1);
+    expect(total).toBe(2);
+    expect(m.target).toBe(2); // solto no elástico, volta até os 2 mm
   });
 
   it('não passa do curso', () => {
@@ -126,6 +127,31 @@ describe('a régua parada segue a máquina, sem pular de volta', () => {
     m.sync(412.6, t + 500);
     m.sync(500, t + 600); // outra coisa moveu a máquina
     expect(m.value).toBe(500);
+  });
+});
+
+describe('o elástico dos 2 mm', () => {
+  it('conforme a máquina alcança, o que estava no elástico vai sendo mandado', () => {
+    const { m, sent } = setup(1);
+    let t = 0;
+    let x = 200;
+    m.down(x, t);
+    for (let k = 0; k < 4; k++) {
+      t += 30;
+      x -= 2 * PX_PER_TICK;
+      m.move(x, t);
+      m.frame(t);
+    }
+    const before = sent.filter((s) => s.command === 'nudge').reduce((a, n) => a + (n as { delta: number }).delta, 0);
+    expect(before).toBe(2);
+    m.reported = 414.3; // a máquina chegou aos 2 mm
+    t += 60;
+    m.frame(t);
+    t += 60;
+    m.frame(t);
+    const after = sent.filter((s) => s.command === 'nudge').reduce((a, n) => a + (n as { delta: number }).delta, 0);
+    expect(after).toBeGreaterThan(2);
+    expect(after).toBeLessThanOrEqual(4);
   });
 });
 
