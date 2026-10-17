@@ -70,12 +70,13 @@
   const table = $derived<TableLimits | null>(limits.x && limits.y ? { x: limits.x, y: limits.y } : null);
   const showMap = $derived(hands && !!table && !!shown && ['Idle', 'Jog'].includes(shown));
   const ghost = $derived(hands && shows('jogTo') && shown === 'Idle');
-  // O Parar grande do mapa é só para o movimento que o mapa mandou; na régua, a régua é o Parar.
-  const mapStop = $derived(hands && mapMoveAt !== null && machine?.state === 'Jog');
+  // Depois de um movimento pelo mapa (longo, de propósito), a barra mostra o Parar
+  // na hora, sem esperar a histerese; o mapa fica limpo, sem overlay.
+  const barState = $derived(mapMoveAt !== null && machine?.state === 'Jog' ? 'Jog' : shown);
   const showRuler = $derived(hands && shows('nudge') && axisNames.includes(axis));
   const canZero = $derived(hands && shows('zero'));
   const slots = $derived<[Slot, Slot, Slot]>(
-    hands && shown ? barSlots(shown, { ...ctx, hasSpindle: !!profile?.spindle }) : [null, null, null],
+    hands && barState ? barSlots(barState, { ...ctx, hasSpindle: !!profile?.spindle }) : [null, null, null],
   );
   const slotKey = (x: Slot) => (x === null ? 'empty' : x.kind === 'action' ? x.command : x.kind);
   const pending = (c: CommandName) => {
@@ -314,8 +315,7 @@
       bind:this={map}
       limits={table}
       {ghost}
-      stop={mapStop}
-      stopPending={!!pending('cancelJog')}
+      moving={machine?.state === 'Jog'}
       frozen={!live}
       {offset}
       needsHoming={hands && !homed && shown === 'Idle' && shows('home')}
@@ -333,7 +333,6 @@
         mapMoveAt = performance.now();
         send({ command: 'jogTo', x: p.x, y: p.y });
       }}
-      onstop={() => send({ command: 'cancelJog' })}
       ongrab={() => clicker.wake()}
     />
   {/if}
@@ -385,8 +384,8 @@
       </div>
       <div class="meter">
         <small>Spindle</small>
-        {#if machine && machine.spindle > 0}
-          <strong>{formatRpm(machine.spindle)}<span>rpm</span></strong>
+        {#if machine?.spindleOn}
+          <strong>{machine.spindle > 0 ? formatRpm(machine.spindle) : 'Ligado'}{#if machine.spindle > 0}<span>rpm</span>{/if}</strong>
         {:else}
           <strong class="off">Parado</strong>
         {/if}
@@ -403,9 +402,9 @@
           {#key slotKey(slot)}
             <div class="cell" in:fade={{ duration: fadeMs }} out:fade={{ duration: fadeMs }}>
               {#if slot?.kind === 'spindle'}
-                <button class="chip" class:on={!!machine && machine.spindle > 0} disabled={!(may('spindleOn') || may('spindleOff') || may('spindleSpeed'))} onclick={() => (sheet = true)} aria-label="Spindle">
+                <button class="chip" class:on={!!machine?.spindleOn} disabled={!(may('spindleOn') || may('spindleOff') || may('spindleSpeed'))} onclick={() => (sheet = true)} aria-label="Spindle">
                   <small>Spindle{#if ov && ov.spindle !== 100} · {ov.spindle} %{/if}</small>
-                  <span>{spindlePending ?? (machine && machine.spindle > 0 ? `${formatRpm(machine.spindle)} rpm` : 'Parado')}</span>
+                  <span>{spindlePending ?? (machine?.spindleOn ? (machine.spindle > 0 ? `${formatRpm(machine.spindle)} rpm` : 'Ligado') : 'Parado')}</span>
                 </button>
               {:else if slot?.kind === 'zeroAll'}
                 <HoldButton label="Zerar todos" hold tone="quiet" onfire={() => zero('all')} />
@@ -465,6 +464,7 @@
   <SpindleSheet
     spindle={profile.spindle}
     reported={machine.spindle}
+    on={machine.spindleOn}
     canStart={may('spindleOn')}
     canStop={may('spindleOff')}
     canAdjust={may('spindleSpeed')}
