@@ -198,6 +198,11 @@ export interface MachineSnapshot {
   overrides: Overrides | null;
   sd: { percent: number; file: string } | null;
   pins: string;
+  /**
+   * O spindle está acionado (M3/M4), pelo campo A: do relatório. Não é o mesmo
+   * que rotação > 0: uma máquina com disable_with_s0 desligado gira em S0.
+   */
+  spindleOn: boolean;
 }
 
 const sub = (a: Vec3, b: Vec3): Vec3 => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
@@ -225,5 +230,7 @@ export function applyReport(prev: MachineSnapshot | null, r: StatusReport): Mach
     overrides: r.overrides ?? prev?.overrides ?? null,
     sd: r.sd ?? null,
     pins: r.pins ?? '',
+    // Como no Grbl: o A: vem no mesmo relatório do Ov; Ov sem A: quer dizer tudo desligado.
+    spindleOn: r.overrides ? /[SC]/.test(r.accessories ?? '') : (prev?.spindleOn ?? false),
   };
 }

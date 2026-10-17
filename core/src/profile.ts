@@ -64,6 +64,8 @@ export interface AxisProfile {
 export interface SpindleProfile {
   type: string;
   minRpm: number;
+  /** A menor rotação em que o spindle gira de verdade: o primeiro valor não zero do speed_map. */
+  minRunningRpm: number;
   maxRpm: number;
   spinupMs: number;
   spindownMs: number;
@@ -130,6 +132,7 @@ function spindleProfile(cfg: ConfigMap): SpindleProfile | null {
     return {
       type,
       minRpm: rpms.length ? Math.min(...rpms) : 0,
+      minRunningRpm: rpms.filter((r) => r > 0).length ? Math.min(...rpms.filter((r) => r > 0)) : rpms.length ? Math.min(...rpms) : 0,
       maxRpm: rpms.length ? Math.max(...rpms) : 0,
       spinupMs: numOr(sec.spinup_ms, 0),
       spindownMs: numOr(sec.spindown_ms, 0),

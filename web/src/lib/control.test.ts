@@ -15,6 +15,7 @@ const snap = (state: MachineState, spindle = 0): MachineSnapshot => ({
   overrides: null,
   sd: null,
   pins: '',
+  spindleOn: spindle > 0,
 });
 
 describe('quem vê os controles', () => {

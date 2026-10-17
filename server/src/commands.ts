@@ -156,8 +156,15 @@ export function planCommand(req: CommandRequest, ctx: CommandContext): Plan {
       const spindle = ctx.profile.spindle;
       if (!spindle) return refuse('Esta máquina não tem spindle configurado');
       let rpm = Math.round(req.rpm);
-      const max = spindle.maxRpm > spindle.minRpm ? spindle.maxRpm : Infinity;
-      const clamped = Math.min(Math.max(rpm, spindle.minRpm, 0), max);
+      // Puxar para 0 desliga: há máquinas (a de referência é uma) que seguem
+      // girando na velocidade mínima do inversor com S0.
+      if (rpm <= 0) {
+        if (req.command === 'spindleOn') return refuse('Escolha uma rotação para ligar');
+        return simple({ line: 'M5' }, false);
+      }
+      const floor = Math.max(spindle.minRunningRpm, spindle.minRpm, 1);
+      const max = spindle.maxRpm > floor ? spindle.maxRpm : Infinity;
+      const clamped = Math.min(Math.max(rpm, floor), max);
       const hitLimit = clamped !== rpm;
       rpm = clamped;
       const line = req.command === 'spindleOn' ? `M3 S${rpm}` : `S${rpm}`;

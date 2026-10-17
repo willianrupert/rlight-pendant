@@ -279,15 +279,25 @@ describe('planCommand: spindle', () => {
       writes: [{ line: 'M3 S18000' }],
       hitLimit: true,
     });
-    expect(planCommand({ command: 'spindleOn', rpm: -5 }, ctx())).toMatchObject({
-      writes: [{ line: 'M3 S0' }],
-      hitLimit: true,
-    });
-    const narrow = { ...profile, spindle: { ...profile.spindle!, minRpm: 6000 } };
+    const narrow = { ...profile, spindle: { ...profile.spindle!, minRpm: 6000, minRunningRpm: 6000 } };
     expect(planCommand({ command: 'spindleSpeed', rpm: 1000 }, ctx({ profile: narrow }))).toMatchObject({
       writes: [{ line: 'S6000' }],
       hitLimit: true,
     });
+  });
+
+  it('puxar a rotação para 0 desliga o spindle (esta máquina não desliga com S0)', () => {
+    expect(planCommand({ command: 'spindleSpeed', rpm: 0 }, ctx())).toMatchObject({ ok: true, writes: [{ line: 'M5' }] });
+  });
+
+  it('abaixo da menor rotação útil, sobe para ela (1800 na RLight)', () => {
+    expect(planCommand({ command: 'spindleSpeed', rpm: 500 }, ctx())).toMatchObject({ writes: [{ line: 'S1800' }], hitLimit: true });
+    expect(planCommand({ command: 'spindleOn', rpm: 500 }, ctx())).toMatchObject({ writes: [{ line: 'M3 S1800' }], hitLimit: true });
+  });
+
+  it('ligar em 0 não faz sentido: pede uma rotação', () => {
+    expect(planCommand({ command: 'spindleOn', rpm: 0 }, ctx())).toEqual({ ok: false, reason: 'Escolha uma rotação para ligar' });
+    expect(planCommand({ command: 'spindleOn', rpm: -5 }, ctx())).toEqual({ ok: false, reason: 'Escolha uma rotação para ligar' });
   });
 
   it('muda a rotação e desliga', () => {

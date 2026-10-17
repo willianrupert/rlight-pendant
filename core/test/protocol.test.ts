@@ -145,6 +145,29 @@ describe('applyReport: o estado vivo da máquina', () => {
     expect(s.sd).toBeNull();
   });
 
+  it('spindle ligado vem do campo A:, que chega junto com o Ov', () => {
+    // Como no Grbl: o A: só aparece no relatório que traz o Ov; Ov sem A: = tudo desligado.
+    let s = applyReport(null, parseStatus('<Idle|MPos:0.000,0.000,0.000|FS:0,0>')!);
+    expect(s.spindleOn).toBe(false);
+    s = applyReport(s, parseStatus('<Idle|MPos:0.000,0.000,0.000|FS:0,0|Ov:100,100,100|A:S>')!);
+    expect(s.spindleOn).toBe(true);
+    s = applyReport(s, parseStatus('<Idle|MPos:0.000,0.000,0.000|FS:0,0>')!);
+    expect(s.spindleOn).toBe(true); // relatório sem Ov: mantém o que se sabia
+    s = applyReport(s, parseStatus('<Idle|MPos:0.000,0.000,0.000|FS:0,0|Ov:100,100,100>')!);
+    expect(s.spindleOn).toBe(false);
+  });
+
+  it('spindle girando em S0 (máquina que não desliga com S0) continua ligado', () => {
+    const s = applyReport(null, parseStatus('<Idle|MPos:0.000,0.000,0.000|FS:0,0|Ov:100,100,100|A:S>')!);
+    expect(s.spindle).toBe(0);
+    expect(s.spindleOn).toBe(true);
+  });
+
+  it('anti-horário (C) também é ligado; refrigeração sozinha não', () => {
+    expect(applyReport(null, parseStatus('<Idle|MPos:0.000,0.000,0.000|FS:0,0|Ov:100,100,100|A:C>')!).spindleOn).toBe(true);
+    expect(applyReport(null, parseStatus('<Idle|MPos:0.000,0.000,0.000|FS:0,0|Ov:100,100,100|A:F>')!).spindleOn).toBe(false);
+  });
+
   it('sem offset conhecido, a posição de trabalho fica desconhecida', () => {
     const s = applyReport(null, parseStatus('<Idle|MPos:1.000,2.000,3.000|FS:0,0>')!);
     expect(s.wpos).toBeNull();
