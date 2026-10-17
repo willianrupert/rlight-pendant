@@ -22,3 +22,7 @@ liga e ajusta o spindle e pausa a execução. Roda só na rede local, em
 Este software comanda uma máquina capaz de causar ferimentos. Ele **não**
 substitui o E-stop elétrico. Foi feito para uma máquina específica: valores de
 velocidade, curso e spindle não servem para outras sem revisão.
+
+## Licença
+
+[MIT](LICENSE).
