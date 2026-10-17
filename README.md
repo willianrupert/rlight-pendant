@@ -1,108 +1,202 @@
-# RLight
+<p align="center">
+  <img src="docs/images/logo.png" width="128" alt="Ícone do RLight: uma fresa tocando a peça">
+</p>
 
-> **Como se a Apple tivesse feito um app para CNC.**
->
-> As interfaces de CNC open source são painéis com todo parâmetro na tela e todo
-> erro em código. O RLight decide o que importa agora e esconde o resto atrás de
-> bons padrões.
+<h1 align="center">RLight</h1>
 
-Um servidor na rede da oficina que nunca tira os olhos da sua CNC, e um PWA para
-**ver, mexer e confiar** nela de qualquer tela: iPhone, Android, tablet ou Mac.
-É grátis, não passa por loja e roda só na rede local.
+<p align="center">
+  <b>A sua CNC, ao vivo, na palma da mão.</b><br>
+  Um app web para ver, mexer e confiar numa fresadora FluidNC, de qualquer celular da oficina.
+</p>
 
-**Funciona com qualquer máquina FluidNC.** O app lê da própria placa o curso, os
-limites, as velocidades e o spindle, e se ajusta sozinho. Nenhum valor de máquina
-está no código. A máquina de referência, onde tudo é desenvolvido e testado, é a
-fresadora CNC RLight.
+<p align="center">
+  <a href="https://github.com/willianrupert/rlight-pendant/actions/workflows/ci.yml"><img src="https://github.com/willianrupert/rlight-pendant/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/testes-500%2B-7fb0ff" alt="Mais de 500 testes">
+  <img src="https://img.shields.io/badge/TypeScript-estrito-3178c6" alt="TypeScript estrito">
+  <img src="https://img.shields.io/badge/FluidNC-3.9-0b1a33" alt="FluidNC 3.9">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licen%C3%A7a-MIT-a3acb8" alt="Licença MIT"></a>
+</p>
 
-- **Ver:** estado, posição, avanço, rotação e trabalhos ao vivo, com o percurso sendo cortado e o tempo restante.
-- **Mexer:** um pendant que parece físico, com mapa, régua de ajuste fino e zero com desfazer.
-- **Confiar:** trabalhos rodam do SD, o servidor protege a máquina e avisa quando termina.
+<p align="center">
+  <img src="docs/images/hero.png" alt="Três telas do app: a máquina andando, o mapa com o destino e o botão Ir, e o mostrador do spindle">
+</p>
 
-> **Estado:** o núcleo (`core/`) começou, testes primeiro, pelas partes que não
-> dependem da placa: estado da conexão, movimento absoluto com limites, física da
-> régua e o que cada estado da máquina permite. O protocolo da placa espera os
-> dados reais do spike S1.
+As interfaces de CNC open source costumam ser painéis com todo parâmetro na tela e
+todo erro em código. O RLight decide o que importa agora e esconde o resto atrás de
+bons padrões. É um PWA servido na rede da oficina. Funciona no iPhone e no Android,
+é grátis e não passa por loja.
 
-## Desenvolvimento
+**Funciona com qualquer máquina FluidNC.** O curso, os limites, as velocidades e o
+spindle vêm da própria placa (`$CD`), e nenhum valor de máquina está no código. O
+desenvolvimento e os testes são feitos numa fresadora real, a CNC RLight, que usa
+o app no dia a dia.
+
+## O que ele faz de diferente
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+**Uma régua em vez de botões de jog.** Arraste e a máquina acompanha o ritmo do
+dedo. Dê um peteleco e ela segue por inércia, com o destino **anunciado** antes de
+chegar. O passo (0,01 · 0,1 · 1 · 10 · 100 mm) muda a escala e a velocidade. A
+régua só mostra os traços que a máquina alcança.
+
+</td>
+<td width="50%" valign="top">
+
+**Toque na mesa e "Ir".** O mapa é a mesa em escala. Um toque põe um fantasma no
+destino, com a linha do caminho. "Ir" manda um único movimento absoluto, na
+velocidade máxima que a placa informa para os eixos.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+**Números que deslizam sem mentir.** A posição desenhada interpola entre dois
+relatórios da placa, sempre um relatório atrás e nunca prevendo. Os dígitos têm
+largura fixa e os decimais ficam mais suaves, como num mostrador.
+
+</td>
+<td valign="top">
+
+**Uma conexão honesta.** O Wi-Fi da placa fica dentro de um painel metálico e vai
+falhar. A tela diz qual trecho caiu e há quanto tempo. Nada é enfileirado sem
+sinal, e todo movimento é uma intenção completa e idempotente: se o celular some
+no meio, a máquina termina onde devia ou para.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+**Segurança por política, não por botão.** Cada comando passa pelo que o estado da
+máquina permite (`allowed()`), no servidor. Uma tela por vez no controle; as outras
+só assistem. Ações que não se desfazem pedem para segurar. O zero tem desfazer
+por 30 s.
+
+</td>
+<td valign="top">
+
+**O spindle pelo que a placa diz.** "Ligado" vem do campo `A:` do relatório, nunca
+de rotação > 0. O anel sobe pela rampa real do inversor até a rotação escolhida, e
+o app diz que isso é uma estimativa.
+
+</td>
+</tr>
+</table>
+
+## Telas
+
+<table>
+<tr>
+<td align="center" width="25%"><img src="docs/images/01-assistir.png" alt="Só assistindo"><br><sub><b>Assistir.</b> Quem não tem o controle vê a máquina ao vivo, sem nenhum botão perigoso.</sub></td>
+<td align="center" width="25%"><img src="docs/images/02-controle.png" alt="Com o controle"><br><sub><b>Controle.</b> O mapa com a velocidade real, a régua e o seletor de passo.</sub></td>
+<td align="center" width="25%"><img src="docs/images/03-fantasma.png" alt="Fantasma e Ir"><br><sub><b>Ir.</b> Um toque na mesa: o fantasma, o caminho e as coordenadas do destino.</sub></td>
+<td align="center" width="25%"><img src="docs/images/04-spindle.png" alt="Spindle"><br><sub><b>Spindle.</b> Gire para escolher e segure para ligar.</sub></td>
+</tr>
+</table>
+
+## Medido na máquina, não suposto
+
+Antes de cada decisão importante houve um spike na máquina de referência
+(FluidNC v3.9.9, ESP32, Wi-Fi dentro do painel):
+
+| Spike | O que provou | Resultado |
+|---|---|---|
+| [S1 · o elo](spikes/s1-elo/RESULTADO-2026-10-17.md) | A placa aguenta um cliente permanente por Wi-Fi? | 1 hora, **0 quedas**, 9,9 relatórios/s, resposta mediana de 28 ms. O limiar de "sem sinal" foi para 2,5 s com base nas pausas medidas |
+| [S2 · o movimento](spikes/s2-movimento/RESULTADO-2026-10-17.md) | O celular pode sumir no meio de um movimento? | **10/10** terminaram no destino (erro ≤ 0,003 mm); a régua nunca adiantou mais de 2 mm |
+| [S3 · a sensação](spikes/s3-haptica/index.html) | Háptica, régua e números num iPhone real | O iOS 26 não deixa páginas vibrarem (230+ tentativas). A catraca perdeu para a régua com inércia |
+
+## Arquitetura
+
+```mermaid
+flowchart LR
+  subgraph Telas["Telas (PWA · Svelte 5)"]
+    A[iPhone]
+    B[Android]
+    C[Tablet / Mac]
+  end
+  subgraph Servidor["Servidor na rede da oficina (Node)"]
+    G[gateway<br/>WebSocket · uma tela no controle]
+    P[core<br/>policy · movimento · protocolo]
+    BD[board<br/>telnet · reconexão]
+  end
+  Placa[(Placa FluidNC<br/>ESP32)]
+  A & B & C <-- wss --> G
+  G --> P --> BD
+  BD <-- "telnet :23<br/>? · $J= · $CD" --> Placa
+```
+
+O servidor é o **único** cliente da placa ([ADR-0001](docs/adr/0001-servidor-no-proxmox.md)).
+As camadas seguem a arquitetura em cebola: o `core/` é TypeScript puro, sem rede,
+DOM nem relógio, e foi escrito com os testes primeiro
+([ADR-0003](docs/adr/0003-arquitetura-em-camadas-e-testes-primeiro.md)). O servidor e
+o app só ligam o `core` ao mundo.
+
+| Pacote | O que tem |
+|---|---|
+| [`core/`](core/src) | Protocolo da placa, perfil da máquina a partir do `$CD`, movimento absoluto com limites, física da régua, a política de cada estado, interpolação |
+| [`server/`](server/src) | Telnet com a placa, o gateway WebSocket ([PROTOCOL.md](server/PROTOCOL.md)), memória do homing, um FluidNC falso para testes e simulação |
+| [`web/`](web/src) | O PWA em Svelte 5 + Vite: mapa, régua, mostrador, folhas, som de detente |
+| [`deploy/`](deploy) | Instalação num container Debian: systemd, Caddy com HTTPS por DNS-01, só na rede local |
+
+## Rodar
 
 ```bash
 npm install
-npm test          # Vitest
-npm run typecheck # TypeScript estrito
+npm test           # Vitest
+npm run typecheck  # TypeScript estrito nos três pacotes
 ```
 
-**Ver a tela no celular, contra o simulador:** em dois terminais,
+**Contra o simulador** (um FluidNC falso que anda, faz homing e liga o spindle):
 
 ```bash
-npm run sim   # FluidNC falso + servidor do RLight na porta 8787
+npm run sim   # simulador + servidor na porta 8787
 npm run dev   # o app em http://<ip-do-computador>:5180
 ```
 
-**Contra uma máquina de verdade:** troque o simulador pelo servidor apontado para a placa.
-O servidor só lê sozinho (`$CD`, `$I`, `$G`, `$#`, `?`); a v0 não manda comando nenhum.
+**Contra uma máquina de verdade:**
 
 ```bash
 RLIGHT_BOARD_HOST=<ip-da-placa> npm run server
 npm run dev
 ```
 
-| Módulo | O que decide | Decisão |
-|---|---|---|
-| [`core/src/link.ts`](core/src/link.ts) | Ao vivo ou sem sinal, há quanto tempo, qual trecho caiu | [ADR-0007](docs/adr/0007-a-conexao-vai-cair.md) |
-| [`core/src/motion.ts`](core/src/motion.ts) | Destinos absolutos, curso, avanço máximo, barreira no Z0, o comando `$J=` | [ADR-0002](docs/adr/0002-movimento-por-intencoes-completas.md) |
-| [`core/src/ruler.ts`](core/src/ruler.ts) | Arrasto, peteleco, destino anunciado, passo mínimo honesto, cliques | [ADR-0010](docs/adr/0010-a-regua.md) |
-| [`core/src/policy.ts`](core/src/policy.ts) | O que cada estado da máquina permite, e por quê | [ADR-0005](docs/adr/0005-seguranca-o-celular-nao-e-e-stop.md) |
-| [`core/src/interpolate.ts`](core/src/interpolate.ts) | O valor desenhado, um relatório atrás, sem nunca prever | [ADR-0009](docs/adr/0009-fluidez-sem-mentir.md) |
-| [`core/src/protocol.ts`](core/src/protocol.ts) | As linhas da placa viram mensagens tipadas; o estado vivo junta relatórios que chegam em pedaços | [ADR-0003](docs/adr/0003-arquitetura-em-camadas-e-testes-primeiro.md) |
-| [`core/src/profile.ts`](core/src/profile.ts) | O perfil da máquina a partir da configuração da placa | [ADR-0008](docs/adr/0008-qualquer-maquina-fluidnc.md) |
-| [`core/src/gcode.ts`](core/src/gcode.ts) | Percurso, limites, conferência contra a máquina, tempo estimado e progresso pelo SD | [ADR-0006](docs/adr/0006-trabalhos-rodam-do-sd.md) |
+Para instalar na rede da oficina, veja [deploy/README.md](deploy/README.md). As
+capturas deste README são geradas com
+[`scripts/capture-screens.mjs`](scripts/capture-screens.mjs), contra o simulador.
 
 ## Documentos
 
-- **[docs/VISION.md](docs/VISION.md)**: o que é e por que é diferente. Comece por aqui.
-- **[docs/DESIGN.md](docs/DESIGN.md)**: os princípios e o ofício. O critério de cada tela, gesto e palavra.
-- **[docs/PRODUCT.md](docs/PRODUCT.md)**: escopo por fase, segurança, spikes e métricas.
+- **[VISION.md](docs/VISION.md)**: o que é e por que é diferente. Comece por aqui.
+- **[DESIGN.md](docs/DESIGN.md)**: o critério de cada tela, gesto e palavra.
+- **[PRODUCT.md](docs/PRODUCT.md)**: escopo por fase, segurança, spikes e métricas.
 - **Decisões (ADRs):**
-  - [0001 · Um servidor no Proxmox é o único que fala com a placa](docs/adr/0001-servidor-no-proxmox.md)
-  - [0002 · Movimento manual por intenções completas](docs/adr/0002-movimento-por-intencoes-completas.md)
-  - [0003 · Arquitetura em camadas, core puro, testes primeiro](docs/adr/0003-arquitetura-em-camadas-e-testes-primeiro.md)
-  - [0004 · PWA em vez de app nativo](docs/adr/0004-pwa-em-vez-de-app-nativo.md)
-  - [0005 · Segurança: o celular não é E-stop](docs/adr/0005-seguranca-o-celular-nao-e-e-stop.md)
-  - [0006 · Trabalhos rodam do SD, enviados e verificados pelo servidor](docs/adr/0006-trabalhos-rodam-do-sd.md)
-  - [0007 · A conexão com a máquina vai cair: projetar para isso](docs/adr/0007-a-conexao-vai-cair.md)
-  - [0008 · Qualquer máquina FluidNC: tudo vem da placa](docs/adr/0008-qualquer-maquina-fluidnc.md)
-  - [0009 · Fluidez sem mentir: zero atraso, números como na Apple, háptica a sério](docs/adr/0009-fluidez-sem-mentir.md)
-  - [0010 · O ajuste fino é uma régua, com inércia de destino anunciado](docs/adr/0010-a-regua.md)
+  [0001 · Um servidor é o único que fala com a placa](docs/adr/0001-servidor-no-proxmox.md) ·
+  [0002 · Movimento por intenções completas](docs/adr/0002-movimento-por-intencoes-completas.md) ·
+  [0003 · Camadas, core puro, testes primeiro](docs/adr/0003-arquitetura-em-camadas-e-testes-primeiro.md) ·
+  [0004 · PWA em vez de nativo](docs/adr/0004-pwa-em-vez-de-app-nativo.md) ·
+  [0005 · O celular não é E-stop](docs/adr/0005-seguranca-o-celular-nao-e-e-stop.md) ·
+  [0006 · Trabalhos rodam do SD](docs/adr/0006-trabalhos-rodam-do-sd.md) ·
+  [0007 · A conexão vai cair](docs/adr/0007-a-conexao-vai-cair.md) ·
+  [0008 · Qualquer máquina FluidNC](docs/adr/0008-qualquer-maquina-fluidnc.md) ·
+  [0009 · Fluidez sem mentir](docs/adr/0009-fluidez-sem-mentir.md) ·
+  [0010 · A régua](docs/adr/0010-a-regua.md)
 
-## Spikes
+## Próximos passos
 
-- [spikes/s1-elo](spikes/s1-elo/README.md): script somente leitura que mede a conexão com a placa e grava o tráfego real como fixture. Pronto para a bancada.
-- [spikes/s3-haptica](spikes/s3-haptica/index.html): laboratório de háptica, régua e números para rodar no próprio celular.
-
-## Servidor
-
-O pacote [`server/`](server) é o único cliente da placa ([ADR-0001](docs/adr/0001-servidor-no-proxmox.md)).
-As telas falam com ele por WebSocket, no formato de [server/PROTOCOL.md](server/PROTOCOL.md).
-
-```bash
-RLIGHT_BOARD_HOST=<ip-da-placa> npm start -w server
-```
-
-| Módulo | O que faz |
-|---|---|
-| [`server/src/board.ts`](server/src/board.ts) | Telnet com a placa: `?` na frequência certa, `$CD` a cada conexão, reconexão 0,5 → 5 s para sempre |
-| [`server/src/gateway.ts`](server/src/gateway.ts) | WebSocket das telas: estado a ≤10/s, uma tela no controle, nada enfileirado sem sinal |
-| [`server/src/commands.ts`](server/src/commands.ts) | Pedido → policy → jog absoluto com o curso da placa |
-| [`server/test/fake-fluidnc.ts`](server/test/fake-fluidnc.ts) | O FluidNC falso dos testes, com quedas, pausas e alarmes |
+Apalpador de Z (touch plate), um histórico mínimo e, na v2, trabalhos enviados e
+verificados pelo servidor e rodando do cartão SD da placa.
 
 ## Aviso
 
-Este software comanda uma máquina capaz de causar ferimentos. Ele **não**
-substitui o E-stop elétrico. Ele confia na configuração da sua placa: se o
-curso, os limites ou as velocidades estiverem errados lá, estarão errados aqui.
-Valide a configuração da máquina antes de usar.
+Este software comanda uma máquina capaz de causar ferimentos. Ele **não** substitui
+o E-stop elétrico. Ele confia na configuração da sua placa: se o curso, os limites
+ou as velocidades estiverem errados lá, estarão errados aqui. Valide a configuração
+da máquina antes de usar.
 
 ## Licença
 
-[MIT](LICENSE).
+[MIT](LICENSE) © Willian Rupert

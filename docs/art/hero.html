@@ -1,0 +1,20 @@
+<!doctype html><meta charset="utf-8">
+<style>
+html,body{margin:0}
+body{width:1200px;height:620px;overflow:hidden;font-family:-apple-system,system-ui,sans-serif;
+  background:radial-gradient(ellipse 70% 60% at 50% 105%,rgba(127,176,255,.28),transparent 70%),linear-gradient(180deg,#0d2350 0%,#071530 60%,#050d1f 100%)}
+.stage{position:absolute;inset:0;display:flex;align-items:flex-start;justify-content:center;gap:40px;padding-top:56px}
+.phone{position:relative;border-radius:46px;padding:9px;background:linear-gradient(145deg,#3a4250,#12161d 40%,#2a313c);
+  box-shadow:0 0 0 1.5px #4b5566 inset,0 30px 60px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.05)}
+.phone img{display:block;width:100%;border-radius:38px}
+.c{width:270px;z-index:2}
+.s{width:236px;margin-top:84px;opacity:.95}
+.s.l{transform:rotate(-4deg) translateY(-6px)}.s.r{transform:rotate(4deg) translateY(-6px)}
+.floor{position:absolute;left:0;right:0;bottom:0;height:120px;z-index:3;background:linear-gradient(180deg,transparent,rgba(5,13,31,.85))}
+</style>
+<div class="stage">
+  <div class="phone s l"><img src="../images/01-assistir.png"></div>
+  <div class="phone c"><img src="../images/03-fantasma.png"></div>
+  <div class="phone s r"><img src="../images/04-spindle.png"></div>
+</div>
+<div class="floor"></div>
