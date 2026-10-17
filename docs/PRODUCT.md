@@ -51,7 +51,7 @@ placa no meio aparece como "sem sinal", volta sozinha e não afeta o corte.
 
 - Assumir e devolver o controle.
 - Unlock, homing, soft reset, feed hold e resume.
-- Mapa: arrastar o ponto e a máquina segue o dedo ([ADR-0002](adr/0002-jog-continuo-em-pedacos.md)).
+- Mapa: arrastar o fantasma, ver o caminho, soltar e a máquina vai; o mapa vira Parar durante o deslocamento ([ADR-0002](adr/0002-movimento-por-intencoes-completas.md)).
 - Volante por anéis (0,01 / 0,1 / 1 mm), com limites e a barreira do Z0.
 - Zerar por eixo, com desfazer.
 - Spindle: mostrador, segurar para ligar, spin-up visível.
@@ -128,8 +128,8 @@ Cada spike tem o critério escrito **antes** de rodar.
 
 | # | Pergunta | Aprova se | Bloqueia |
 |---|---|---|---|
-| **S1** | Como se comporta o elo servidor → placa (Wi-Fi no painel)? | Relatório de estado a 10 Hz ou mais por 1 h com o painel energizado; **cada queda registrada** (quantas, quanto duram); reconexão sozinha em todas; tráfego gravado como fixture; WebUI no Mac junto sem conflito. Mais de uma queda por hora → antena externa ou ponto de acesso antes da v1 | v0 |
-| **S2** | O jog em pedaços para a máquina quando a rede cai? | Para em ≤ 0,5 s se o celular cair e anda ≤ 6 mm se a placa cair (ADR-0002) | v1 |
+| **S1** | Como se comporta o elo servidor → placa (Wi-Fi no painel)? | Relatório de estado a 10 Hz ou mais por 1 h com o painel energizado; **cada queda registrada** (quantas, quanto duram); reconexão sozinha em todas; tráfego gravado como fixture; WebUI no Mac junto sem conflito; um corte no ar do SD com e sem telemetria a 10 Hz leva o mesmo tempo, sem esvaziar a fila do planner. Mais de uma queda por hora → antena externa ou ponto de acesso antes da v1 | v0 |
+| **S2** | O movimento por intenções completas é exato e seguro com a rede caindo? | Parar em ≤ 0,3 s com link bom; com queda, a máquina termina exatamente no destino e não passa do alvo do volante; reenviar o último comando não move nada (ADR-0002) | v1 |
 | **S3** | Dá para ter háptica no iPhone? | Toque perceptível e consistente no iOS atual | Nada: sem ela, segue sem vibração no iPhone |
 | **S4** | O envio ao SD é confiável com o painel energizado? | 10 envios de 500 KB verificados, sem intervenção (ADR-0006) | v2 |
 
@@ -153,7 +153,7 @@ isolada.
 | ADR | Decisão |
 |---|---|
 | [0001](adr/0001-servidor-no-proxmox.md) | Um servidor no Proxmox é o único que fala com a placa |
-| [0002](adr/0002-jog-continuo-em-pedacos.md) | Jog em pedaços curtos, decidido no servidor |
+| [0002](adr/0002-movimento-por-intencoes-completas.md) | Movimento manual por intenções completas: o gesto nunca espera a rede |
 | [0003](adr/0003-arquitetura-em-camadas-e-testes-primeiro.md) | Arquitetura em camadas, core puro, testes primeiro |
 | [0004](adr/0004-pwa-em-vez-de-app-nativo.md) | PWA em vez de app nativo |
 | [0005](adr/0005-seguranca-o-celular-nao-e-e-stop.md) | Segurança: o celular não é E-stop |

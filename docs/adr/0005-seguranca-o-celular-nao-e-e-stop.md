@@ -17,8 +17,9 @@ isso.
 1. **Não existe botão de emergência no app.** Existem *Pausar* (feed hold) e
    *Resetar* (soft reset), com esses nomes. Chamar um deles de "emergência"
    ensinaria o operador a procurar o celular em vez do botão vermelho.
-2. **Falha de conexão para a máquina.** É garantido pelo ADR-0002 (jog em
-   pedaços e watchdog). Desconectado, nada é enfileirado para mandar depois.
+2. **Todo movimento tem destino.** Uma queda nunca deixa a máquina andando sem
+   fim: ela termina o que foi pedido e para (ADR-0002). Desconectado, nada é
+   enfileirado para mandar depois (ADR-0007).
 3. **A policy do core decide o que aparece.** Cada comando declara em quais
    estados é permitido. A UI pergunta à policy e esconde ou desabilita o resto.
    Exemplos: em Alarm não há jog; em Run não há zerar nem homing; em Hold há

@@ -67,7 +67,7 @@ setas nem seletor de passo.
 
 ```
 ┌─────────────────────────────┐
-│  ONDE   a mesa vista de cima│   arrastar o ponto = a máquina segue o dedo
+│  ONDE   a mesa vista de cima│   arrastar o fantasma e soltar = a máquina vai
 ├─────────────────────────────┤
 │  QUANTO   X  412,30         │   tocar = escolhe o eixo
 │           Y  118,05         │   segurar = zera (com desfazer)
@@ -78,8 +78,14 @@ setas nem seletor de passo.
 └─────────────────────────────┘
 ```
 
-1. **Arrastar no mapa:** você encosta no ponto do spindle e a máquina real
-   segue o seu dedo pela mesa. Soltou, parou. É o movimento grosso.
+1. **Arrastar o fantasma e soltar:** você arrasta um fantasma do spindle pelo
+   mapa e vê a linha do caminho e o destino. A máquina não se mexe enquanto você
+   arrasta. Soltou, ela desliza até lá, ao vivo, e o mapa vira um botão Parar.
+   Como soltar um alfinete no Mapas. É o movimento grosso.
+
+   **O gesto nunca espera a rede:** tudo o que você sente acontece no aparelho, e
+   a máquina recebe só intenções completas, com destino conhecido. O Wi-Fi da
+   placa pode soluçar à vontade que nada gagueja ([ADR-0002](adr/0002-movimento-por-intencoes-completas.md)).
 2. **Girar o volante:** cada detente é um passo exato. **O anel em que o polegar
    está escolhe a resolução.** O volante comanda distância, não velocidade: se a
    conexão cair, a máquina faz no máximo o que você já girou.
@@ -114,8 +120,10 @@ tela. A interface funciona igual com ou sem vibração.
   Respeita os soft limits? Desce abaixo da profundidade permitida para a mesa?
   O que ele consegue verificar, ele verifica. Você só confirma o que ele não vê:
   "peça presa".
-- **O watchdog fica no servidor.** Se um celular some no meio de um jog, o
-  servidor para a máquina em menos de meio segundo ([ADR-0002](adr/0002-jog-continuo-em-pedacos.md)).
+- **Todo movimento manual tem destino.** A máquina nunca anda "até alguém mandar
+  parar". Se a conexão cair no meio, ela termina exatamente o que você pediu e
+  viu, e nada mais. Os comandos são absolutos: repetir um por engano não move a
+  máquina ([ADR-0002](adr/0002-movimento-por-intencoes-completas.md)).
 - **Tudo fica registrado:** trabalhos, alarmes, horas de spindle, quem estava no
   controle. Quando algo dá errado, dá para ver o que aconteceu antes.
 - **A conexão com a máquina vai cair**, porque ela está no Wi-Fi dentro de um

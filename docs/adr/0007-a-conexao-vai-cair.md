@@ -48,7 +48,7 @@ agir certo. Quem quiser saber toca na linha e vê a corrente:
 
 - Sem sinal, **nenhum comando é aceito**. Os controles não ficam só cinza:
   saem de cena, e a área deles mostra o motivo.
-- Na reconexão, **nada pendente é enviado**. Intenções de jog são descartadas.
+- Na reconexão, **nada pendente é enviado**. Gestos interrompidos são descartados.
   Quem quiser mover, toca de novo, já vendo a posição real.
 - O servidor também não guarda comandos para a placa. Se a placa não estiver ao
   vivo, ele responde ao app "máquina sem sinal" na hora.
@@ -58,8 +58,8 @@ agir certo. Quem quiser saber toca na linha e vê a corrente:
 | Estava acontecendo | Ao cair a conexão com a placa |
 |---|---|
 | Repouso | Nada muda |
-| Jog | Ela termina o pedaço que tem na fila (≤ 5 mm) e para ([ADR-0002](0002-jog-continuo-em-pedacos.md)) |
-| Volante | Ela termina os cliques já recebidos e para |
+| Indo até o fantasma | Termina exatamente no destino escolhido e para ([ADR-0002](0002-movimento-por-intencoes-completas.md)) |
+| Volante | Termina os cliques já recebidos (no máximo 2 mm à frente) e para |
 | **Trabalho do SD** | **Continua cortando.** O trabalho não depende da rede ([ADR-0006](0006-trabalhos-rodam-do-sd.md)) |
 | Spindle ligado, sem trabalho | Continua ligado. A tela avisa disso em destaque ao voltar, e o histórico registra |
 

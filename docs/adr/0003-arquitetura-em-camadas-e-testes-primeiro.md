@@ -6,7 +6,7 @@
 
 O sistema comanda uma máquina que pode machucar alguém. Quase toda a lógica que
 importa pode ser escrita sem rede, sem tela e sem relógio real: interpretar o
-estado, decidir o que é permitido, montar comandos, renovar o jog, analisar
+estado, decidir o que é permitido, montar comandos, limitar movimentos, analisar
 G-code e estimar tempo. Se ficar assim, dá para testar tudo antes de chegar perto
 da máquina.
 
@@ -22,7 +22,8 @@ core/      TypeScript puro. Sem I/O, sem DOM, sem dependências.
   protocol   relatório de estado e mensagens → tipos do domínio
   commands   G-code, $J=, bytes realtime
   policy     o que é permitido em cada estado
-  jog        intenção → pedaços (ADR-0002), relógio injetado
+  motion     gesto → comando absoluto, alvo comandado, limites (ADR-0002)
+  link       idade dos dados → ao vivo / sem sinal (ADR-0007), relógio injetado
   gcode      parser, limites, percurso, estimativa de tempo
 server/    Node. Casos de uso + adapters: placa, navegadores, SQLite, push, SD
 web/       PWA. UI + adapters de navegador (WebSocket, háptica, wake lock)
