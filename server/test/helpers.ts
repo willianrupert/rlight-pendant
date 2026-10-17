@@ -38,7 +38,7 @@ export async function rawClient(port: number) {
   return {
     sock,
     lines,
-    send: (s: string) => sock.write(s),
+    send: (s: string | Uint8Array) => sock.write(s),
     close: () => sock.destroy(),
   };
 }

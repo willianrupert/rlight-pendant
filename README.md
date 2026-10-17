@@ -62,6 +62,22 @@ npm run typecheck # TypeScript estrito
 - [spikes/s1-elo](spikes/s1-elo/README.md): script somente leitura que mede a conexão com a placa e grava o tráfego real como fixture. Pronto para a bancada.
 - [spikes/s3-haptica](spikes/s3-haptica/index.html): laboratório de háptica, régua e números para rodar no próprio celular.
 
+## Servidor
+
+O pacote [`server/`](server) é o único cliente da placa ([ADR-0001](docs/adr/0001-servidor-no-proxmox.md)).
+As telas falam com ele por WebSocket, no formato de [server/PROTOCOL.md](server/PROTOCOL.md).
+
+```bash
+RLIGHT_BOARD_HOST=<ip-da-placa> npm start -w server
+```
+
+| Módulo | O que faz |
+|---|---|
+| [`server/src/board.ts`](server/src/board.ts) | Telnet com a placa: `?` na frequência certa, `$CD` a cada conexão, reconexão 0,5 → 5 s para sempre |
+| [`server/src/gateway.ts`](server/src/gateway.ts) | WebSocket das telas: estado a ≤10/s, uma tela no controle, nada enfileirado sem sinal |
+| [`server/src/commands.ts`](server/src/commands.ts) | Pedido → policy → jog absoluto com o curso da placa |
+| [`server/test/fake-fluidnc.ts`](server/test/fake-fluidnc.ts) | O FluidNC falso dos testes, com quedas, pausas e alarmes |
+
 ## Aviso
 
 Este software comanda uma máquina capaz de causar ferimentos. Ele **não**
