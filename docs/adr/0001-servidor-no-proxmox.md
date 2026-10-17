@@ -107,6 +107,26 @@ programa".
 - Quem está na LAN alcança o app. A v1 aceita isso, mas a rede de visitantes
   precisa estar isolada. Um PIN para assumir o controle fica previsto.
 
+## Decisão futura: tirar a WebUI do ESP32
+
+O spike S1 (2026-10-17) mostrou que cada pedido da WebUI do FluidNC trava a placa
+por cerca de 1 s. Na placa de referência, sem cartão SD, cada pedido também dispara
+uma tentativa de ler o cartão que falha devagar
+(`[MSG:ERR: sdmmc_card_init failed code 0x108]`).
+
+**Quando o app cobrir o uso diário, a página da WebUI sai do flash do ESP32.** O
+servidor HTTP e o telnet da placa continuam: o primeiro para subir configuração e
+firmware, o segundo para o servidor do RLight. A placa deixa de servir páginas.
+
+Condições antes de tirar:
+1. O app faz tudo o que a WebUI faz no dia a dia: destravar, homing, jog,
+   spindle, enviar e acompanhar trabalhos.
+2. Existe um plano B documentado para quando o servidor estiver fora, por
+   exemplo a WebUI rodando a partir de um computador, falando com a placa por
+   HTTP.
+3. Repetir o S1 com o cartão SD na placa. Se a WebUI aberta não travar mais a
+   placa, a urgência cai, e a decisão fica por simplicidade, não por necessidade.
+
 ## Alternativas descartadas
 
 | Alternativa | Por que não |
