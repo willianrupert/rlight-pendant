@@ -19,7 +19,25 @@ fresadora CNC RLight.
 - **Mexer:** um pendant que parece físico, com mapa, régua de ajuste fino e zero com desfazer.
 - **Confiar:** trabalhos rodam do SD, o servidor protege a máquina e avisa quando termina.
 
-> **Estado:** desenho. Ainda não há código. Os spikes de validação vêm antes.
+> **Estado:** o núcleo (`core/`) começou, testes primeiro, pelas partes que não
+> dependem da placa: estado da conexão, movimento absoluto com limites, física da
+> régua e o que cada estado da máquina permite. O protocolo da placa espera os
+> dados reais do spike S1.
+
+## Desenvolvimento
+
+```bash
+npm install
+npm test          # Vitest
+npm run typecheck # TypeScript estrito
+```
+
+| Módulo | O que decide | Decisão |
+|---|---|---|
+| [`core/src/link.ts`](core/src/link.ts) | Ao vivo ou sem sinal, há quanto tempo, qual trecho caiu | [ADR-0007](docs/adr/0007-a-conexao-vai-cair.md) |
+| [`core/src/motion.ts`](core/src/motion.ts) | Destinos absolutos, curso, avanço máximo, barreira no Z0, o comando `$J=` | [ADR-0002](docs/adr/0002-movimento-por-intencoes-completas.md) |
+| [`core/src/ruler.ts`](core/src/ruler.ts) | Arrasto, peteleco, destino anunciado, passo mínimo honesto, cliques | [ADR-0010](docs/adr/0010-a-regua.md) |
+| [`core/src/policy.ts`](core/src/policy.ts) | O que cada estado da máquina permite, e por quê | [ADR-0005](docs/adr/0005-seguranca-o-celular-nao-e-e-stop.md) |
 
 ## Documentos
 

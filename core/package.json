@@ -1,0 +1,8 @@
+{
+  "name": "@rlight/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Núcleo puro do RLight: sem I/O, sem DOM, sem dependências.",
+  "exports": { ".": "./src/index.ts" }
+}
