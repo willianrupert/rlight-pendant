@@ -55,7 +55,7 @@ describe('profileFromConfig: a máquina de referência', () => {
   });
 
   it('o spindle: faixa e tempos de rampa', () => {
-    expect(p.spindle).toEqual({ type: '10V', minRpm: 0, minRunningRpm: 1800, maxRpm: 18000, spinupMs: 5000, spindownMs: 10000 });
+    expect(p.spindle).toEqual({ type: '10V', minRpm: 0, minRunningRpm: 900, maxRpm: 18000, spinupMs: 5000, spindownMs: 10000 });
   });
 
   it('apalpador e cartão SD configurados', () => {
@@ -106,9 +106,17 @@ describe('profileFromConfig: outras máquinas (configurações sintéticas)', ()
     expect(p.spindle).toBeNull();
   });
 
-  it('menor rotação útil: o primeiro valor diferente de zero do speed_map', () => {
+  it('menor rotação útil: com o mapa partindo de 0=0%, o inversor segue desde baixo; fica em 5% do máximo', () => {
+    // A máquina de referência: 1800 rpm é só um ponto da curva, não um piso.
+    const ref = profileFromConfig(minimal('10V:\n  speed_map: 0=0.00% 1800=10.25% 18000=99.72%'));
+    expect(ref.spindle?.minRunningRpm).toBe(900);
     const p = profileFromConfig(minimal('PWM:\n  speed_map: 0=0% 500=5% 24000=100%'));
     expect(p.spindle?.minRunningRpm).toBe(500);
+  });
+
+  it('menor rotação útil: sem 0=0% no mapa, o primeiro valor diferente de zero é o piso', () => {
+    expect(profileFromConfig(minimal('PWM:\n  speed_map: 0=20% 6000=20% 24000=100%')).spindle?.minRunningRpm).toBe(6000);
+    expect(profileFromConfig(minimal('PWM:\n  speed_map: 6000=20% 24000=100%')).spindle?.minRunningRpm).toBe(6000);
   });
 
   it('sem speed_map, a menor rotação útil é a mínima', () => {

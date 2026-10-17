@@ -14,7 +14,7 @@ export interface RpmRange {
 
 /**
  * O começo do arco é a parada "Desligado": abaixo da menor rotação que o
- * inversor sustenta (minRunningRpm do perfil) não existe "devagar", existe
+ * mostrador oferece (minRunningRpm do perfil) não existe "devagar", existe
  * desligado. Rotação 0 aqui significa desligado.
  */
 export const OFF_DEG = 30;
@@ -68,25 +68,56 @@ export function dialAngle(dx: number, dy: number): number {
   return a;
 }
 
+/**
+ * Quanto o inversor leva até uma rotação, partindo do repouso. A rampa dele é de
+ * aceleração constante e o perfil diz o tempo de 0 ao máximo (spinup_ms), então
+ * rotações baixas chegam antes.
+ */
+export function rampMs(targetRpm: number, maxRpm: number, spinupMs: number): number {
+  if (spinupMs <= 0 || maxRpm <= 0) return 0;
+  return spinupMs * Math.min(1, Math.max(0, targetRpm) / maxRpm);
+}
+
+/** O ângulo do anel para uma rotação; abaixo da faixa, ele cresce dentro do trecho do desligado. */
+function ringAngle(rpm: number, r: RpmRange): number {
+  if (rpm <= 0) return 0;
+  if (rpm < r.min) return (OFF_DEG * rpm) / r.min;
+  return angleFromRpm(rpm, r);
+}
+
 export interface Ring {
-  /** 0 a 1, o quanto do anel está cheio. */
+  /** 0 a 1, o quanto do arco está cheio. */
   fill: number;
   phase: 'idle' | 'confirming' | 'spinup' | 'running';
+  /** Durante a aceleração: a rotação estimada pela rampa. É estimativa, não leitura. */
+  estimatedRpm: number;
 }
 
 /**
- * O anel em duas partes: a confirmação de segurar ocupa o primeiro quarto, o
- * spin-up estimado o resto. Sem estimativa no perfil, a confirmação enche tudo.
+ * O anel é a rotação: segurar enche o trecho do desligado; depois ele sobe pela
+ * rampa do inversor até a rotação escolhida e, girando, mostra a reportada.
  */
-export function ringFill(input: { holdProgress: number; spinupStartedAt: number | null; now: number; spinupMs: number; running: boolean }): Ring {
-  const share = input.spinupMs > 0 ? 0.25 : 1;
+export function ringFill(input: {
+  holdProgress: number;
+  spinupStartedAt: number | null;
+  now: number;
+  spinupMs: number;
+  maxRpm: number;
+  targetRpm: number;
+  range: RpmRange;
+  running: boolean;
+  runningRpm: number;
+}): Ring {
+  const frac = (rpm: number) => ringAngle(rpm, input.range) / DIAL_SWEEP_DEG;
   if (input.spinupStartedAt !== null) {
-    const t = input.spinupMs > 0 ? Math.min(1, (input.now - input.spinupStartedAt) / input.spinupMs) : 1;
-    return { fill: share + (1 - share) * t, phase: t >= 1 ? 'running' : 'spinup' };
+    const elapsed = Math.max(0, input.now - input.spinupStartedAt);
+    const est = input.spinupMs > 0 && input.maxRpm > 0 ? Math.min(input.targetRpm, (input.maxRpm / input.spinupMs) * elapsed) : input.targetRpm;
+    const done = est >= input.targetRpm;
+    return { fill: frac(est), phase: done ? 'running' : 'spinup', estimatedRpm: Math.round(est / 100) * 100 };
   }
-  if (input.running) return { fill: 1, phase: 'running' };
-  if (input.holdProgress > 0) return { fill: share * input.holdProgress, phase: 'confirming' };
-  return { fill: 0, phase: 'idle' };
+  if (input.running) return { fill: frac(input.runningRpm > 0 ? input.runningRpm : input.targetRpm), phase: 'running', estimatedRpm: 0 };
+  if (input.holdProgress > 0) return { fill: (OFF_DEG / DIAL_SWEEP_DEG) * input.holdProgress, phase: 'confirming', estimatedRpm: 0 };
+  return { fill: 0, phase: 'idle', estimatedRpm: 0 };
 }
 
 export interface SpindleButtons {
@@ -107,7 +138,10 @@ export interface SpindleButtons {
  * rotação > 0: com S0 e M3 ativo o inversor segue girando no mínimo e a placa
  * reporta 0 rpm.
  */
-export function spindleButtons(input: { on: boolean; spinningUp: boolean; pending: string | null }): SpindleButtons {
+export function spindleButtons(input: { on: boolean; spinningUp: boolean; pending: string | null; holding?: boolean }): SpindleButtons {
+  // Com o dedo ainda no ligar, o layout congela: senão o Desligar cresce para debaixo
+  // do dedo e soltar vira um toque nele.
+  if (input.holding) return { start: true, stop: 'secondary', idleNote: null };
   const running = input.on || input.spinningUp;
   return {
     start: !running,

@@ -1,13 +1,13 @@
 <script lang="ts">
   // A folha do spindle (VISION.md): um mostrador grande. Gira-se para escolher a
-  // rotação; segura-se para ligar. O anel enche na confirmação e continua no
-  // spin-up, que é a estimativa do perfil, dita como estimativa.
+  // rotação; segura-se para ligar. O anel enche na confirmação e depois sobe pela
+  // rampa do inversor até a rotação escolhida: uma estimativa, dita como estimativa.
   import { onDestroy } from 'svelte';
   import type { SpindleProfile } from '@rlight/core';
   import type { Clicker } from '../lib/feel';
   import { HOLD_MS, holdProgress, idleHold, pressHold } from '../lib/hold';
   import { formatRpm } from '../lib/present';
-  import { DIAL_SWEEP_DEG, OFF, OFF_DEG, angleFromRpm, dialAngle, releaseAction, ringFill, rpmFromAngle, snapRpm, spindleButtons, thousandsCrossed } from '../lib/spindle';
+  import { DIAL_SWEEP_DEG, OFF, OFF_DEG, angleFromRpm, dialAngle, rampMs, releaseAction, ringFill, rpmFromAngle, snapRpm, spindleButtons, thousandsCrossed } from '../lib/spindle';
 
   interface Props {
     spindle: SpindleProfile;
@@ -83,9 +83,16 @@
   let holdP = $state(0);
   let spinupAt = $state<number | null>(null);
   let now = $state(performance.now());
+  // O dedo ainda no ligar: os botões não mudam de lugar até ele sair (ver spindleButtons).
+  let holding = $state(false);
+  // E o toque que o navegador inventa ao soltar não pode cair no Desligar.
+  let guardUntil = 0;
+  const target = $derived(Math.max(rpm, range.min));
+  const rampTo = $derived(rampMs(target, spindle.maxRpm, spindle.spinupMs));
   function holdDown(e: PointerEvent) {
     if (!canStart || pending || rpm === OFF) return;
     clicker.wake();
+    holding = true;
     try {
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     } catch {
@@ -107,7 +114,13 @@
     };
     raf = requestAnimationFrame(loop);
   }
+  function fingerUp() {
+    if (!holding) return;
+    holding = false;
+    if (spinupAt !== null) guardUntil = performance.now() + 450;
+  }
   function holdUp() {
+    fingerUp();
     if (spinupAt !== null) return;
     cancelAnimationFrame(raf);
     h = idleHold();
@@ -116,7 +129,8 @@
   function tickSpinup() {
     const loop = (t: number) => {
       now = t;
-      if (spinupAt !== null && t - spinupAt < spindle.spinupMs + 100) raf = requestAnimationFrame(loop);
+      // Até a rampa terminar, e ao menos o bastante para notar um pedido que falhou.
+      if (spinupAt !== null && t - spinupAt < Math.max(rampTo + 100, 800)) raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
   }
@@ -133,9 +147,25 @@
   });
   onDestroy(() => cancelAnimationFrame(raf));
 
-  const ring = $derived(ringFill({ holdProgress: holdP, spinupStartedAt: spinupAt, now, spinupMs: spindle.spinupMs, running }));
+  const ring = $derived(
+    ringFill({
+      holdProgress: holdP,
+      spinupStartedAt: spinupAt,
+      now,
+      spinupMs: spindle.spinupMs,
+      maxRpm: spindle.maxRpm,
+      targetRpm: target,
+      range,
+      running,
+      runningRpm: reported,
+    }),
+  );
   const spinningUp = $derived(ring.phase === 'spinup');
-  const buttons = $derived(spindleButtons({ on, spinningUp: spinupAt !== null && (spinningUp || !!pending), pending }));
+  const buttons = $derived(spindleButtons({ on, spinningUp: spinupAt !== null && (spinningUp || !!pending), pending, holding }));
+  function stop() {
+    if (holding || performance.now() < guardUntil) return;
+    onstop();
+  }
 
   // Geometria do arco: 270°, começando embaixo à esquerda.
   const R = 120;
@@ -174,6 +204,7 @@
   });
 </script>
 
+<svelte:window onpointerup={fingerUp} onpointercancel={fingerUp} />
 <div class="scrim" onclick={onclose} role="presentation"></div>
 <div class="sheet" role="dialog" aria-modal="true" aria-label="Spindle">
   <header>
@@ -217,7 +248,7 @@
       <text x="150" y="178" class="unit">rpm</text>
     {/if}
     <text x="150" y="212" class="now">
-      {#if spinningUp}Acelerando · estimativa{:else if running}{reported > 0 ? `Ligado · ${formatRpm(reported)} rpm` : 'Ligado'}{:else}Parado{/if}
+      {#if spinningUp}Acelerando · ~{formatRpm(ring.estimatedRpm)} rpm{:else if running}{reported > 0 ? `Ligado · ${formatRpm(reported)} rpm` : 'Ligado'}{:else}Parado{/if}
     </text>
   </svg>
 
@@ -242,14 +273,14 @@
     <button
       class="big off"
       class:secondary={buttons.stop === 'secondary'}
-      onclick={onstop}
+      onclick={stop}
       disabled={!canStop || pending === 'Desligando…'}
     >
       {pending === 'Desligando…' ? 'Desligando…' : 'Desligar'}
     </button>
   </div>
-  {#if spindle.spinupMs > 0}
-    <p class="note">O anel continua durante a aceleração do inversor: {Math.round(spindle.spinupMs / 100) / 10} s, pelo perfil da máquina.</p>
+  {#if spindle.spinupMs > 0 && rpm !== OFF}
+    <p class="note">O anel segue a rampa do inversor: {formatRpm(target)} rpm em ~{(Math.round(rampTo / 100) / 10).toLocaleString('pt-BR')} s, pelo perfil da máquina.</p>
   {/if}
 </div>
 
@@ -274,7 +305,9 @@
   header { display: flex; align-items: center; justify-content: space-between; }
   h2 { margin: 0; font-size: 22px; }
   .close { border: 0; background: transparent; color: var(--acc); font: 500 17px var(--sans); min-height: 60px; min-width: 60px; cursor: pointer; }
-  .dial { width: min(300px, 82vw); align-self: center; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
+  .dial { width: min(300px, 82vw); align-self: center; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; cursor: grab; outline: none; }
+  /* Sem o quadrado de foco no toque; pelo teclado, o botão do mostrador ganha um anel. */
+  .dial:focus-visible .knob { stroke: var(--acc); stroke-width: 4; }
   .track { fill: none; stroke: var(--line); stroke-width: 18; stroke-linecap: round; }
   .ring { fill: none; stroke: var(--acc); stroke-width: 18; stroke-linecap: round; }
   .ring.spin { animation: breathe 1.2s ease-in-out infinite; }

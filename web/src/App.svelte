@@ -367,7 +367,8 @@
       </div>
     {/each}
     <p class="caption">
-      {#if canZero}Segure um eixo para zerar · {/if}{usingWork ? 'Coordenadas da peça' : 'Coordenadas da máquina'}
+      <span>{usingWork ? 'Coordenadas da peça' : 'Coordenadas da máquina'}</span>
+      {#if canZero}<span class="hint">Segure um eixo para zerar</span>{/if}
     </p>
   </section>
 
@@ -492,7 +493,8 @@
   header { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px; }
   .title { display: flex; flex-direction: column; gap: 4px; flex: 1; }
   .detail { flex-basis: 100%; }
-  .name { font-size: 13px; color: var(--fg-3); letter-spacing: 0.02em; }
+  /* O nome da máquina como sobretítulo: caixa alta, espaçada, discreta. */
+  .name { font-size: 12px; font-weight: 600; color: var(--fg-3); text-transform: uppercase; letter-spacing: 0.08em; }
   h1 { margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -0.02em; }
   main.hands h1 { font-size: 28px; }
   .detail { margin: 6px 0 0; font-size: 16px; line-height: 1.4; color: var(--fg-2); max-width: 32ch; }
@@ -540,7 +542,10 @@
   .value { font-size: clamp(46px, 15.5vw, 74px); justify-self: end; transition: opacity 0.4s; }
   main.hands .value { font-size: clamp(34px, 11vw, 52px); }
   .unit { font-size: 14px; color: var(--fg-3); }
-  .caption { margin: 4px 0 0; font-size: 12px; color: var(--fg-3); text-align: right; }
+  /* Centrada; quando cabe, uma linha com um ponto médio entre as partes; quando não, quebra sem ponto solto. */
+  .caption { margin: 6px 0 0; display: flex; flex-wrap: wrap; justify-content: center; column-gap: 0.5em; font-size: 12px; color: var(--fg-3); text-align: center; }
+  .caption span:first-child { color: var(--fg-2); }
+  .caption .hint::before { content: '·'; margin-right: 0.5em; }
   main.stale .value { opacity: 0.35; }
 
   .meters { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

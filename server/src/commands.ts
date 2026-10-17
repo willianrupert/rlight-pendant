@@ -99,6 +99,10 @@ function feedFor(profile: MachineProfile, axes: readonly Axis[], wanted: number)
 
 export function planCommand(req: CommandRequest, ctx: CommandContext): Plan {
   if (!ctx.snapshot) return refuse('Sem sinal da máquina');
+  // Parar o que já parou deu certo: acontece ao soltar a régua no instante em que o movimento acaba.
+  if (req.command === 'cancelJog' && ctx.snapshot.state === 'Idle' && ctx.link === 'live' && ctx.inControl) {
+    return { ok: true, writes: [], commanded: {}, hitLimit: false, moves: false };
+  }
   const decision = allowed(req.command, ctx.snapshot.state, {
     link: ctx.link,
     inControl: ctx.inControl,

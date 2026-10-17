@@ -109,6 +109,13 @@ describe('planCommand: movimento absoluto (ADR-0002)', () => {
     const p = planCommand({ command: 'cancelJog' }, ctx({ snapshot: jog, commanded: { x: 101 } }));
     expect(p).toMatchObject({ ok: true, writes: [{ realtime: 0x85 }], commanded: {} });
   });
+
+  it('parar com a máquina já parada dá certo em silêncio (soltar a régua no fim do movimento)', () => {
+    // Antes virava "Nada em andamento" na tela, um aviso que não fazia sentido para quem só soltou o dedo.
+    const p = planCommand({ command: 'cancelJog' }, ctx({ commanded: { x: 101 } }));
+    expect(p).toMatchObject({ ok: true, writes: [], commanded: {} });
+    expect(planCommand({ command: 'cancelJog' }, ctx({ inControl: false })).ok).toBe(false);
+  });
 });
 
 describe('planCommand: velocidade do fantasma sem perfil de velocidade', () => {
@@ -290,9 +297,9 @@ describe('planCommand: spindle', () => {
     expect(planCommand({ command: 'spindleSpeed', rpm: 0 }, ctx())).toMatchObject({ ok: true, writes: [{ line: 'M5' }] });
   });
 
-  it('abaixo da menor rotação útil, sobe para ela (1800 na RLight)', () => {
-    expect(planCommand({ command: 'spindleSpeed', rpm: 500 }, ctx())).toMatchObject({ writes: [{ line: 'S1800' }], hitLimit: true });
-    expect(planCommand({ command: 'spindleOn', rpm: 500 }, ctx())).toMatchObject({ writes: [{ line: 'M3 S1800' }], hitLimit: true });
+  it('abaixo da menor rotação útil, sobe para ela (900 na RLight: 5% do máximo, a curva parte de 0=0%)', () => {
+    expect(planCommand({ command: 'spindleSpeed', rpm: 500 }, ctx())).toMatchObject({ writes: [{ line: 'S900' }], hitLimit: true });
+    expect(planCommand({ command: 'spindleOn', rpm: 500 }, ctx())).toMatchObject({ writes: [{ line: 'M3 S900' }], hitLimit: true });
   });
 
   it('ligar em 0 não faz sentido: pede uma rotação', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DIAL_SWEEP_DEG, OFF, OFF_DEG, angleFromRpm, dialAngle, releaseAction, ringFill, rpmFromAngle, snapRpm, spindleButtons, thousandsCrossed } from './spindle';
+import { DIAL_SWEEP_DEG, OFF, OFF_DEG, angleFromRpm, dialAngle, rampMs, releaseAction, ringFill, rpmFromAngle, snapRpm, spindleButtons, thousandsCrossed } from './spindle';
 
 const r = { min: 1_800, max: 24_000 }; // minRunningRpm..maxRpm da máquina de referência
 
@@ -48,15 +48,42 @@ describe('o mostrador', () => {
   });
 });
 
+describe('a rampa do inversor', () => {
+  // Rampa de aceleração constante: o perfil diz o tempo de 0 ao máximo (P100 = 5 s até 18000 rpm).
+  it('rotações baixas chegam antes', () => {
+    expect(rampMs(4_800, 18_000, 5_000)).toBeCloseTo(1_333, 0);
+    expect(rampMs(18_000, 18_000, 5_000)).toBe(5_000);
+    expect(rampMs(24_000, 18_000, 5_000)).toBe(5_000);
+    expect(rampMs(4_800, 18_000, 0)).toBe(0);
+  });
+});
+
 describe('o anel', () => {
-  it('segurar enche a primeira parte; o spin-up estimado, o resto', () => {
-    expect(ringFill({ holdProgress: 0.5, spinupStartedAt: null, now: 0, spinupMs: 4_000, running: false })).toEqual({ fill: 0.125, phase: 'confirming' });
-    expect(ringFill({ holdProgress: 1, spinupStartedAt: 0, now: 2_000, spinupMs: 4_000, running: false })).toEqual({ fill: 0.625, phase: 'spinup' });
-    expect(ringFill({ holdProgress: 1, spinupStartedAt: 0, now: 5_000, spinupMs: 4_000, running: true }).phase).toBe('running');
+  const base = { spinupMs: 5_000, maxRpm: 18_000, targetRpm: 9_000, range: { min: 900, max: 18_000 }, runningRpm: 0 };
+  const at = (rpm: number) => angleFromRpm(rpm, base.range) / DIAL_SWEEP_DEG;
+
+  it('segurar enche só o trecho do desligado', () => {
+    const r = ringFill({ ...base, holdProgress: 0.5, spinupStartedAt: null, now: 0, running: false });
+    expect(r.phase).toBe('confirming');
+    expect(r.fill).toBeCloseTo((OFF_DEG / DIAL_SWEEP_DEG) * 0.5, 5);
   });
 
-  it('sem estimativa, a confirmação enche tudo', () => {
-    expect(ringFill({ holdProgress: 0.5, spinupStartedAt: null, now: 0, spinupMs: 0, running: false }).fill).toBe(0.5);
+  it('acelerando, o anel acompanha a rotação estimada pela rampa, até a escolhida', () => {
+    const mid = ringFill({ ...base, holdProgress: 1, spinupStartedAt: 0, now: 1_250, running: false }); // 18000/5000 × 1250 = 4500
+    expect(mid.phase).toBe('spinup');
+    expect(mid.estimatedRpm).toBe(4_500);
+    expect(mid.fill).toBeCloseTo(at(4_500), 5);
+    const done = ringFill({ ...base, holdProgress: 1, spinupStartedAt: 0, now: 2_600, running: true });
+    expect(done.phase).toBe('running');
+    expect(done.fill).toBeCloseTo(at(9_000), 5);
+  });
+
+  it('girando, o anel mostra a rotação que a placa reporta', () => {
+    expect(ringFill({ ...base, runningRpm: 12_000, holdProgress: 0, spinupStartedAt: null, now: 0, running: true }).fill).toBeCloseTo(at(12_000), 5);
+  });
+
+  it('sem estimativa no perfil, chega direto', () => {
+    expect(ringFill({ ...base, spinupMs: 0, holdProgress: 1, spinupStartedAt: 0, now: 0, running: false }).phase).toBe('running');
   });
 });
 
@@ -79,6 +106,11 @@ describe('os botões da folha', () => {
 
   it('acelerando depois de segurar: desligar em destaque, mesmo antes da placa confirmar', () => {
     expect(spindleButtons({ on: false, spinningUp: true, pending: 'Ligando…' })).toMatchObject({ start: false, stop: 'primary' });
+  });
+
+  it('com o dedo ainda no ligar, nada muda de lugar: o Desligar não pode surgir debaixo do dedo', () => {
+    // Na máquina real: o Desligar crescia para onde estava o ligar e soltar o dedo virava um toque nele (M5).
+    expect(spindleButtons({ on: true, spinningUp: true, pending: null, holding: true })).toMatchObject({ start: true, stop: 'secondary' });
   });
 
   it('com um comando pendente, a linha honesta espera', () => {

@@ -124,11 +124,13 @@
     </div>
   {:else if !moving && (dest || preview || ghost)}
     <p class="caption" class:dest={!!(dest || preview)}>
-      {#if dest || preview}
-        {destinationText((dest ?? preview)!, offset)}
-      {:else}
-        Arraste o ponto, ou toque na mesa
-      {/if}
+      <span>
+        {#if dest || preview}
+          {destinationText((dest ?? preview)!, offset)}
+        {:else}
+          Arraste o ponto, ou toque na mesa
+        {/if}
+      </span>
     </p>
   {/if}
 </section>
@@ -164,10 +166,12 @@
   .map :global(.path) { stroke: var(--acc); stroke-width: 2; stroke-dasharray: 4 5; vector-effect: non-scaling-stroke; opacity: 0.8; }
   /* A legenda mora dentro do mapa, embaixo: não empurra a tela. */
   .caption {
-    position: absolute; left: 0; right: 34px; bottom: 8px; margin: 0; pointer-events: none;
+    position: absolute; left: 0; right: 34px; bottom: 18px; margin: 0; pointer-events: none;
     font-size: 12px; color: var(--fg-3); text-align: center;
   }
-  .map:global(.point-low) .caption { bottom: auto; top: 8px; }
+  /* Uma pílula da cor do mapa: a frase fica afastada da borda e não briga com as linhas da grade. */
+  .caption span { display: inline-block; padding: 3px 10px; border-radius: 999px; background: rgba(13, 15, 18, 0.55); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+  .map:global(.point-low) .caption { bottom: auto; top: 18px; }
   .caption.dest { font: 600 15px var(--mono); color: var(--acc); }
   .go {
     position: absolute;

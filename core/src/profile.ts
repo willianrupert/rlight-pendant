@@ -64,7 +64,11 @@ export interface AxisProfile {
 export interface SpindleProfile {
   type: string;
   minRpm: number;
-  /** A menor rotação em que o spindle gira de verdade: o primeiro valor não zero do speed_map. */
+  /**
+   * A menor rotação que o mostrador oferece. Com o speed_map partindo de 0=0%,
+   * a curva vale desde baixo e o piso é 5% do máximo (o primeiro ponto, se for
+   * menor); sem isso, abaixo do primeiro ponto não diferente de zero não há curva.
+   */
   minRunningRpm: number;
   maxRpm: number;
   spinupMs: number;
@@ -123,17 +127,25 @@ function spindleProfile(cfg: ConfigMap): SpindleProfile | null {
     const s = cfg[type];
     const sec: ConfigMap = isMap(s) ? s : {};
     const rpms: number[] = [];
+    let fromZero = false;
     if (typeof sec.speed_map === 'string') {
       for (const pair of sec.speed_map.split(/\s+/)) {
-        const rpm = Number(pair.split('=')[0]);
-        if (Number.isFinite(rpm)) rpms.push(rpm);
+        const [r, pct] = pair.split('=');
+        const rpm = Number(r);
+        if (!Number.isFinite(rpm)) continue;
+        rpms.push(rpm);
+        if (rpm === 0 && parseFloat(pct ?? '') === 0) fromZero = true;
       }
     }
+    const positive = rpms.filter((r) => r > 0);
+    const maxRpm = rpms.length ? Math.max(...rpms) : 0;
+    let minRunningRpm = positive.length ? Math.min(...positive) : rpms.length ? Math.min(...rpms) : 0;
+    if (fromZero && positive.length) minRunningRpm = Math.min(minRunningRpm, Math.max(100, Math.round((maxRpm * 0.05) / 100) * 100));
     return {
       type,
       minRpm: rpms.length ? Math.min(...rpms) : 0,
-      minRunningRpm: rpms.filter((r) => r > 0).length ? Math.min(...rpms.filter((r) => r > 0)) : rpms.length ? Math.min(...rpms) : 0,
-      maxRpm: rpms.length ? Math.max(...rpms) : 0,
+      minRunningRpm,
+      maxRpm,
       spinupMs: numOr(sec.spinup_ms, 0),
       spindownMs: numOr(sec.spindown_ms, 0),
     };
