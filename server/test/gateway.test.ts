@@ -246,9 +246,9 @@ describe('gateway: a conexão vai cair (ADR-0007)', () => {
     b.send({ type: 'takeControl' });
     await until(() => b.state()?.control.inControl);
 
-    // A placa para de responder, como nas pausas da WebUI.
-    fake.freeze(2_500);
-    await until(() => b.state()?.link.mode === 'no-signal', { what: 'sem sinal' });
+    // A placa para de responder por mais que o limiar de 2,5 s (ADR-0007).
+    fake.freeze(4_000);
+    await until(() => b.state()?.link.mode === 'no-signal', { what: 'sem sinal', timeoutMs: 5_000 });
     const r = await b.command({ command: 'nudge', axis: 'x', delta: 1 });
     expect(r).toEqual({ type: 'result', id: 'r1', ok: false, reason: 'Sem sinal da máquina' });
     expect(await b.command({ command: 'jogTo', x: 1, y: 1 })).toMatchObject({ ok: false });
@@ -270,5 +270,5 @@ describe('gateway: a conexão vai cair (ADR-0007)', () => {
     const again = await b.command({ command: 'nudge', axis: 'x', delta: 1 });
     expect(again).toMatchObject({ ok: true });
     expect(fake.jogs).toEqual(['$J=G53 G90 X101.000 F1000']);
-  }, 15_000);
+  }, 25_000);
 });
