@@ -232,8 +232,12 @@ describe('gateway: mexer na máquina, de ponta a ponta', () => {
     });
   });
 
+  // O servidor só dá o homing por feito quando vê a passagem Home → Idle nos
+  // relatórios (4 por segundo com uma tela aberta). Um homing de verdade leva
+  // segundos; os 50 ms padrão do falso às vezes cabiam entre dois relatórios e o
+  // teste falhava na CI, mais lenta. 600 ms é mais que dois intervalos.
   it('ir até o fantasma exige homing; depois do homing, vai', async () => {
-    await setup({ state: 'Alarm', homePos: { x: 0, y: 0, z: 0 } });
+    await setup({ state: 'Alarm', homePos: { x: 0, y: 0, z: 0 }, homingMs: 600 });
     const b = await browser();
     await until(() => live(b.state()) && b.of('profile')[0]);
     b.send({ type: 'takeControl' });
@@ -252,7 +256,7 @@ describe('gateway: mexer na máquina, de ponta a ponta', () => {
   it('o homing sobrevive a um reinício do servidor', async () => {
     const file = join(mkdtempSync(join(tmpdir(), 'rlight-')), 'homing.json');
     const memory = fileHomingMemory(file);
-    await setup({ state: 'Alarm', homePos: { x: 0, y: 0, z: 0 } }, undefined, memory);
+    await setup({ state: 'Alarm', homePos: { x: 0, y: 0, z: 0 }, homingMs: 600 }, undefined, memory);
     let b = await browser();
     await until(() => live(b.state()) && b.of('profile')[0]);
     b.send({ type: 'takeControl' });
