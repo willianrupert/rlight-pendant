@@ -105,6 +105,14 @@ describe('pendente até a máquina confirmar', () => {
     expect(p.expire(6_000)).toEqual([{ kind: 'failed', command: 'home', reason: 'O servidor não respondeu' }]);
   });
 
+  it('homing rápido demais para ser visto confirma pelo "agora tem homing"', () => {
+    const p = new PendingTracker();
+    p.sent('r6', 'home', 0, 'Alarm', false);
+    p.result('r6', { ok: true });
+    expect(p.state(snap('Idle'), false)).toEqual([]);
+    expect(p.state(snap('Idle'), true)).toEqual([{ kind: 'confirmed', command: 'home' }]);
+  });
+
   it('spindle confirma pela rotação reportada', () => {
     const p = new PendingTracker();
     p.sent('r5', 'spindleOn', 0, 'Idle');
