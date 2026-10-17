@@ -1,0 +1,34 @@
+%
+(Placa de teste: bolso retangular e furo redondo)
+(Ferramenta: fresa reta 6 mm, zero no canto inferior esquerdo, topo da peça)
+G21 G90 G17 G94
+G54
+T1 M6
+M3 S18000
+G0 Z5.000
+G0 X10.000 Y10.000
+; bolso, duas passadas
+G1 Z-1.500 F300
+G1 X60.000 F1200
+G1 Y40.000
+G1 X10.000
+G1 Y10.000
+G1 Z-3.000 F300
+G1 X60.000 F1200
+G1 Y40.000
+G1 X10.000
+G1 Y10.000
+G0 Z5.000
+; furo redondo de 20 mm, em hélice
+G0 X90.000 Y25.000
+G1 Z0.000 F300
+G2 X90.000 Y25.000 Z-1.500 I-7.000 J0.000 F900
+G2 X90.000 Y25.000 Z-3.000 I-7.000 J0.000
+G2 X90.000 Y25.000 I-7.000 J0.000
+G3 X76.000 Y25.000 R7.000
+G0 Z5.000
+G4 P0.5
+M5
+G53 G0 Z0
+M30
+%
