@@ -99,10 +99,11 @@ export function confirmedBy(
       return true;
     case 'cancelJog':
       return now.state !== 'Jog';
+    // Ligado é o que a placa diz (campo A:), não a rotação reportada.
     case 'spindleOn':
-      return now.spindle > 0;
+      return now.spindleOn;
     case 'spindleOff':
-      return now.spindle === 0;
+      return !now.spindleOn;
     default:
       return true;
   }

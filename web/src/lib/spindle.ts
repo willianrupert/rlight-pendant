@@ -12,25 +12,47 @@ export interface RpmRange {
   max: number;
 }
 
+/**
+ * O começo do arco é a parada "Desligado": abaixo da menor rotação que o
+ * inversor sustenta (minRunningRpm do perfil) não existe "devagar", existe
+ * desligado. Rotação 0 aqui significa desligado.
+ */
+export const OFF_DEG = 30;
+export const OFF = 0;
+
 export function rpmFromAngle(deg: number, r: RpmRange): number {
-  const t = Math.min(1, Math.max(0, deg / DIAL_SWEEP_DEG));
+  if (deg < OFF_DEG / 2) return OFF;
+  const t = Math.min(1, Math.max(0, (deg - OFF_DEG) / (DIAL_SWEEP_DEG - OFF_DEG)));
   return Math.round((r.min + t * (r.max - r.min)) / 100) * 100;
 }
 
 export function angleFromRpm(rpm: number, r: RpmRange): number {
-  if (r.max <= r.min) return 0;
-  return (Math.min(r.max, Math.max(r.min, rpm)) - r.min) / (r.max - r.min) * DIAL_SWEEP_DEG;
+  if (rpm <= OFF) return 0;
+  if (r.max <= r.min) return OFF_DEG;
+  return OFF_DEG + ((Math.min(r.max, Math.max(r.min, rpm)) - r.min) / (r.max - r.min)) * (DIAL_SWEEP_DEG - OFF_DEG);
 }
 
-/** Ao soltar, encosta num valor comum próximo, dentro da faixa. */
+/** Ao soltar, encosta num valor comum próximo, dentro da faixa; o desligado fica desligado. */
 export function snapRpm(rpm: number, r: RpmRange): number {
+  if (rpm <= OFF) return OFF;
   const near = COMMON_RPM.filter((c) => c >= r.min && c <= r.max).find((c) => Math.abs(c - rpm) <= SNAP_RPM);
   return near ?? Math.min(r.max, Math.max(r.min, Math.round(rpm / 100) * 100));
 }
 
-/** Um clique a cada mil rpm atravessados. */
+/** Um clique a cada mil rpm atravessados (e ao entrar ou sair do desligado). */
 export function thousandsCrossed(from: number, to: number): number {
+  if ((from <= OFF) !== (to <= OFF)) return 1;
   return Math.abs(Math.floor(to / 1000) - Math.floor(from / 1000));
+}
+
+/** O que soltar o mostrador faz: com o spindle ligado, ajusta ou (no desligado) desliga. */
+export function releaseAction(input: { rpm: number; on: boolean; canAdjust: boolean; canStop: boolean }):
+  | { command: 'spindleOff' }
+  | { command: 'spindleSpeed'; rpm: number }
+  | null {
+  if (!input.on) return null;
+  if (input.rpm <= OFF) return input.canStop ? { command: 'spindleOff' } : null;
+  return input.canAdjust ? { command: 'spindleSpeed', rpm: input.rpm } : null;
 }
 
 /**
@@ -80,8 +102,13 @@ export interface SpindleButtons {
   idleNote: string | null;
 }
 
-export function spindleButtons(input: { reportedRpm: number; spinningUp: boolean; pending: string | null }): SpindleButtons {
-  const running = input.reportedRpm > 0 || input.spinningUp;
+/**
+ * "Ligado" é o que a placa diz (`spindleOn`, do campo A: do relatório), nunca
+ * rotação > 0: com S0 e M3 ativo o inversor segue girando no mínimo e a placa
+ * reporta 0 rpm.
+ */
+export function spindleButtons(input: { on: boolean; spinningUp: boolean; pending: string | null }): SpindleButtons {
+  const running = input.on || input.spinningUp;
   return {
     start: !running,
     stop: running ? 'primary' : 'secondary',

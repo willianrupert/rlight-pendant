@@ -7,12 +7,14 @@
   import type { Clicker } from '../lib/feel';
   import { HOLD_MS, holdProgress, idleHold, pressHold } from '../lib/hold';
   import { formatRpm } from '../lib/present';
-  import { DIAL_SWEEP_DEG, angleFromRpm, dialAngle, ringFill, rpmFromAngle, snapRpm, spindleButtons, thousandsCrossed } from '../lib/spindle';
+  import { DIAL_SWEEP_DEG, OFF, OFF_DEG, angleFromRpm, dialAngle, releaseAction, ringFill, rpmFromAngle, snapRpm, spindleButtons, thousandsCrossed } from '../lib/spindle';
 
   interface Props {
     spindle: SpindleProfile;
     /** Rotação reportada pela placa agora. */
     reported: number;
+    /** Ligado segundo a placa (campo A: do relatório), não pela rotação. */
+    on: boolean;
     canStart: boolean;
     canStop: boolean;
     canAdjust: boolean;
@@ -24,16 +26,20 @@
     onclose: () => void;
   }
 
-  let { spindle, reported, canStart, canStop, canAdjust, pending, clicker, onstart, onstop, onadjust, onclose }: Props = $props();
+  let { spindle, reported, on, canStart, canStop, canAdjust, pending, clicker, onstart, onstop, onadjust, onclose }: Props = $props();
 
-  const range = $derived({ min: spindle.minRpm, max: spindle.maxRpm > spindle.minRpm ? spindle.maxRpm : 24_000 });
-  const running = $derived(reported > 0);
+  // Do menor valor em que o inversor gira de verdade até o máximo; abaixo disso, o "Desligado".
+  const range = $derived.by(() => {
+    const min = spindle.minRunningRpm > 0 ? spindle.minRunningRpm : spindle.minRpm;
+    return { min, max: spindle.maxRpm > min ? spindle.maxRpm : 24_000 };
+  });
+  const running = $derived(on);
   let rpm = $state(12_000);
   let initialized = false;
   $effect(() => {
     if (initialized) return;
     initialized = true;
-    rpm = snapRpm(reported > 0 ? reported : 12_000, range);
+    rpm = snapRpm(on ? Math.max(range.min, reported) : 12_000, range);
   });
 
   // Mostrador
@@ -56,14 +62,19 @@
   function turnMove(e: PointerEvent) {
     if (!turning) return;
     const next = rpmFromAngle(dialPoint(e), range);
-    if (thousandsCrossed(rpm, next) > 0) clicker.play(next % 5000 < 1000 ? 'major' : 'minor');
+    if (thousandsCrossed(rpm, next) > 0) clicker.play(next === OFF || next % 5000 < 1000 ? 'major' : 'minor');
     rpm = next;
+  }
+  function release() {
+    const act = releaseAction({ rpm, on, canAdjust, canStop });
+    if (act?.command === 'spindleOff') onstop();
+    else if (act) onadjust(act.rpm);
   }
   function turnUp() {
     if (!turning) return;
     turning = false;
     rpm = snapRpm(rpm, range);
-    if (running && canAdjust) onadjust(rpm);
+    release();
   }
 
   // Segurar para ligar
@@ -73,7 +84,7 @@
   let spinupAt = $state<number | null>(null);
   let now = $state(performance.now());
   function holdDown(e: PointerEvent) {
-    if (!canStart || pending) return;
+    if (!canStart || pending || rpm === OFF) return;
     clicker.wake();
     try {
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -124,7 +135,7 @@
 
   const ring = $derived(ringFill({ holdProgress: holdP, spinupStartedAt: spinupAt, now, spinupMs: spindle.spinupMs, running }));
   const spinningUp = $derived(ring.phase === 'spinup');
-  const buttons = $derived(spindleButtons({ reportedRpm: reported, spinningUp: spinupAt !== null && (spinningUp || !!pending), pending }));
+  const buttons = $derived(spindleButtons({ on, spinningUp: spinupAt !== null && (spinningUp || !!pending), pending }));
 
   // Geometria do arco: 270°, começando embaixo à esquerda.
   const R = 120;
@@ -152,6 +163,15 @@
     }
     return out;
   });
+  // A parada "Desligado", no começo do arco, um pouco separada da faixa que gira.
+  const offMark = $derived.by(() => {
+    const a = ((0 - 135 - 90) * Math.PI) / 180;
+    const b = ((OFF_DEG * 0.75 - 135 - 90) * Math.PI) / 180;
+    return {
+      x1: C + (R - 14) * Math.cos(a), y1: C + (R - 14) * Math.sin(a), x2: C + (R - 28) * Math.cos(a), y2: C + (R - 28) * Math.sin(a),
+      lx: C + (R - 40) * Math.cos(b), ly: C + (R - 40) * Math.sin(b),
+    };
+  });
 </script>
 
 <div class="scrim" onclick={onclose} role="presentation"></div>
@@ -171,27 +191,33 @@
     aria-valuemin={range.min}
     aria-valuemax={range.max}
     aria-valuenow={rpm}
-    aria-valuetext="{formatRpm(rpm)} rpm"
+    aria-valuetext={rpm === OFF ? 'Desligado' : `${formatRpm(rpm)} rpm`}
     onpointerdown={turnDown}
     onpointermove={turnMove}
     onpointerup={turnUp}
     onpointercancel={turnUp}
     onkeydown={(e) => {
-      if (e.key === 'ArrowUp' || e.key === 'ArrowRight') rpm = Math.min(range.max, rpm + 1000);
-      else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') rpm = Math.max(range.min, rpm - 1000);
+      if (e.key === 'ArrowUp' || e.key === 'ArrowRight') rpm = rpm === OFF ? range.min : Math.min(range.max, rpm + 1000);
+      else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') rpm = rpm - 1000 < range.min ? OFF : rpm - 1000;
       else return;
       e.preventDefault();
-      if (running && canAdjust) onadjust(rpm);
+      release();
     }}
   >
     <path class="track" d={arc(0, DIAL_SWEEP_DEG)} />
     {#if ring.fill > 0}<path class="ring" class:spin={spinningUp} d={arc(0, DIAL_SWEEP_DEG * ring.fill)} />{/if}
+    <line class="offmark" x1={offMark.x1} y1={offMark.y1} x2={offMark.x2} y2={offMark.y2} />
+    <text class="offlabel" x={offMark.lx} y={offMark.ly} text-anchor="start">off</text>
     {#each ticks as t}<line class="tick" class:major={t.major} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} />{/each}
     <circle class="knob" cx={knob.x} cy={knob.y} r="15" />
-    <text x="150" y="150" class="rpm">{formatRpm(rpm)}</text>
-    <text x="150" y="178" class="unit">rpm</text>
+    {#if rpm === OFF}
+      <text x="150" y="150" class="rpm off">Desligado</text>
+    {:else}
+      <text x="150" y="150" class="rpm">{formatRpm(rpm)}</text>
+      <text x="150" y="178" class="unit">rpm</text>
+    {/if}
     <text x="150" y="212" class="now">
-      {#if spinningUp}Acelerando · estimativa{:else if running}Girando a {formatRpm(reported)}{:else}Parado{/if}
+      {#if spinningUp}Acelerando · estimativa{:else if running}{reported > 0 ? `Ligado · ${formatRpm(reported)} rpm` : 'Ligado'}{:else}Parado{/if}
     </text>
   </svg>
 
@@ -201,7 +227,7 @@
       <button
         class="big on"
         style:--p={ring.phase === 'confirming' ? holdP : 0}
-        disabled={!canStart || !!pending}
+        disabled={!canStart || !!pending || rpm === OFF}
         onpointerdown={holdDown}
         onpointerup={holdUp}
         onpointercancel={holdUp}
@@ -209,7 +235,7 @@
         aria-label="Ligar a {formatRpm(rpm)} rpm, segure para confirmar"
       >
         <span class="fill" aria-hidden="true"></span>
-        <span class="t">{pending && pending !== 'Desligando…' ? pending : 'Segure para ligar'}</span>
+        <span class="t">{pending && pending !== 'Desligando…' ? pending : rpm === OFF ? 'Escolha a rotação' : 'Segure para ligar'}</span>
       </button>
     {/if}
     <!-- Desligar sempre existe: M5 nunca faz mal, e o motor pode girar com a placa dizendo que não. -->
@@ -255,6 +281,9 @@
   .tick { stroke: var(--fg-3); stroke-width: 2; }
   .tick.major { stroke: var(--fg-2); stroke-width: 3; }
   .knob { fill: var(--fg); }
+  .rpm.off { font: 600 30px var(--sans); fill: var(--fg-2); }
+  .offmark { stroke: var(--fg-3); stroke-width: 3; stroke-linecap: round; }
+  .offlabel { font: 500 11px var(--sans); fill: var(--fg-3); }
   .rpm { font: 600 44px var(--mono); fill: var(--fg); text-anchor: middle; dominant-baseline: middle; font-variant-numeric: tabular-nums; }
   .unit { font: 500 15px var(--sans); fill: var(--fg-3); text-anchor: middle; }
   .now { font: 500 14px var(--sans); fill: var(--fg-2); text-anchor: middle; }
