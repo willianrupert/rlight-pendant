@@ -1,6 +1,6 @@
 # ADR-0009 · Fluidez sem mentir: zero atraso no toque, números que se movem como na Apple
 
-**Status:** aceito, condicionado ao spike S3 · 2026-10-16
+**Status:** aceito · 2026-10-16 · spike S3 concluído no mesmo dia
 
 ## Contexto
 
@@ -77,15 +77,24 @@ A háptica faz o vidro parecer mecanismo, e merece engenharia, não um detalhe:
   `crescendo`, `parede`, `confirmado`, `alarme`), nunca chamadas soltas.
 - **Android:** `navigator.vibrate` com padrões curtos (5 a 15 ms), afinados num
   aparelho real.
-- **iPhone:** no iOS 18 em diante, acionar um `<input type="checkbox" switch>`
-  produz o toque do sistema. O spike S3 descobre o que é possível com ele: se
-  dispara durante o arrasto, quantos toques por segundo aguenta e se padrões
-  (dois e três toques) são distinguíveis.
+- **iPhone: não há háptica por web.** Medido no spike S3, num iPhone com
+  iOS 26.5, em página direta (sem iframe): o switch nativo vibra quando o
+  **dedo** o toca, mas acioná-lo por código não vibra. Foram mais de 230
+  tentativas em quatro variantes do truque, e nenhuma vibrou. O truque que
+  funcionava no iOS 18 foi fechado. No iPhone, a sensação mecânica vem do **som e
+  do movimento**, desenhados para isso (abaixo).
+- **O que o teste já decidiu sobre o volante:** ele acompanha o dedo 1:1, liso,
+  sem nada que o segure. Uma versão "catraca", que prendia a roda no dente e
+  saltava entre eles, soou certa mas **perdeu a fluidez** e foi descartada. Sem
+  inércia: a máquina move exatamente o que foi girado.
+- **O que ainda está em aberto:** a forma (roda circular ou régua linear, como o
+  ajuste de ângulo do app Fotos) e o tom do clique. Decide-se no laboratório,
+  pelo tato.
 - **O volante limita os detentes sentidos** à taxa que o aparelho aguenta. Mais
   rápido que isso, o volante continua contando, mas a háptica vira um "rolar"
   espaçado, como a coroa do Apple Watch girada depressa.
-- **Som opcional**, curto e grave, gerado pela Web Audio API e sincronizado com a
-  háptica, para quem quiser e para aparelhos sem vibração.
+- **Som de detente** no volante, curto e suave, desligável. É o substituto da
+  háptica no iPhone e um reforço no Android.
 
 O laboratório do spike S3 fica em `spikes/s3-haptica/` e roda no próprio
 aparelho.
@@ -98,5 +107,7 @@ aparelho.
 - O caminho quente sem framework exige disciplina: uma camada pequena e bem
   testada, com orçamento de desempenho no CI (zero quadros perdidos num arrasto
   gravado).
-- A háptica no iPhone depende de um comportamento não documentado. Ela é uma
-  melhoria, e o app é completo sem ela.
+- No iPhone não há vibração. O app é completo sem ela: som, lingueta e
+  movimento carregam a sensação. Se um dia valer pagar por háptica real no
+  iPhone, um app nativo pode ser só mais um cliente do mesmo servidor
+  ([ADR-0004](0004-pwa-em-vez-de-app-nativo.md)).

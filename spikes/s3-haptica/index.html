@@ -112,7 +112,7 @@ textarea{width:100%;box-sizing:border-box;min-height:150px;background:var(--pane
 
   <section class="card" aria-labelledby="h-wheel">
     <h2 id="h-wheel">3 · Volante</h2>
-    <p>Gire com o polegar, como uma catraca: o volante segura no dente e salta para o próximo. Cada traço é um detente. O anel externo é 0,01 mm, o do meio 0,1 e o interno 1 mm. Gire devagar e depois rápido.</p>
+    <p>Gire com o polegar. A roda gira livre e lisa; a lingueta no topo estala a cada dente, como numa catraca. Cada traço é um detente. O anel externo é 0,01 mm, o do meio 0,1 e o interno 1 mm. Gire devagar e depois rápido.</p>
     <div class="wheelbox">
       <canvas id="wheel" width="560" height="560" aria-label="Volante de jog"></canvas>
       <div class="meters">
@@ -285,14 +285,15 @@ const cv = $('#wheel'), g = cv.getContext('2d'); const W = 560, C = W / 2;
 const R = { outer: 270, mid: 200, inner: 130, hub: 70 };
 let wAngle = 0, wLast = null, step = 0.01, wPos = 0, minGap = 35, lastFire = 0, detents = [];
 const DET = 15;
-// Catraca: o dedo move o ângulo cru; o volante desenhado fica preso ao dente com uma mola
-// e salta para o próximo ao cruzar a metade.
-let rawDeg = 0, lastN = 0, shownDeg = 0, ratchetSound = true;
-const RESIST = 0.28;
-function targetDeg() { const n = Math.round(rawDeg / DET); return n * DET + (rawDeg - n * DET) * RESIST; }
+// Catraca de verdade: a roda gira livre e lisa, 1:1 com o dedo; quem estala é a lingueta,
+// que salta a cada dente e volta com mola. Ao soltar, a roda assenta no dente mais próximo.
+let rawDeg = 0, lastN = 0, shownDeg = 0, ratchetSound = true, dragging = false;
+let pawl = 0, pawlDir = 1, dirty = true;
 function wheelLoop() {
-  const t = targetDeg(); const d = t - shownDeg;
-  if (Math.abs(d) > 0.01) { shownDeg += d * 0.45; wAngle = shownDeg * Math.PI / 180; drawWheel(); }
+  if (dragging) { if (shownDeg !== rawDeg) { shownDeg = rawDeg; dirty = true; } }
+  else { const d = lastN * DET - shownDeg; if (Math.abs(d) > 0.01) { shownDeg += d * 0.3; dirty = true; } }
+  if (pawl > 0.01) { pawl *= 0.72; dirty = true; } else if (pawl) { pawl = 0; dirty = true; }
+  if (dirty) { wAngle = shownDeg * Math.PI / 180; drawWheel(); dirty = false; }
   requestAnimationFrame(wheelLoop);
 }
 requestAnimationFrame(wheelLoop);
@@ -320,25 +321,31 @@ function drawWheel() {
   for (let i = 0; i < 360 / DET; i++) { const a = i * DET * Math.PI / 180; g.strokeStyle = i % 6 ? '#3a414b' : '#6b7480'; g.lineWidth = i % 6 ? 3 : 5;
     g.beginPath(); g.moveTo(Math.sin(a) * 262, -Math.cos(a) * 262); g.lineTo(Math.sin(a) * 240, -Math.cos(a) * 240); g.stroke(); }
   g.restore();
+  if (typeof pawl === 'number') {
+    g.save(); g.translate(C, 18); g.rotate(pawlDir * pawl * 0.5);
+    g.beginPath(); g.moveTo(-11, -14); g.lineTo(11, -14); g.lineTo(0, 22); g.closePath();
+    g.fillStyle = pawl > 0.3 ? '#7fb0ff' : '#c9d1db'; g.fill(); g.restore();
+  }
   g.beginPath(); g.arc(C, C, R.hub, 0, 7); g.fillStyle = '#0b0d10'; g.fill();
   g.fillStyle = '#5f6873'; g.font = '600 22px ui-monospace, monospace'; g.textAlign = 'center';
   g.fillText('0,01', C, C - R.outer + 52); g.fillText('0,1', C, C - R.mid + 40); g.fillText('1', C, C - R.inner + 36);
   g.fillStyle = '#eef1f5'; g.font = '600 34px system-ui, sans-serif'; g.fillText('X', C, C + 12);
 }
 function wp(e) { const b = cv.getBoundingClientRect(); const x = (e.clientX - b.left) * W / b.width - C, y = (e.clientY - b.top) * W / b.height - C; return { a: Math.atan2(x, -y), r: Math.hypot(x, y) }; }
-cv.addEventListener('pointerdown', e => { const p = wp(e); if (p.r < R.hub || p.r > R.outer) return; cv.setPointerCapture(e.pointerId); wLast = p.a; step = p.r > R.mid ? 0.01 : p.r > R.inner ? 0.1 : 1; });
+cv.addEventListener('pointerdown', e => { const p = wp(e); if (p.r < R.hub || p.r > R.outer) return; cv.setPointerCapture(e.pointerId); wLast = p.a; dragging = true; step = p.r > R.mid ? 0.01 : p.r > R.inner ? 0.1 : 1; });
 cv.addEventListener('pointermove', e => {
   if (wLast === null) return; const p = wp(e); let d = p.a - wLast; if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI;
   wLast = p.a; rawDeg += d * 180 / Math.PI;
   const n = Math.round(rawDeg / DET);
   while (n !== lastN) {
     const s = Math.sign(n - lastN); lastN += s; wPos = Math.round((wPos + s * step) * 100) / 100;
+    pawl = 1; pawlDir = -s;
     const now = performance.now(); detents.push(now);
     if (now - lastFire >= minGap) { pulse(step >= 1 ? 18 : 8); ratchet(step >= 1); lastFire = now; }
   }
   $('#w-pos').textContent = fmt(wPos);
 });
-const endW = () => { wLast = null; rawDeg = lastN * DET; }; cv.addEventListener('pointerup', endW); cv.addEventListener('pointercancel', endW);
+const endW = () => { wLast = null; dragging = false; rawDeg = lastN * DET; }; cv.addEventListener('pointerup', endW); cv.addEventListener('pointercancel', endW);
 seg($('#gap'), 'g', v => minGap = +v);
 $('#rsnd').addEventListener('change', e => { ratchetSound = e.target.checked; });
 setInterval(() => {

@@ -110,9 +110,10 @@ passa girando de novo, de propósito. **Um alarme aparece como uma frase e uma
 ação**, nunca como `ALARM:1`.
 
 **Háptica onde o aparelho deixa.** No Android, o navegador vibra com padrões
-completos. No iPhone, o Safari não oferece vibração para páginas. Existe um
-truque experimental, e o resto do feedback vem por som curto e movimento na
-tela. A interface funciona igual com ou sem vibração.
+completos. No iPhone, o Safari não deixa páginas vibrarem (medido no iOS 26),
+então o volante fala por **som e movimento**: ele gira liso e cada detente tem
+um clique curto e suave. A interface funciona igual com ou
+sem vibração.
 
 ---
 
@@ -163,7 +164,7 @@ tela. A interface funciona igual com ou sem vibração.
 | Mac e tablet | **De graça** | Mais trabalho |
 | Atualização | Publicar no servidor | Loja ou reinstalação |
 | Ver trabalho, notificar, enviar arquivo | ✅ | ✅ |
-| Háptica | Android sim; iPhone experimental | ✅ |
+| Háptica | Android sim; iPhone não (som e movimento no lugar) | ✅ |
 | Live Activity, Watch, Botão de Ação | ❌ | ✅ |
 
 O servidor compensa boa parte do que a web não tem: ele mantém a conexão,

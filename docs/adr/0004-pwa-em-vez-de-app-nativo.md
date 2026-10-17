@@ -22,13 +22,12 @@ Activity, Apple Watch, Botão de Ação e Siri. Os requisitos decidiram:
 | Web Push (notificações) | ✅ iOS 16.4+ instalado | ✅ | ✅ |
 | Tela sempre acesa (Wake Lock) | ✅ | ✅ | ✅ |
 | Receber arquivo compartilhado | ❌ (usa o seletor de arquivos) | ✅ Web Share Target | Arrastar e soltar |
-| Vibração | ⚠️ truque experimental | ✅ Vibration API | — |
+| Vibração | ❌ fechada no iOS 26 (medido no S3) | ✅ Vibration API | — |
 
 **Háptica como melhoria progressiva**, atrás da porta `Haptics`:
 - **Android:** padrões completos da linguagem de háptica.
-- **iPhone:** no iOS 18, acionar um `<input type="checkbox" switch>` gera um
-  toque. Usado se o spike S3 aprovar, com saída silenciosa se sumir numa
-  atualização.
+- **iPhone:** sem vibração por web desde o iOS 26 (spike S3, [ADR-0009](0009-fluidez-sem-mentir.md)).
+  A sensação vem do clique sonoro e do movimento.
 - **Todos:** som curto opcional e resposta visual imediata. Nenhuma função
   depende de vibração.
 

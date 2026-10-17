@@ -114,8 +114,9 @@ As regras detalhadas estão no [ADR-0009](adr/0009-fluidez-sem-mentir.md): o toq
 ### Háptica e som
 Uma linguagem só ([VISION.md](VISION.md#mexer-um-pendant-que-parece-físico)):
 tique leve, tique firme, cliques crescendo, batida seca, pulso duplo, três
-batidas. Vibração no Android, truque experimental no iPhone e som curto
-opcional em todos ([ADR-0004](adr/0004-pwa-em-vez-de-app-nativo.md)). Nenhuma
+batidas. Vibração no Android; no iPhone, que não deixa páginas vibrarem, o
+clique sonoro e o movimento do volante carregam a sensação; som em todos,
+desligável ([ADR-0004](adr/0004-pwa-em-vez-de-app-nativo.md)). Nenhuma
 informação depende só de vibração.
 
 ### Instalado, não navegado
