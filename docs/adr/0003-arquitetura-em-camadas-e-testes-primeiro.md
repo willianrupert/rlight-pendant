@@ -1,81 +1,74 @@
 # ADR-0003 · Arquitetura em camadas, core puro, testes primeiro
 
-**Status:** aceito · 2026-10-16
+**Status:** aceito · 2026-10-16 (revisado: servidor e web compartilham o core)
 
 ## Contexto
 
-O pendant comanda uma máquina que pode machucar alguém. Quase toda a lógica que
-importa (interpretar o status, decidir o que é permitido, montar comandos,
-renovar o jog) pode ser escrita sem rede, sem tela e sem relógio real. Se ficar
-assim, dá para testar exaustivamente antes de chegar perto da máquina.
+O sistema comanda uma máquina que pode machucar alguém. Quase toda a lógica que
+importa pode ser escrita sem rede, sem tela e sem relógio real: interpretar o
+estado, decidir o que é permitido, montar comandos, renovar o jog, analisar
+G-code e estimar tempo. Se ficar assim, dá para testar tudo antes de chegar perto
+da máquina.
 
 Objetivos: manter simples, modular, fácil de manter, e escrever os testes antes
 do código.
 
 ## Decisão
 
-### Camadas
+### Três pacotes, um core
 
 ```
-core/        TypeScript puro. Sem I/O, sem DOM, sem dependências.
-  protocol   parser de status report e mensagens  →  tipos do domínio
-  commands   construtores de comando (G-code, $J=, bytes realtime)
-  policy     o que é permitido em cada estado da máquina
-  jog        política do jog contínuo (ADR-0002), com relógio injetado
-app/         casos de uso: Jog, Spindle, Home, Unlock, Zero, Hold/Resume
-ports/       interfaces: MachineLink, Clock, Haptics, WakeLock
-adapters/    WebSocketLink · FakeFluidNC · UI
+core/      TypeScript puro. Sem I/O, sem DOM, sem dependências.
+  protocol   relatório de estado e mensagens → tipos do domínio
+  commands   G-code, $J=, bytes realtime
+  policy     o que é permitido em cada estado
+  jog        intenção → pedaços (ADR-0002), relógio injetado
+  gcode      parser, limites, percurso, estimativa de tempo
+server/    Node. Casos de uso + adapters: placa, navegadores, SQLite, push, SD
+web/       PWA. UI + adapters de navegador (WebSocket, háptica, wake lock)
 ```
 
-**Regra de dependência:** as setas só apontam para dentro. O core não importa
-nada. O app importa core e ports. Adapters implementam ports. A UI é um adapter
-e pode ser trocada sem tocar no core.
+**Regra de dependência:** as setas apontam para dentro. O core não importa nada.
+O servidor e a web importam o core. Adapters implementam portas. **A UI é um
+adapter** e pode ser trocada sem tocar no resto.
 
-### Repositório
-
-```
-core/    pacote compartilhado
-pwa/     o app (UI + adapters de navegador)
-ponte/   o processo do ADR-0001
-```
-
-Um repositório com workspaces de npm. TypeScript em modo estrito nos três.
+**O mesmo core nos dois lados.** O servidor usa o core para decidir. A web usa o
+mesmo core para desenhar o percurso e para saber o que mostrar habilitado, sem
+duplicar regra.
 
 ### Stack
 
-- **Vite + TypeScript** no PWA.
-- **Svelte** na UI: compila para JS pequeno, sem runtime pesado, e com
-  reatividade que combina com um status chegando a 10 Hz. Por ser adapter, trocar
-  de framework custa só a UI.
-- **Node** na ponte, para usar a mesma linguagem e as mesmas ferramentas.
-- **Vitest** para unidade e integração, **Playwright com WebKit** para e2e
-  (o motor do Safari).
+| Peça | Escolha | Por quê |
+|---|---|---|
+| Linguagem | TypeScript estrito em tudo | Uma linguagem, um core compartilhado |
+| Servidor | Node, com `ws` e `better-sqlite3` | Simples, maduro, roda num LXC pequeno |
+| Web | Vite + Svelte | JS pequeno, reatividade que acompanha estado a 10 Hz ou mais |
+| Desenho do percurso | Canvas 2D na v2; WebGL só se a vista 3D se pagar | Começar pelo simples |
+| Testes | Vitest; Playwright com WebKit e Chromium | Os motores do Safari e do Chrome |
+| Repositório | Workspaces do npm | Sem ferramenta extra |
 
 ### Testes primeiro, em quatro níveis
 
 | Nível | O que testa | Contra o quê | Quando roda |
 |---|---|---|---|
-| **Unidade** | core: parser, comandos, policy, jog | fixtures e relógio falso | sempre, em ms |
-| **Integração** | casos de uso de ponta a ponta | `FakeFluidNC` | sempre |
-| **E2E** | PWA no WebKit | `FakeFluidNC` atrás da ponte | sempre, no CI |
+| **Unidade** | core | fixtures e relógio falso | sempre, em ms |
+| **Integração** | servidor de ponta a ponta | `FakeFluidNC` | sempre |
+| **E2E** | PWA real no WebKit e no Chromium | servidor + `FakeFluidNC` | sempre, no CI |
 | **Contrato** | o FakeFluidNC se comporta como a placa | **placa real, em bancada** | manual, marcado `@bancada` |
 
-- **Fixtures reais:** o tráfego capturado da placa no spike S1 vira arquivo de
-  fixture. O parser é testado contra o que a placa realmente manda, não contra o
-  que a documentação promete.
-- **FakeFluidNC:** um simulador do subconjunto do protocolo que o pendant usa
-  (status, `ok`/`error`, jog, `0x85`, spindle, alarmes). Permite desenvolver sem
-  a máquina e reproduzir falhas: queda de conexão, alarme no meio do jog,
-  resposta lenta.
-- **Teste de contrato:** a mesma suíte de integração rodando contra a placa real.
-  É o que impede o simulador de divergir da realidade.
+- **Fixtures reais:** o tráfego capturado da placa no spike S1 vira fixture. O
+  parser é testado contra o que a placa manda, não contra a documentação.
+- **FakeFluidNC:** um simulador do subconjunto do protocolo que o sistema usa
+  (estado, `ok`/`error`, jog, `0x85`, spindle, alarmes, SD), com falhas
+  injetáveis: queda de conexão, alarme no meio do jog, resposta lenta.
+- **Estimativa de tempo:** testada contra a duração real dos trabalhos rodados na
+  máquina. Cada trabalho real vira um caso de teste com tolerância.
 - **Cada surpresa vira teste:** todo comportamento inesperado na máquina vira
-  primeiro um teste que falha no core ou no simulador, e só depois a correção.
+  primeiro um teste que falha, e só depois a correção.
 
 ## Consequências
 
-- O que é perigoso (policy e jog) é também o que é mais fácil de testar.
-- O simulador é um pequeno produto à parte e precisa ser mantido. O teste de
-  contrato é o custo disso.
-- Escrever o parser contra fixtures exige o spike S1 antes de qualquer código
-  de produção.
+- O que é perigoso (policy, jog) e o que é difícil (estimativa de tempo) são
+  também os pontos mais fáceis de testar.
+- O simulador precisa ser mantido. O teste de contrato é o custo disso.
+- O parser exige o spike S1 antes de qualquer código de produção.

@@ -1,70 +1,66 @@
-# ADR-0002 · Jog contínuo em pedaços curtos com watchdog
+# ADR-0002 · Jog em pedaços curtos, decidido no servidor
 
-**Status:** aceito, condicionado ao spike S2 · 2026-10-16
+**Status:** aceito, condicionado ao spike S2 · 2026-10-16 (revisado: o laço foi para o servidor)
 
 ## Contexto
 
-O jog contínuo é o gesto principal de um pendant: segurar e a máquina anda,
-soltar e ela para.
+O jog contínuo, em que a máquina anda enquanto o dedo está na tela, é o gesto
+principal do modo manual. Isso inclui arrastar o ponto no mapa.
 
 A implementação ingênua manda um jog longo (`$J=G91 X1000 F…`) ao tocar e o
-cancelamento (`0x85`) ao soltar. **Se a conexão cair entre os dois, o
-cancelamento nunca chega e a máquina anda até o fim do curso** (ou até o soft
-limit).
+cancelamento (`0x85`) ao soltar. **Se a conexão cair entre os dois, a máquina
+anda até o fim do curso.**
 
-Isso não é hipotético nesta máquina: a placa fica dentro de um painel metálico,
-e na bancada a conexão já caiu várias vezes com o sinal marcando 100 %.
+Esta máquina tem histórico: a placa fica dentro de um painel metálico e, na
+bancada, a conexão caiu várias vezes com o sinal marcando 100 %.
 
-Números da máquina: 3000 mm/min no máximo em X e Y, aceleração de 250 mm/s².
+Há dois trechos que podem cair:
+1. **celular → servidor** (Wi-Fi do celular);
+2. **servidor → placa** (Wi-Fi da placa).
+
+Números da máquina: até 3000 mm/min em X e Y, aceleração de 250 mm/s².
 
 ## Decisão
 
-**O jog contínuo é uma sequência de jogs curtos renovados enquanto o dedo estiver
-na tela.**
+**O celular manda intenção, não comandos.** Enquanto o dedo está na tela, ele
+manda "quero ir nesta direção, nesta velocidade" com um batimento a cada
+100 ms. **O servidor transforma a intenção em jogs curtos** e os entrega à
+placa.
 
-| Parâmetro | Valor inicial | Por quê |
-|---|---|---|
-| Velocidade máxima do jog contínuo no pendant | 1500 mm/min | Metade da máxima. Ajustável depois do S2 |
-| Duração de cada pedaço | 100 ms de movimento (2,5 mm a 1500 mm/min) | Curto o bastante para limitar o excesso, longo o bastante para não gaguejar |
-| Pedaços na fila do planner | no máximo 2, contados pelos `ok` da placa | O planner sempre planeja parar no fim da fila |
-| Ao soltar o dedo | `0x85` imediato | Para na hora, sem esperar a fila acabar |
+| Parâmetro | Valor inicial |
+|---|---|
+| Velocidade máxima do jog contínuo | 1500 mm/min (ajustável depois do S2) |
+| Cada pedaço | 100 ms de movimento: 2,5 mm a 1500 mm/min |
+| Pedaços na fila da placa | No máximo 2, contados pelos `ok` |
+| Dedo solto | O celular avisa e o servidor manda `0x85` na hora |
+| Sem batimento por 300 ms | O servidor manda `0x85` |
+| WebSocket do celular fechou | O servidor manda `0x85` |
 
-**Excesso no pior caso**, com a placa perdendo a conexão: os pedaços já na fila,
-ou seja ≤ 5 mm a 1500 mm/min, com a desaceleração incluída, porque o planner
-desacelera dentro da distância enfileirada.
+**Cobertura das falhas**
+- **Cai o celular:** o servidor percebe em até 300 ms e cancela.
+- **Cai a placa:** ela termina o que já tem na fila, ≤ 5 mm a 1500 mm/min, com a
+  desaceleração incluída, e para sozinha.
 
-**Watchdog na ponte**, para quando o celular some e a placa continua conectada:
+**O volante é diferente.** Cada detente vira um movimento pequeno e fechado.
+Não há "andar até soltar". Se a conexão cair, a máquina faz no máximo o que já foi
+girado. O servidor limita quanto o volante pode ficar à frente da máquina: os
+cliques além disso são recusados, e o app avisa com uma batida.
 
-- Durante um jog, o cliente manda um batimento a cada 100 ms.
-- Sem batimento por 300 ms, ou se o WebSocket do cliente fechar, a ponte manda
-  `0x85` para a placa.
-
-As duas camadas cobrem falhas diferentes: os pedaços cobrem a queda entre a
-ponte e a placa, e o watchdog cobre a queda entre o celular e a ponte.
-
-**O jog por passo** (um toque) continua sendo um único `$J=` com a distância
-escolhida. Ele é limitado por natureza (no máximo 10 mm) e não precisa de
-renovação.
-
-**O core recorta o destino pelos limites conhecidos** antes de enviar, para não
-gerar erro de soft limit a cada toque perto da borda.
+**O core recorta o destino pelos soft limits** antes de enviar.
 
 ## Critério de aceitação (spike S2)
 
-Motor desacoplado primeiro, depois acoplado. Iniciar um jog contínuo na
-velocidade máxima do pendant e desligar o Wi-Fi do celular. Depois repetir
-derrubando a conexão da placa. Dez vezes cada.
+Motor desacoplado primeiro, depois acoplado. Começar um jog contínuo na
+velocidade máxima e (a) desligar o Wi-Fi do celular, (b) derrubar a conexão da
+placa. Dez vezes cada.
 
-- **Aprova:** excesso ≤ 6 mm em todas as repetições.
-- **Reprova:** reduzir o pedaço ou a velocidade e repetir. Se não fechar, a v1
-  sai **só com jog por passo**.
+- **Aprova:** em (a), a máquina para em ≤ 0,5 s. Em (b), anda ≤ 6 mm a mais.
+- **Reprova:** reduzir o pedaço ou a velocidade. Se não fechar, a v1 sai só com
+  o volante.
 
 ## Consequências
 
-- O jog contínuo depende de um fluxo regular de mensagens. Rede ruim aparece
-  como movimento entrecortado, não como movimento descontrolado. A falha é
-  segura.
-- A lógica de renovação e contagem de `ok` mora no core e é testável com relógio
-  falso.
-- A velocidade do jog contínuo fica abaixo da máxima da máquina, uma troca
-  consciente de velocidade por segurança.
+- A lógica fica num só lugar, no servidor, testável com relógio falso.
+- O celular é fino: gestos viram intenções.
+- Rede ruim aparece como movimento entrecortado, nunca como movimento
+  descontrolado.
