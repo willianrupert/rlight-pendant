@@ -1,15 +1,19 @@
 # RLight · Produto
 
-Um servidor no Proxmox conectado à CNC RLight, e um PWA em
-`https://cnc.rlight.com.br` para **ver, mexer e confiar** na máquina a partir de
-qualquer tela da rede da oficina. É grátis e funciona no iPhone, no Android e no Mac.
+Um servidor sempre ligado na rede da oficina, conectado a uma máquina FluidNC, e
+um PWA para **ver, mexer e confiar** nela a partir de qualquer tela da rede. É
+grátis e funciona no iPhone, no Android e no Mac.
+
+**Serve qualquer máquina FluidNC** ([ADR-0008](adr/0008-qualquer-maquina-fluidnc.md)):
+tudo o que o app sabe da máquina vem da configuração da placa. A instalação de
+referência é a da CNC RLight, num Proxmox, em `https://cnc.rlight.com.br`.
 
 A visão completa, e o porquê, estão em [VISION.md](VISION.md). Este documento é
 o contrato: o que entra, em que ordem e como saber que deu certo.
 
 ---
 
-## A máquina
+## A máquina de referência
 
 Uma fresadora CNC portátil construída por Romney Rupert, migrada do Mach3 para o
 **FluidNC v3.9.9** numa placa **PiBot ESP32 (V4.96 Pro)** ligada por Wi-Fi.
@@ -24,8 +28,8 @@ Uma fresadora CNC portátil construída por Romney Rupert, migrada do Mach3 para
 | Cartão SD | Na placa |
 | E-stop | Elétrico, por contator. A entrada na placa é só o aviso |
 
-Este sistema serve a **esta** máquina. Velocidades, cursos e faixa de rotação
-vêm da configuração dela.
+É nela que se desenvolve e se roda o teste de contrato. **Nenhum destes números
+está no código:** o app os lê da placa, como leria de qualquer outra máquina.
 
 ---
 
@@ -159,3 +163,4 @@ isolada.
 | [0005](adr/0005-seguranca-o-celular-nao-e-e-stop.md) | Segurança: o celular não é E-stop |
 | [0006](adr/0006-trabalhos-rodam-do-sd.md) | Trabalhos rodam do SD, enviados e verificados pelo servidor |
 | [0007](adr/0007-a-conexao-vai-cair.md) | A conexão com a máquina vai cair: projetar para isso |
+| [0008](adr/0008-qualquer-maquina-fluidnc.md) | Qualquer máquina FluidNC: tudo vem da placa |

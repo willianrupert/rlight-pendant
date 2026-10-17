@@ -43,7 +43,10 @@ alto, leitura a três metros, tela acesa enquanto você trabalha.
 
 ### 7. Zero configuração
 A máquina conta ao app quem ela é. Curso, limites, velocidades e homing vêm da
-configuração da própria placa. Não existe tela de configurações.
+configuração da própria placa, e por isso o app serve qualquer máquina FluidNC
+([ADR-0008](adr/0008-qualquer-maquina-fluidnc.md)). Não existe tela de
+configurações. O pouco que a placa não sabe é perguntado uma vez, na primeira
+conexão.
 
 ---
 

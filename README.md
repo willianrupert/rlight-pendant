@@ -6,10 +6,14 @@
 > erro em código. O RLight decide o que importa agora e esconde o resto atrás de
 > bons padrões.
 
-Um servidor na rede da oficina que nunca tira os olhos da fresadora CNC RLight
-(FluidNC num ESP32), e um PWA para **ver, mexer e confiar** na máquina de
-qualquer tela: iPhone, Android, tablet ou Mac. É grátis, não passa por loja e
-roda só na rede local, em `https://cnc.rlight.com.br`.
+Um servidor na rede da oficina que nunca tira os olhos da sua CNC, e um PWA para
+**ver, mexer e confiar** nela de qualquer tela: iPhone, Android, tablet ou Mac.
+É grátis, não passa por loja e roda só na rede local.
+
+**Funciona com qualquer máquina FluidNC.** O app lê da própria placa o curso, os
+limites, as velocidades e o spindle, e se ajusta sozinho. Nenhum valor de máquina
+está no código. A máquina de referência, onde tudo é desenvolvido e testado, é a
+fresadora CNC RLight.
 
 - **Ver:** estado, posição, avanço, rotação e trabalhos ao vivo, com o percurso sendo cortado e o tempo restante.
 - **Mexer:** um pendant que parece físico, com mapa, volante por anéis e zero com desfazer.
@@ -30,12 +34,14 @@ roda só na rede local, em `https://cnc.rlight.com.br`.
   - [0005 · Segurança: o celular não é E-stop](docs/adr/0005-seguranca-o-celular-nao-e-e-stop.md)
   - [0006 · Trabalhos rodam do SD, enviados e verificados pelo servidor](docs/adr/0006-trabalhos-rodam-do-sd.md)
   - [0007 · A conexão com a máquina vai cair: projetar para isso](docs/adr/0007-a-conexao-vai-cair.md)
+  - [0008 · Qualquer máquina FluidNC: tudo vem da placa](docs/adr/0008-qualquer-maquina-fluidnc.md)
 
 ## Aviso
 
 Este software comanda uma máquina capaz de causar ferimentos. Ele **não**
-substitui o E-stop elétrico. Foi feito para uma máquina específica: valores de
-velocidade, curso e spindle não servem para outras sem revisão.
+substitui o E-stop elétrico. Ele confia na configuração da sua placa: se o
+curso, os limites ou as velocidades estiverem errados lá, estarão errados aqui.
+Valide a configuração da máquina antes de usar.
 
 ## Licença
 

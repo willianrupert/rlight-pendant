@@ -61,7 +61,10 @@ duplicar regra.
   parser é testado contra o que a placa manda, não contra a documentação.
 - **FakeFluidNC:** um simulador do subconjunto do protocolo que o sistema usa
   (estado, `ok`/`error`, jog, `0x85`, spindle, alarmes, SD), com falhas
-  injetáveis: queda de conexão, alarme no meio do jog, resposta lenta.
+  injetáveis: queda de conexão, alarme no meio do jog, resposta lenta. Ele
+  carrega **perfis de máquina** (a RLight, uma CoreXY, uma sem homing, uma sem
+  SD), e a suíte roda contra todos. Nenhum número de máquina entra no código
+  ([ADR-0008](0008-qualquer-maquina-fluidnc.md)).
 - **Estimativa de tempo:** testada contra a duração real dos trabalhos rodados na
   máquina. Cada trabalho real vira um caso de teste com tolerância.
 - **Cada surpresa vira teste:** todo comportamento inesperado na máquina vira

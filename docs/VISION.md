@@ -3,13 +3,19 @@
 > **Um servidor na sua rede que nunca tira os olhos da máquina.
 > Um app que mostra a máquina como ela é, em qualquer tela.**
 
-A CNC RLight hoje é uma caixa preta com uma WebUI de desktop. Para saber o que
-ela está fazendo é preciso estar na frente dela. Para mexer nela é preciso um
-notebook.
+Uma CNC com FluidNC hoje é uma caixa preta com uma WebUI de desktop. Para saber
+o que ela está fazendo é preciso estar na frente dela. Para mexer nela é preciso
+um notebook.
+
+O RLight nasceu na CNC RLight, uma fresadora construída à mão, e serve **qualquer
+máquina FluidNC**. Ao conectar, ele lê da placa quem a máquina é (curso, limites,
+velocidades, spindle) e se ajusta sozinho
+([ADR-0008](adr/0008-qualquer-maquina-fluidnc.md)).
 
 O RLight muda isso com duas peças:
 
-- **O servidor**, um container no Proxmox, fica conectado à placa 24 horas por
+- **O servidor**, um container em qualquer computador sempre ligado na rede (na
+  instalação de referência, um Proxmox), fica conectado à placa 24 horas por
   dia. Ele é o único que fala com o FluidNC. Ele entende o que a máquina está
   fazendo, guarda tudo, avisa quando algo acontece e protege a máquina quando
   alguém some no meio de um movimento.
