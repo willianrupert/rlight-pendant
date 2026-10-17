@@ -15,16 +15,21 @@ export function canTakeControl(input: { live: boolean; inControl: boolean; hasMa
   return input.live && input.hasMachine && !input.inControl;
 }
 
-export interface MachineAction {
-  command: Extract<Command, 'unlock' | 'home' | 'feedHold' | 'resume' | 'softReset' | 'cancelJog'>;
+export type ActionCommand = Extract<Command, 'unlock' | 'home' | 'feedHold' | 'resume' | 'softReset' | 'cancelJog'>;
+
+export interface ActionSlot {
+  kind: 'action';
+  command: ActionCommand;
   label: string;
   /** O perigoso se confirma segurando. */
   hold: boolean;
-  /** O principal do estado vai em destaque; os perigosos ficam longe dele. */
-  primary: boolean;
+  tone: 'primary' | 'normal' | 'danger';
 }
 
-const LABELS: Record<MachineAction['command'], string> = {
+/** Um lugar fixo na barra de ações. Vazio continua ocupando o lugar. */
+export type Slot = ActionSlot | { kind: 'spindle' } | { kind: 'zeroAll' } | null;
+
+const LABELS: Record<ActionCommand, string> = {
   unlock: 'Desbloquear',
   home: 'Homing',
   feedHold: 'Pausar',
@@ -33,32 +38,44 @@ const LABELS: Record<MachineAction['command'], string> = {
   cancelJog: 'Parar',
 };
 
-const HOLD = new Set<MachineAction['command']>(['home', 'softReset']);
+const HOLD = new Set<ActionCommand>(['home', 'softReset']);
 
-// Uma coisa por vez (DESIGN.md): o que cada estado mostra, em ordem. Em repouso
-// não há Resetar à vista: normal não precisa dele.
-const BY_STATE: Record<MachineState, MachineAction['command'][]> = {
-  Idle: ['home'],
-  Jog: ['cancelJog', 'feedHold'],
-  Run: ['feedHold', 'softReset'],
-  Hold: ['resume', 'softReset'],
-  Alarm: ['unlock', 'home', 'softReset'],
-  Home: ['softReset'],
-  Door: ['softReset'],
-  Check: ['softReset'],
-  Sleep: ['softReset'],
+type Want = ActionCommand | 'spindle' | 'zeroAll' | null;
+
+// Três lugares fixos: à esquerda o spindle (ou o homing, no alarme), no meio a
+// ação do estado, à direita o perigoso ou o raro. Nada muda de lugar quando o
+// estado muda; o conteúdo troca dentro do mesmo lugar (DESIGN.md: uma coisa por
+// vez, sem a tela pular). Sem o estado pedir, o lugar fica vazio.
+const LAYOUT: Record<MachineState, [Want, Want, Want]> = {
+  Idle: ['spindle', 'home', 'zeroAll'],
+  Jog: ['spindle', 'cancelJog', null],
+  Run: ['spindle', 'feedHold', 'softReset'],
+  Hold: ['spindle', 'resume', 'softReset'],
+  Alarm: ['home', 'unlock', 'softReset'],
+  Home: [null, 'softReset', null],
+  Door: [null, 'softReset', null],
+  Check: [null, 'softReset', null],
+  Sleep: [null, 'softReset', null],
 };
 
-/** Os botões de máquina deste estado, só os que a policy deixa. */
-export function machineActions(
+/** O que cada um dos três lugares mostra neste estado; a policy do core filtra. */
+export function barSlots(
   state: MachineState,
-  ctx: PolicyContext & { canHome: boolean; homed: boolean },
-): MachineAction[] {
-  const list = BY_STATE[state].filter((c) => allowed(c, state, ctx).ok && (c !== 'home' || ctx.canHome));
-  // Em repouso, homing só é a ação principal quando ainda falta.
-  const out = list.map((command, i) => ({ command, label: LABELS[command], hold: HOLD.has(command), primary: i === 0 && command !== 'softReset' }));
-  if (state === 'Idle' && ctx.homed) for (const a of out) a.primary = false;
-  return out;
+  ctx: PolicyContext & { canHome: boolean; hasSpindle: boolean },
+): [Slot, Slot, Slot] {
+  const slot = (want: Want, i: number): Slot => {
+    if (want === null) return null;
+    if (want === 'spindle') return ctx.hasSpindle ? { kind: 'spindle' } : null;
+    if (want === 'zeroAll') return allowed('zero', state, ctx).ok ? { kind: 'zeroAll' } : null;
+    if (!allowed(want, state, ctx).ok) return null;
+    if (want === 'home' && !ctx.canHome) return null;
+    // No meio fica a ação principal; em repouso, o homing só é principal quando ainda falta.
+    const primary = i === 1 && want !== 'softReset' && !(state === 'Idle' && ctx.homed);
+    const tone = want === 'softReset' ? 'danger' : primary ? 'primary' : 'normal';
+    return { kind: 'action', command: want, label: LABELS[want], hold: HOLD.has(want), tone };
+  };
+  const [a, b, c] = LAYOUT[state];
+  return [slot(a, 0), slot(b, 1), slot(c, 2)];
 }
 
 /** O que o comando muda e por isso confirma quando o estado novo chega. */

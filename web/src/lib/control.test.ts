@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { MachineSnapshot, MachineState } from '@rlight/core';
-import { PendingTracker, UndoWindow, UNDO_WINDOW_MS, canTakeControl, controlsVisible, machineActions } from './control';
+import { PendingTracker, UndoWindow, UNDO_WINDOW_MS, barSlots, canTakeControl, controlsVisible } from './control';
 
 const live = { link: 'live' as const, inControl: true, homed: true, canHome: true };
-const names = (state: MachineState, ctx = live) => machineActions(state, ctx).map((a) => a.label);
 
 const snap = (state: MachineState, spindle = 0): MachineSnapshot => ({
   state,
@@ -32,41 +31,49 @@ describe('quem vê os controles', () => {
   });
 });
 
-describe('botões por estado (a policy do core decide)', () => {
-  it('alarme: desbloquear, homing e resetar', () => {
-    expect(names('Alarm')).toEqual(['Desbloquear', 'Homing', 'Resetar']);
+describe('a barra de ações: três lugares fixos', () => {
+  const ctx = { ...live, hasSpindle: true };
+  const view = (state: MachineState, c = ctx) =>
+    barSlots(state, c).map((x) => (x === null ? '—' : x.kind === 'action' ? x.label : x.kind));
+
+  it('cada estado em seus lugares', () => {
+    expect(view('Idle')).toEqual(['spindle', 'Homing', 'zeroAll']);
+    expect(view('Jog')).toEqual(['spindle', 'Parar', '—']);
+    expect(view('Run')).toEqual(['spindle', 'Pausar', 'Resetar']);
+    expect(view('Hold')).toEqual(['spindle', 'Retomar', 'Resetar']);
+    expect(view('Alarm')).toEqual(['Homing', 'Desbloquear', 'Resetar']);
   });
 
-  it('em repouso só o homing, e discreto se já houve homing', () => {
-    expect(names('Idle')).toEqual(['Homing']);
-    expect(machineActions('Idle', live)[0]!.primary).toBe(false);
-    expect(machineActions('Idle', { ...live, homed: false })[0]!.primary).toBe(true);
+  it('durante o homing, Resetar fica no meio', () => {
+    expect(view('Home')).toEqual(['—', 'Resetar', '—']);
   });
 
-  it('máquina sem homing não oferece homing', () => {
-    expect(names('Alarm', { ...live, canHome: false })).toEqual(['Desbloquear', 'Resetar']);
+  it('a ação do meio é a principal; em repouso, o homing só quando falta', () => {
+    expect(barSlots('Alarm', ctx)[1]).toMatchObject({ command: 'unlock', tone: 'primary' });
+    expect(barSlots('Idle', ctx)[1]).toMatchObject({ command: 'home', tone: 'normal' });
+    expect(barSlots('Idle', { ...ctx, homed: false })[1]).toMatchObject({ command: 'home', tone: 'primary' });
   });
 
-  it('movendo: parar primeiro; cortando: pausar; em pausa: retomar', () => {
-    expect(names('Jog')).toEqual(['Parar', 'Pausar']);
-    expect(names('Run')).toEqual(['Pausar', 'Resetar']);
-    expect(names('Hold')).toEqual(['Retomar', 'Resetar']);
+  it('homing e resetar se confirmam segurando; resetar é perigoso', () => {
+    expect(barSlots('Alarm', ctx)[0]).toMatchObject({ command: 'home', hold: true });
+    expect(barSlots('Alarm', ctx)[2]).toMatchObject({ command: 'softReset', hold: true, tone: 'danger' });
   });
 
-  it('homing e resetar se confirmam segurando', () => {
-    const a = machineActions('Alarm', live);
-    expect(a.filter((x) => x.hold).map((x) => x.command)).toEqual(['home', 'softReset']);
+  it('máquina sem homing nem spindle: os lugares ficam vazios, não somem', () => {
+    const none = { ...ctx, canHome: false, hasSpindle: false };
+    expect(view('Alarm', none)).toEqual(['—', 'Desbloquear', 'Resetar']);
+    expect(view('Idle', none)).toEqual(['—', '—', 'zeroAll']);
   });
 
   it('nunca um botão de emergência (ADR-0005)', () => {
     for (const s of ['Idle', 'Jog', 'Run', 'Hold', 'Alarm', 'Home', 'Door', 'Check', 'Sleep'] as const) {
-      expect(names(s).join(' ')).not.toMatch(/emerg/i);
+      expect(view(s).join(' ')).not.toMatch(/emerg/i);
     }
   });
 
-  it('sem sinal ou sem controle, nenhum botão', () => {
-    expect(names('Alarm', { ...live, link: 'no-signal' as never })).toEqual([]);
-    expect(names('Alarm', { ...live, inControl: false })).toEqual([]);
+  it('sem sinal ou sem controle, nenhuma ação', () => {
+    expect(view('Alarm', { ...ctx, link: 'no-signal' as never })).toEqual(['—', '—', '—']);
+    expect(view('Alarm', { ...ctx, inControl: false })).toEqual(['—', '—', '—']);
   });
 });
 
