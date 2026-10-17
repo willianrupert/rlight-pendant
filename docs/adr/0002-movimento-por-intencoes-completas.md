@@ -58,7 +58,7 @@ uma ambiguidade não vira movimento a mais.
 
 | Regra | Como se sente |
 |---|---|
-| A régua não pode ficar mais de 2 mm à frente da posição real | Ela resiste e não avança mais: a máquina "pesa" |
+| A régua não pode ficar mais que **max(2 mm, 4 passos)** à frente da posição real | Ela resiste e não avança mais: a máquina "pesa" |
 | Destino fora do curso | O fantasma ou a régua param na parede |
 | Descendo o Z até o zero da peça | Barreira no Z0: para passar, solte e gire de novo |
 | Sem sinal | O fantasma e a régua saem de cena ([ADR-0007](0007-a-conexao-vai-cair.md)) |
@@ -77,6 +77,15 @@ Nos dois casos ela faz **exatamente o que foi pedido e nada mais**. Ela nunca an
 
 Ir até o fantasma usa 2000 mm/min (ajustável depois do S2). A régua usa uma
 velocidade que acompanha o ritmo do giro, até o mesmo teto.
+
+### Revisão de 2026-10-17: o limite acompanha o passo
+
+No iPhone, com o passo de 1 mm, a régua andava aos trancos. Com só 2 mm (dois
+passos) à frente, cada jog terminava antes de o próximo chegar, e a máquina
+acelerava e parava a cada passo. O limite à frente passou a ser
+**max(2 mm, 4 passos)**, e o avanço da régua passou a crescer com o passo:
+300 mm/min no 0,01, 1000 no 0,1, 2000 no 1, e o máximo do eixo no 10 e no 100.
+Numa queda, a máquina continua fazendo no máximo o que a régua já mostrou.
 
 ## Critério de aceitação (spike S2)
 

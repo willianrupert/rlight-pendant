@@ -28,6 +28,18 @@ export interface MotionSettings {
 
 export const DEFAULT_MOTION: MotionSettings = { nudgeFeedMmPerMin: 1_000, jogToFeedMmPerMin: 2_000 };
 
+/**
+ * Limite à frente e avanço da régua conforme o passo escolhido. Com só 2 mm à
+ * frente no passo de 1 mm, cada jog terminava antes do próximo chegar e a
+ * máquina andava aos trancos (visto no iPhone em 2026-10-17). Quatro passos à
+ * frente, nunca menos que 2 mm; o avanço cresce com o passo e o eixo recorta.
+ */
+export function stepMotion(step: number): { leadMm: number; feedMmPerMin: number } {
+  const leadMm = Math.max(2, 4 * step);
+  const feedMmPerMin = step <= 0.01 ? 300 : step <= 0.1 ? 1_000 : step <= 1 ? 2_000 : 3_000;
+  return { leadMm, feedMmPerMin };
+}
+
 export interface CommandContext {
   snapshot: MachineSnapshot | null;
   profile: MachineProfile | null;
@@ -182,6 +194,8 @@ export function planCommand(req: CommandRequest, ctx: CommandContext): Plan {
   }
 
   const { axis, delta } = req;
+  const scale = req.step === undefined ? null : stepMotion(req.step);
+  const maxLeadMm = scale ? Math.max(scale.leadMm, ctx.motion.maxLeadMm ?? 0) : ctx.motion.maxLeadMm;
   const commanded = ctx.commanded[axis] ?? mpos[axis];
   const result = nudge({
     axis,
@@ -189,7 +203,7 @@ export function planCommand(req: CommandRequest, ctx: CommandContext): Plan {
     commanded,
     reported: mpos[axis],
     limits,
-    ...(ctx.motion.maxLeadMm === undefined ? {} : { maxLeadMm: ctx.motion.maxLeadMm }),
+    ...(maxLeadMm === undefined ? {} : { maxLeadMm }),
   });
   if (result.refused === 'lead') return refuse('A régua está à frente da máquina');
   const hitLimit = result.refused === 'limit';
@@ -197,7 +211,7 @@ export function planCommand(req: CommandRequest, ctx: CommandContext): Plan {
   if (result.target === commanded) {
     return { ok: true, writes: [], commanded: ctx.commanded, hitLimit, moves: false };
   }
-  const feed = feedFor(profile, [axis], ctx.motion.nudgeFeedMmPerMin);
+  const feed = feedFor(profile, [axis], scale ? scale.feedMmPerMin : ctx.motion.nudgeFeedMmPerMin);
   return {
     ok: true,
     writes: [{ line: formatJog({ [axis]: result.target }, feed) }],

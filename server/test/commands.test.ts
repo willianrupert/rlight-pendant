@@ -111,6 +111,44 @@ describe('planCommand: movimento absoluto (ADR-0002)', () => {
   });
 });
 
+describe('planCommand: a escala da régua acompanha o passo (step)', () => {
+  // Com o passo de 1 mm e só 2 mm à frente, a máquina andava aos trancos: cada
+  // jog terminava antes do próximo chegar. O limite e o avanço crescem com o passo.
+  it('sem step, nada muda: 2 mm à frente e o avanço da régua', () => {
+    expect(planCommand({ command: 'nudge', axis: 'x', delta: 0.5 }, ctx())).toMatchObject({ writes: [{ line: '$J=G53 G90 X100.500 F1000' }] });
+  });
+
+  it('passo de 1 mm: até 4 mm à frente, a 2000 mm/min', () => {
+    const ok = planCommand({ command: 'nudge', axis: 'x', delta: 1, step: 1 }, ctx({ commanded: { x: 103 } }));
+    expect(ok).toMatchObject({ ok: true, writes: [{ line: '$J=G53 G90 X104.000 F2000' }] });
+    const far = planCommand({ command: 'nudge', axis: 'x', delta: 1, step: 1 }, ctx({ commanded: { x: 104 } }));
+    expect(far).toEqual({ ok: false, reason: 'A régua está à frente da máquina' });
+  });
+
+  it('passo fino, avanço baixo: 0,01 mm a 300 mm/min, ainda com 2 mm à frente', () => {
+    expect(planCommand({ command: 'nudge', axis: 'x', delta: 0.05, step: 0.01 }, ctx())).toMatchObject({
+      writes: [{ line: '$J=G53 G90 X100.050 F300' }],
+    });
+    expect(planCommand({ command: 'nudge', axis: 'x', delta: 0.01, step: 0.01 }, ctx({ commanded: { x: 102 } }))).toMatchObject({ ok: false });
+  });
+
+  it('passos grandes: 10 e 100 mm cabem à frente, no avanço máximo do eixo', () => {
+    expect(planCommand({ command: 'nudge', axis: 'x', delta: 10, step: 10 }, ctx())).toMatchObject({
+      writes: [{ line: '$J=G53 G90 X110.000 F3000' }],
+    });
+    expect(planCommand({ command: 'nudge', axis: 'x', delta: 100, step: 100 }, ctx())).toMatchObject({
+      writes: [{ line: '$J=G53 G90 X200.000 F3000' }],
+    });
+  });
+
+  it('o curso continua recortando, qualquer que seja o passo', () => {
+    expect(planCommand({ command: 'nudge', axis: 'z', delta: 100, step: 100 }, ctx({ snapshot: idleAt(0, 0, -10) }))).toMatchObject({
+      writes: [{ line: '$J=G53 G90 Z0.000 F3000' }],
+      hitLimit: true,
+    });
+  });
+});
+
 describe('planCommand: ir até um ponto num eixo (jogAxisTo)', () => {
   it('vai ao destino anunciado, absoluto, no avanço do fantasma', () => {
     const p = planCommand({ command: 'jogAxisTo', axis: 'z', value: -12.5 }, ctx());
@@ -289,6 +327,14 @@ describe('ControlSession: uma tela comanda', () => {
 });
 
 describe('parseClientMessage', () => {
+  it('nudge aceita o passo, e só um passo válido', () => {
+    expect(parseClientMessage(JSON.stringify({ type: 'command', command: 'nudge', axis: 'x', delta: 1, step: 1 }))).toEqual({
+      type: 'command', command: 'nudge', axis: 'x', delta: 1, step: 1,
+    });
+    expect(parseClientMessage(JSON.stringify({ type: 'command', command: 'nudge', axis: 'x', delta: 1, step: 0 }))).toEqual({ invalid: 'Passo inválido' });
+    expect(parseClientMessage(JSON.stringify({ type: 'command', command: 'nudge', axis: 'x', delta: 1, step: 'a' }))).toEqual({ invalid: 'Passo inválido' });
+  });
+
   it('aceita as mensagens do protocolo', () => {
     expect(parseClientMessage('{"type":"takeControl"}')).toEqual({ type: 'takeControl' });
     expect(parseClientMessage('{"type":"command","id":"1","command":"nudge","axis":"x","delta":0.1}')).toEqual({

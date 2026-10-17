@@ -136,7 +136,7 @@ a resposta é imediata e nada é enfileirado nem reenviado depois
 
 | Pedido | Vai para a placa |
 |---|---|
-| `{ "type": "command", "id": "r1", "command": "nudge", "axis": "x", "delta": 0.1 }` | `$J=G53 G90 X<alvo> F<avanço>`: o alvo comandado + `delta`, recortado pelo curso |
+| `{ "type": "command", "id": "r1", "command": "nudge", "axis": "x", "delta": 0.1, "step": 0.1 }` | `$J=G53 G90 X<alvo> F<avanço>`: o alvo comandado + `delta`, recortado pelo curso. `step` (opcional) é o passo da régua: o limite à frente vira max(2 mm, 4 passos) e o avanço cresce com ele (300 / 1000 / 2000 / máximo do eixo). Sem `step`: 2 mm e 1000 mm/min |
 | `{ "type": "command", "command": "jogTo", "x": 410, "y": 220 }` | `$J=G53 G90 X410.000 Y220.000 F2000`, recortado pelo curso |
 | `{ "type": "command", "command": "cancelJog" }` | `0x85` |
 | `{ "type": "command", "command": "unlock" }` | `$X` |
