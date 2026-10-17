@@ -1,6 +1,6 @@
 # ADR-0002 · Movimento manual por intenções completas: o gesto nunca espera a rede
 
-**Status:** aceito, condicionado ao spike S2 · 2026-10-16 (substitui o "jog em pedaços")
+**Status:** aceito · 2026-10-16 (substitui o "jog em pedaços") · spike S2 aprovado em 2026-10-17 ([resultado](../../spikes/s2-movimento/RESULTADO-2026-10-17.md))
 
 ## Contexto
 
