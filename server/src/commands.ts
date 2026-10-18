@@ -19,6 +19,7 @@ import {
 } from '@rlight/core';
 import { JOG_CANCEL, SOFT_RESET } from './board';
 import type { CommandRequest } from './messages';
+import { ProbeSequence } from './probe';
 
 export interface MotionSettings {
   /** Avanço da régua. Limitado pelo máximo do eixo. */
@@ -94,6 +95,8 @@ export type Plan =
        * fila), fica guardada e sai quando a espera acabar. Só a última conta.
        */
       deferredLine?: string;
+      /** A placa de toque começou: o gateway segue as fases pelos toques da placa. */
+      probe?: ProbeSequence;
     }
   | { ok: false; reason: string };
 
@@ -191,6 +194,19 @@ export function planCommand(req: CommandRequest, ctx: CommandContext): Plan {
         return { ok: true, writes: [], commanded: ctx.commanded, hitLimit, moves: false, deferredLine: line };
       }
       return { ...simple({ line }, false), hitLimit };
+    }
+    case 'probeZ': {
+      const profile = ctx.profile;
+      if (!profile) return refuse('Lendo a configuração da máquina');
+      if (!profile.hasProbe) return refuse('Esta máquina não tem apalpador configurado');
+      const z = limitsOf(profile).z;
+      const mpos = ctx.snapshot.mpos;
+      const wco = ctx.snapshot.wco;
+      if (!z || !mpos || !wco) return refuse('Ainda não sei a posição do Z; tente de novo em instantes');
+      if (!(req.thicknessMm > 0 && req.thicknessMm <= 50)) return refuse('A espessura da placa precisa estar entre 0 e 50 mm');
+      const probe = new ProbeSequence({ mposZ: mpos.z, wcoZ: wco.z, zMin: z.min, zMax: z.max, thicknessMm: req.thicknessMm });
+      const step = probe.start();
+      return { ok: true, writes: step.lines.map((line) => ({ line })), commanded: {}, hitLimit: false, moves: false, probe };
     }
     case 'nudge':
     case 'jogTo':

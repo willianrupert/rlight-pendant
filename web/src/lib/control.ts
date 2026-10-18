@@ -4,6 +4,7 @@
 
 import { allowed, type Command, type MachineSnapshot, type MachineState, type PolicyContext } from '@rlight/core';
 import type { CommandName, CommandResult } from './connection';
+import { alarmAction } from './present';
 
 /** Os controles só existem com sinal e com o controle nas mãos (ADR-0007). */
 export function controlsVisible(input: { live: boolean; inControl: boolean; hasMachine: boolean }): boolean {
@@ -70,7 +71,12 @@ export function barSlots(
     if (!allowed(want, state, ctx).ok) return null;
     if (want === 'home' && !ctx.canHome) return null;
     // No meio fica a ação principal; em repouso, o homing só é principal quando ainda falta.
-    const primary = i === 1 && want !== 'softReset' && !(state === 'Idle' && ctx.homed);
+    // No alarme, o destaque vai para o que resolve (alarmAction): homing se a
+    // posição se perdeu, desbloquear se não. Os lugares não mudam.
+    const primary =
+      state === 'Alarm'
+        ? want === alarmAction(ctx.homed)
+        : i === 1 && want !== 'softReset' && !(state === 'Idle' && ctx.homed);
     const tone = want === 'softReset' ? 'danger' : primary ? 'primary' : 'normal';
     return { kind: 'action', command: want, label: LABELS[want], hold: HOLD.has(want), tone };
   };

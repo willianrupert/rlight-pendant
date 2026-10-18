@@ -49,6 +49,14 @@ describe('a barra de ações: três lugares fixos', () => {
     expect(view('Home')).toEqual(['—', 'Resetar', '—']);
   });
 
+  it('no alarme, o destaque vai para o que resolve: homing se a posição se perdeu, desbloquear se não', () => {
+    // Os lugares não mudam (nada pula); só o destaque.
+    expect(barSlots('Alarm', { ...ctx, homed: false })[0]).toMatchObject({ command: 'home', tone: 'primary' });
+    expect(barSlots('Alarm', { ...ctx, homed: false })[1]).toMatchObject({ command: 'unlock', tone: 'normal' });
+    expect(barSlots('Alarm', ctx)[0]).toMatchObject({ command: 'home', tone: 'normal' });
+    expect(barSlots('Alarm', ctx)[1]).toMatchObject({ command: 'unlock', tone: 'primary' });
+  });
+
   it('a ação do meio é a principal; em repouso, o homing só quando falta', () => {
     expect(barSlots('Alarm', ctx)[1]).toMatchObject({ command: 'unlock', tone: 'primary' });
     expect(barSlots('Idle', ctx)[1]).toMatchObject({ command: 'home', tone: 'normal' });

@@ -40,11 +40,13 @@ const STATES: Record<MachineState, { label: string; tone: Tone }> = {
   Sleep: { label: 'Em repouso', tone: 'idle' },
 };
 
-// Códigos de alarme do Grbl, herdados pelo FluidNC.
+// Códigos de alarme do Grbl, herdados pelo FluidNC: só a causa. A ação vem do
+// estado real (o homing ainda vale ou não), para a frase e o botão em destaque
+// dizerem a mesma coisa.
 const ALARMS: Record<number, string> = {
-  1: 'Um fim de curso foi acionado. Afaste o eixo e desbloqueie.',
+  1: 'Um fim de curso foi acionado.',
   2: 'Um movimento passaria do curso da máquina e foi barrado.',
-  3: 'A máquina foi resetada no meio de um movimento. Faça o homing de novo.',
+  3: 'A máquina foi resetada no meio de um movimento.',
   4: 'O apalpador já estava acionado antes de começar.',
   5: 'O apalpador não encostou em nada.',
   6: 'O homing foi interrompido.',
@@ -53,15 +55,23 @@ const ALARMS: Record<number, string> = {
   9: 'O homing não encontrou o fim de curso.',
 };
 
+/** O que resolve o alarme agora: homing se a posição se perdeu, desbloquear se não. */
+export function alarmAction(homed: boolean): 'home' | 'unlock' {
+  return homed ? 'unlock' : 'home';
+}
+
 export function presentState(input: { state: MachineState | null; homed: boolean; alarmCode?: number | null }): Presentation {
   if (!input.state) return { label: 'Conectando', tone: 'idle' };
   const base = STATES[input.state];
   if (input.state !== 'Alarm') return { ...base };
+  const action = alarmAction(input.homed) === 'home' ? 'Faça o homing para continuar.' : 'Desbloqueie para continuar.';
   if (input.alarmCode != null) {
-    return { ...base, detail: ALARMS[input.alarmCode] ?? `A máquina entrou em alarme (código ${input.alarmCode}).` };
+    const cause = ALARMS[input.alarmCode] ?? `A máquina entrou em alarme (código ${input.alarmCode}).`;
+    return { ...base, detail: `${cause} ${action}` };
   }
   if (!input.homed) return { ...base, detail: 'A máquina precisa de homing antes de se mover.' };
-  return { ...base, detail: 'A máquina está em alarme. Desbloqueie para continuar.' };
+  // Sem código e com o homing valendo: um reset (o Resetar, ou desligar o spindle no spin-up).
+  return { ...base, detail: `A placa foi resetada e está travada. ${action}` };
 }
 
 /** A única linha sobre conexão. Ao vivo não diz nada: normal não precisa de aviso. */

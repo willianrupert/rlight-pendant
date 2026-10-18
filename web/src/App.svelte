@@ -16,6 +16,8 @@
   import HoldButton from './ui/HoldButton.svelte';
   import Ruler from './ui/Ruler.svelte';
   import SpindleSheet from './ui/SpindleSheet.svelte';
+  import AutomationsSheet from './ui/AutomationsSheet.svelte';
+  import type { ProbeProgress } from './lib/automations';
   import TableMap from './ui/TableMap.svelte';
 
   const conn = new Connection(serverUrl());
@@ -41,6 +43,9 @@
   let axis = $state<Axis>('x');
   let sheet = $state(false);
   let sound = $state(clicker.sound);
+  // A tela de Automações (placa de toque, receitas): fora da tela de controle.
+  let automations = $state(false);
+  let probe = $state<ProbeProgress | null>(null);
   let ruler: ReturnType<typeof Ruler> | null = $state(null);
   let map: ReturnType<typeof TableMap> | null = $state(null);
   /** O estado que a tela mostra: o real, com histerese entre repouso e movimento. */
@@ -234,6 +239,11 @@
       profile = p;
       limits = conn.limits;
     };
+    conn.onProbe = (p) => {
+      probe = p;
+      if (p.status === 'failed') clicker.play('wall');
+      if (p.status === 'done') clicker.play('confirm');
+    };
     conn.onControl = (has, reason) => {
       if (!has) {
         ruler?.abort();
@@ -319,7 +329,10 @@
     </div>
     {#if hands}
       <div class="quiet-row">
-        <button class="quiet" aria-pressed={sound} onclick={() => (sound = clicker.sound = !sound)}>{sound ? 'Som' : 'Mudo'}</button>
+        <!-- A entrada da tela de Automações, no lugar do antigo "Som" (que foi para dentro dela). -->
+        <button class="quiet icon" aria-label="Automações" onclick={() => (automations = true)}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="2" /><rect x="13.5" y="3.5" width="7" height="7" rx="2" /><rect x="3.5" y="13.5" width="7" height="7" rx="2" /><rect x="13.5" y="13.5" width="7" height="7" rx="2" /></svg>
+        </button>
         <button class="quiet" onclick={() => conn.releaseControl()}>Só assistir</button>
       </div>
     {/if}
@@ -508,6 +521,25 @@
   </div>
 {/if}
 
+{#if automations && hands}
+  <AutomationsSheet
+    hasProbe={!!profile?.hasProbe}
+    canProbe={may('probeZ')}
+    {homed}
+    {probe}
+    canStop={may('feedHold')}
+    {sound}
+    {clicker}
+    onprobe={(thicknessMm) => {
+      probe = null;
+      send({ command: 'probeZ', thicknessMm });
+    }}
+    onstop={() => send({ command: 'feedHold' })}
+    onsound={(on) => (sound = clicker.sound = on)}
+    onclose={() => (automations = false)}
+  />
+{/if}
+
 {#if sheet && hands && profile?.spindle && machine}
   <SpindleSheet
     spindle={profile.spindle}
@@ -642,6 +674,8 @@
   }
   .quiet-row { display: flex; gap: 6px; }
   .quiet { border: 0; background: transparent; color: var(--fg-3); font: 500 14px var(--sans); min-height: 44px; padding: 0 10px; cursor: pointer; }
+  .quiet.icon { width: 44px; padding: 0; display: grid; place-items: center; }
+  .quiet.icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; }
 
   .toast {
     position: fixed;

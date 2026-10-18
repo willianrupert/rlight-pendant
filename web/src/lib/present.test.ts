@@ -39,14 +39,27 @@ describe('presentState: o estado é a interface', () => {
     });
   });
 
-  it('alarme com código conhecido vira frase, nunca ALARM:n', () => {
-    const p = presentState({ state: 'Alarm', homed: true, alarmCode: 1 });
-    expect(p.detail).toBe('Um fim de curso foi acionado. Afaste o eixo e desbloqueie.');
+  it('alarme com código conhecido vira causa e ação, nunca ALARM:n', () => {
+    // O fim de curso faz perder a posição: a ação é o homing, não o desbloqueio.
+    const p = presentState({ state: 'Alarm', homed: false, alarmCode: 1 });
+    expect(p.detail).toBe('Um fim de curso foi acionado. Faça o homing para continuar.');
     expect(p.detail).not.toMatch(/ALARM/);
   });
 
-  it('alarme com código desconhecido ainda é uma frase', () => {
-    expect(presentState({ state: 'Alarm', homed: true, alarmCode: 99 }).detail).toBe('A máquina entrou em alarme (código 99).');
+  it('a ação vem do estado real: com a posição valendo, desbloquear', () => {
+    expect(presentState({ state: 'Alarm', homed: true, alarmCode: 2 }).detail).toBe(
+      'Um movimento passaria do curso da máquina e foi barrado. Desbloqueie para continuar.',
+    );
+  });
+
+  it('alarme sem código com o homing valendo: a placa foi resetada (ex.: desligar no spin-up)', () => {
+    expect(presentState({ state: 'Alarm', homed: true }).detail).toBe('A placa foi resetada e está travada. Desbloqueie para continuar.');
+  });
+
+  it('alarme com código desconhecido ainda é uma frase, com a ação', () => {
+    expect(presentState({ state: 'Alarm', homed: true, alarmCode: 99 }).detail).toBe(
+      'A máquina entrou em alarme (código 99). Desbloqueie para continuar.',
+    );
   });
 
   it('sem leitura da máquina ainda', () => {

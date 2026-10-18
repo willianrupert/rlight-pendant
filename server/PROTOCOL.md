@@ -136,6 +136,22 @@ token dela por 60 s; ninguém comanda nesse meio-tempo, e as outras telas veem
 assumiu. A reserva sobrevive a reinícios do servidor (`RLIGHT_STATE_DIR/control.json`).
 Sem `token`, cair solta na hora, como na primeira versão.
 
+### Placa de toque (tela de Automações)
+
+```json
+{ "type": "command", "id": "r9", "command": "probeZ", "thicknessMm": 10 }
+```
+
+Exige homing (a descida é limitada pelo fundo do curso do Z) e um apalpador no
+perfil da placa. O servidor segue as fases pelos `[PRB:…]` da placa: desce no
+máximo 15 mm a F200 até encostar, recua 1,5 mm, mede de novo a F25, zera o Z pela
+coordenada do toque menos a espessura (`G10 L2 P0 Z…`) e sobe 5 mm. Todas as
+telas recebem o andamento:
+
+```json
+{ "type": "probe", "status": "seeking" | "measuring" | "done" | "failed", "reason": "…", "zeroMachineZ": -50.25 }
+```
+
 ### `command`
 
 Todo comando passa por `allowed()` do core antes de chegar à placa. Sem sinal,

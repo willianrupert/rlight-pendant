@@ -114,6 +114,9 @@ describe('outras mensagens', () => {
       value: { x: 188, y: 182, z: -105 },
     });
     expect(parseLine('[TLO:0.000]')).toEqual({ kind: 'toolLength', value: 0 });
+    // O apalpador: posição de máquina no toque e se tocou (1) ou não (0).
+    expect(parseLine('[PRB:100.000,200.000,-41.250:1]')).toEqual({ kind: 'probe', at: { x: 100, y: 200, z: -41.25 }, touched: true });
+    expect(parseLine('[PRB:100.000,200.000,-55.000:0]')).toEqual({ kind: 'probe', at: { x: 100, y: 200, z: -55 }, touched: false });
     expect(parseLine('[VER:3.9 FluidNC v3.9.9:]')).toEqual({ kind: 'version', text: 'FluidNC v3.9.9' });
   });
 

@@ -10,6 +10,7 @@ import { combineLinks, limitsOf, type AxisValues, type LinkView, type MachineSta
 import { pollHzFor, type Board } from './board';
 import { DEFAULT_MOTION, planCommand, type MotionSettings, type ZeroMemory } from './commands';
 import { ControlSession, noControlMemory, REASON_TAKEN, type ControlMemory } from './control';
+import { ProbeSequence, type ProbeStep } from './probe';
 import {
   parseClientMessage,
   PROTOCOL_VERSION,
@@ -65,6 +66,8 @@ export class Gateway {
   private deferredSpindle: string | null = null;
   /** Até quando ler a placa depressa, para a confirmação do spindle chegar logo. */
   private spindleFastUntil = -Infinity;
+  /** A placa de toque em andamento: cada [PRB] da placa decide a próxima fase. */
+  private probe: ProbeSequence | null = null;
   private lastJogAt = -Infinity;
   private sawHoming = false;
   private firstReport = true;
@@ -96,6 +99,7 @@ export class Gateway {
         this.commanded = {};
         this.spindleLine = null;
         this.deferredSpindle = null;
+        if (this.probe) this.probeStep({ status: 'failed', lines: [], reason: 'A conexão com a máquina caiu durante a medição.' });
         this.firstReport = true;
         this.prevState = null;
       }),
@@ -104,7 +108,9 @@ export class Gateway {
       b.on('status', (snap) => this.onStatus(snap.state)),
       b.on('message', (m) => {
         if (m.kind === 'ok' || m.kind === 'error') this.flushDeferredSpindle();
+        if (m.kind === 'probe' && this.probe) this.probeStep(this.probe.onProbe(m.at, m.touched));
         if (m.kind !== 'alarm') return;
+        if (this.probe) this.probeStep(this.probe.onAlarm(m.code));
         this.commanded = {};
         if (!alarmKeepsHoming(m.code)) this.setHomed(false);
         this.broadcast({ type: 'alarm', code: m.code });
@@ -161,6 +167,19 @@ export class Gateway {
     this.scheduleAll();
   }
 
+  /** A próxima fase da placa de toque: manda as linhas e conta para todas as telas. */
+  private probeStep(step: ProbeStep): void {
+    for (const line of step.lines) this.board.send(line);
+    this.broadcast({
+      type: 'probe',
+      status: step.status,
+      ...(step.reason ? { reason: step.reason } : {}),
+      ...(step.zeroMachineZ !== undefined ? { zeroMachineZ: step.zeroMachineZ } : {}),
+    });
+    if (step.status === 'done' || step.status === 'failed') this.probe = null;
+    this.updatePoll();
+  }
+
   private spindleDwelling(): boolean {
     return this.spindleLine !== null && !this.board.answered(this.spindleLine);
   }
@@ -181,7 +200,7 @@ export class Gateway {
     const state = this.board.snapshot?.state;
     // O spindle confirma pelo campo A:, que vem a cada ~10 relatórios: depois de um
     // comando dele, e durante a espera, ler depressa para a tela saber em ~1 s.
-    const spindleBusy = this.board.now() < this.spindleFastUntil || this.spindleDwelling();
+    const spindleBusy = this.board.now() < this.spindleFastUntil || this.spindleDwelling() || this.probe !== null;
     const moving =
       spindleBusy || state === 'Jog' || state === 'Home' || this.board.now() - this.lastJogAt < MOTION_GRACE_MS;
     const running = state === 'Run' || state === 'Hold';
@@ -277,6 +296,10 @@ export class Gateway {
       if ('line' in w && /^(M3|M5|S)/.test(w.line)) this.spindleLine = this.board.lastLine;
     }
     if (plan.deferredLine !== undefined) this.deferredSpindle = plan.deferredLine;
+    if (plan.probe) {
+      this.probe = plan.probe;
+      this.broadcast({ type: 'probe', status: 'seeking' });
+    }
     // Desligar com o reset descarta o que estava guardado.
     if (req.command === 'spindleOff') this.deferredSpindle = null;
     if (req.command === 'spindleOn' || req.command === 'spindleOff' || req.command === 'spindleSpeed') {

@@ -54,6 +54,11 @@ describe('regras que valem para todos os estados', () => {
     expect(allowed('nudge', 'Idle', { ...ctx, homed: false }).ok).toBe(true);
   });
 
+  it('a placa de toque exige homing: a descida é limitada pelo fundo do curso do Z', () => {
+    expect(allowed('probeZ', 'Idle', { ...ctx, homed: false })).toEqual({ ok: false, reason: 'Faça o homing para usar a placa de toque' });
+    expect(allowed('probeZ', 'Idle', ctx).ok).toBe(true);
+  });
+
   it('o destino absoluto da régua também exige homing', () => {
     expect(allowed('jogAxisTo', 'Idle', { ...ctx, homed: false })).toEqual({
       ok: false,

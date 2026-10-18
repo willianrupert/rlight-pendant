@@ -69,5 +69,7 @@ export function allowed(command: Command, state: MachineState, ctx: PolicyContex
   }
   if (command === 'jogTo' && !ctx.homed) return { ok: false, reason: 'Faça o homing para mover pelo mapa' };
   if (command === 'jogAxisTo' && !ctx.homed) return { ok: false, reason: 'Faça o homing para mover até um ponto' };
+  // A descida do apalpador é limitada pelo fundo do curso do Z, que só existe com homing.
+  if (command === 'probeZ' && !ctx.homed) return { ok: false, reason: 'Faça o homing para usar a placa de toque' };
   return { ok: true };
 }

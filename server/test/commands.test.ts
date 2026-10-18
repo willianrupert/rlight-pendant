@@ -285,6 +285,24 @@ describe('planCommand: zerar a peça e desfazer', () => {
   });
 });
 
+describe('planCommand: placa de toque', () => {
+  const comZero = () => ctx({ snapshot: snap('<Idle|MPos:100.000,200.000,-30.000|FS:0,0|WCO:0.000,0.000,-20.000>') });
+  it('começa pela busca rápida e devolve a sequência para o gateway seguir', () => {
+    const p = planCommand({ command: 'probeZ', thicknessMm: 10 }, comZero());
+    expect(p).toMatchObject({ ok: true, writes: [{ line: 'G90 G38.2 Z-25.000 F200' }] });
+    expect((p as { probe?: unknown }).probe).toBeDefined();
+  });
+
+  it('espessura fora de 0 a 50 mm é recusada', () => {
+    expect(planCommand({ command: 'probeZ', thicknessMm: 0 }, comZero())).toEqual({ ok: false, reason: 'A espessura da placa precisa estar entre 0 e 50 mm' });
+  });
+
+  it('máquina sem apalpador: recusa e diz por quê', () => {
+    const sem = { ...profile, hasProbe: false };
+    expect(planCommand({ command: 'probeZ', thicknessMm: 10 }, { ...comZero(), profile: sem })).toEqual({ ok: false, reason: 'Esta máquina não tem apalpador configurado' });
+  });
+});
+
 describe('planCommand: spindle', () => {
   it('desligar durante o spin-up passa na frente: reset de tempo real, não um M5 na fila', () => {
     // O FluidNC espera o spinup_ms depois do M3 antes de ler a próxima linha: um M5
@@ -434,8 +452,9 @@ describe('parseClientMessage', () => {
     expect(parseClientMessage('{"type":"command","command":"jogTo","x":"1","y":2}')).toEqual({
       invalid: 'Destino inválido',
     });
-    expect(parseClientMessage('{"type":"command","command":"probeZ"}')).toEqual({
-      invalid: 'Comando desconhecido: probeZ',
+    expect(parseClientMessage('{"type":"command","command":"probeZ"}')).toEqual({ invalid: 'Espessura inválida' });
+    expect(parseClientMessage('{"type":"command","command":"dance"}')).toEqual({
+      invalid: 'Comando desconhecido: dance',
     });
     expect(parseClientMessage('{"type":"command","command":"spindleOn"}')).toEqual({ invalid: 'Rotação inválida' });
     expect(parseClientMessage('{"type":"command","command":"zero","axis":"a"}')).toEqual({ invalid: 'Eixo inválido' });

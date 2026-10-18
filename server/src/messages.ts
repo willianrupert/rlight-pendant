@@ -20,6 +20,8 @@ export type CommandRequest =
   | { command: 'zero'; axis: Axis | 'all' }
   | { command: 'spindleOn' | 'spindleSpeed'; rpm: number }
   | { command: 'undoZero' | 'spindleOff' }
+  /** A placa de toque (tela de Automações): mede o Z e zera pela espessura da placa. */
+  | { command: 'probeZ'; thicknessMm: number }
   | { command: 'cancelJog' | 'unlock' | 'home' | 'softReset' | 'feedHold' | 'resume' };
 
 export type ClientMessage =
@@ -44,6 +46,8 @@ export type ServerMessage =
   | { type: 'result'; id?: string; ok: true; hitLimit?: boolean; undoable?: boolean }
   | { type: 'result'; id?: string; ok: false; reason: string }
   | { type: 'alarm'; code: number }
+  /** O andamento da placa de toque, para todas as telas. */
+  | { type: 'probe'; status: 'seeking' | 'measuring' | 'done' | 'failed'; reason?: string; zeroMachineZ?: number }
   | { type: 'invalid'; reason: string };
 
 const SIMPLE = new Set(['cancelJog', 'unlock', 'home', 'softReset', 'feedHold', 'resume', 'undoZero', 'spindleOff']);
@@ -76,6 +80,10 @@ export function parseClientMessage(raw: string): ClientMessage | { invalid: stri
     if (o.to !== undefined && !isNum(o.to)) return { invalid: 'Destino inválido' };
     const to = o.to === undefined ? {} : { to: o.to };
     return { type: 'command', ...id, command: 'nudge', axis: o.axis, delta: o.delta, ...step, ...to };
+  }
+  if (o.command === 'probeZ') {
+    if (!isNum(o.thicknessMm)) return { invalid: 'Espessura inválida' };
+    return { type: 'command', ...id, command: 'probeZ', thicknessMm: o.thicknessMm };
   }
   if (o.command === 'jogTo') {
     if (!isNum(o.x) || !isNum(o.y)) return { invalid: 'Destino inválido' };

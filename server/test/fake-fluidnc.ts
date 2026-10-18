@@ -49,6 +49,10 @@ export interface FakeOptions {
   spinupMs?: number;
   /** Como o spindown_ms: a espera ao baixar a rotação e no M5. Padrão: o spinupMs. */
   spindownMs?: number;
+  /** A placa de toque: o Z de máquina em que a fresa encosta nela. Sem isto, não há placa. */
+  plateZ?: number;
+  /** Teto da duração de um G38.2 simulado, para os testes não esperarem a descida real. */
+  probeMaxMs?: number;
 }
 
 const fmt = (v: number) => (Object.is(v, -0) ? 0 : v).toFixed(3);
@@ -75,6 +79,8 @@ export class FakeFluidNC {
   private readonly tickMs: number;
   private readonly spinupMs: number;
   private readonly spindownMs: number;
+  private readonly plateZ: number | undefined;
+  private readonly probeMaxMs: number;
   private dwellTimer: NodeJS.Timeout | null = null;
   private waiting: { sock: net.Socket; cmd: string }[] = [];
   private queue: Segment[] = [];
@@ -98,6 +104,8 @@ export class FakeFluidNC {
     this.tickMs = options.tickMs ?? 10;
     this.spinupMs = options.spinupMs ?? 0;
     this.spindownMs = options.spindownMs ?? this.spinupMs;
+    this.plateZ = options.plateZ;
+    this.probeMaxMs = options.probeMaxMs ?? 400;
     this.ticker = setInterval(() => this.step(this.tickMs), this.tickMs);
   }
 
@@ -290,6 +298,9 @@ export class FakeFluidNC {
     else if (cmd.startsWith('$J=')) this.jog(sock, cmd);
     else if (cmd.startsWith('G10 ')) this.setOffset(sock, cmd);
     else if (/^(M3|M5|S)/.test(cmd)) this.spindle(sock, cmd);
+    else if (cmd === 'G90') this.write(sock, 'ok');
+    else if (cmd.startsWith('G53 G0 ')) this.rapid(sock, cmd);
+    else if (cmd.startsWith('G90 G38.2 ')) this.probe(sock, cmd);
     else this.write(sock, 'error:20');
   }
 
@@ -311,6 +322,51 @@ export class FakeFluidNC {
     }
     this.wcoDirty = true;
     this.write(sock, 'ok');
+  }
+
+  /** G53 G0 Z…: um rápido em coordenada de máquina (só o Z, como a placa de toque usa). */
+  private rapid(sock: net.Socket, cmd: string): void {
+    const m = /^G53 G0 Z(-?\d+(?:\.\d+)?)$/.exec(cmd);
+    if (!m) return this.write(sock, 'error:2');
+    if (this.state !== 'Idle') return this.write(sock, 'error:9');
+    this.mpos = { ...this.mpos, z: Number(m[1]) };
+    this.write(sock, 'ok');
+  }
+
+  /**
+   * G90 G38.2 Z… F…: desce até encostar na placa. Como no FluidNC com
+   * check_mode_start: já encostando, alarme 4; chegou ao alvo sem encostar,
+   * [PRB:…:0] e alarme 5. As linhas seguintes esperam a descida acabar.
+   */
+  private probe(sock: net.Socket, cmd: string): void {
+    const m = /^G90 G38\.2 Z(-?\d+(?:\.\d+)?) F(\d+(?:\.\d+)?)$/.exec(cmd);
+    if (!m) return this.write(sock, 'error:2');
+    if (this.state !== 'Idle') return this.write(sock, 'error:9');
+    const plate = this.plateZ;
+    if (plate !== undefined && this.mpos.z <= plate) {
+      this.state = 'Alarm';
+      this.broadcast('ALARM:4');
+      return;
+    }
+    const target = Number(m[1]) + this.wco.z;
+    const contact = plate !== undefined && target <= plate ? plate : null;
+    const end = contact ?? target;
+    const ms = Math.min(this.probeMaxMs, (Math.abs(this.mpos.z - end) / Number(m[2])) * 60_000);
+    this.state = 'Run';
+    this.dwellTimer = setTimeout(() => {
+      this.dwellTimer = null;
+      this.mpos = { ...this.mpos, z: end };
+      if (contact !== null) {
+        this.state = 'Idle';
+        this.write(sock, `[PRB:${vec(this.mpos)}:1]`, 'ok');
+      } else {
+        this.state = 'Alarm';
+        this.write(sock, `[PRB:${vec(this.mpos)}:0]`);
+        this.broadcast('ALARM:5');
+        this.waiting = [];
+      }
+      this.drain();
+    }, ms);
   }
 
   /** M3 [S…] liga no sentido horário, M5 desliga, S… muda a rotação. */

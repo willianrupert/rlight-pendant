@@ -402,6 +402,37 @@ describe('gateway: mexer na máquina, de ponta a ponta', () => {
     expect(fake.received).not.toContain('0x18');
   });
 
+  it('a placa de toque mede o Z e zera pela espessura, com todas as telas vendo o andamento', async () => {
+    const memory = fileHomingMemory(join(mkdtempSync(join(tmpdir(), 'rlight-')), 'homing.json'));
+    memory.write(true);
+    await setup({ state: 'Idle', mpos: { x: 100, y: 200, z: -30 }, plateZ: -40 }, undefined, memory);
+    const b = await browser();
+    const watcher = await browser();
+    await until(() => live(b.state()) && b.of('profile')[0] && b.state()?.machine?.wco);
+    b.send({ type: 'takeControl' });
+    await until(() => b.state()?.control.inControl);
+    expect(await b.command({ command: 'probeZ', thicknessMm: 10 })).toMatchObject({ ok: true });
+    const done = await until(() => watcher.of('probe').find((m) => m.status === 'done'), { what: 'a medição', timeoutMs: 5_000 });
+    expect(done.zeroMachineZ).toBe(-50);
+    expect(watcher.of('probe').map((m) => m.status)).toEqual(['seeking', 'measuring', 'done']);
+    await until(() => b.state()?.machine?.wco?.z === -50, { what: 'o zero novo na tela' });
+    await until(() => fake.mpos.z === -35, { what: 'a fresa 5 mm acima da placa' });
+  });
+
+  it('sem placa embaixo: falha com o motivo, e nada mais é mandado', async () => {
+    const memory = fileHomingMemory(join(mkdtempSync(join(tmpdir(), 'rlight-')), 'homing.json'));
+    memory.write(true);
+    await setup({ state: 'Idle', mpos: { x: 100, y: 200, z: -30 } }, undefined, memory);
+    const b = await browser();
+    await until(() => live(b.state()) && b.of('profile')[0] && b.state()?.machine?.wco);
+    b.send({ type: 'takeControl' });
+    await until(() => b.state()?.control.inControl);
+    await b.command({ command: 'probeZ', thicknessMm: 10 });
+    const failed = await until(() => b.of('probe').find((m) => m.status === 'failed'), { what: 'a falha', timeoutMs: 5_000 });
+    expect(failed.reason).toBe('A fresa não encostou na placa. Aproxime mais e tente de novo.');
+    expect(fake.received.filter((l) => l.startsWith('G10'))).toEqual([]);
+  });
+
   it('o alarme da placa chega a todas as telas', async () => {
     await setup();
     const a = await browser();

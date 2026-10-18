@@ -15,6 +15,9 @@ const fake = new FakeFluidNC({
   mpos: { x: 412.3, y: 118.05, z: -3.2 },
   homingMs: 3_000,
   spinupMs: Number(process.env.RLIGHT_SIM_SPINUP_MS ?? 5_000),
+  // A placa de toque do simulador: a fresa encosta nela em Z −60 de máquina.
+  plateZ: Number(process.env.RLIGHT_SIM_PLATE_Z ?? -60),
+  probeMaxMs: 2_500,
 });
 const boardPort = await fake.listen(Number(process.env.RLIGHT_SIM_PORT ?? 0));
 

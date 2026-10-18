@@ -42,6 +42,7 @@ export type Message =
   | { kind: 'gcodeState'; words: string[] }
   | { kind: 'offset'; name: string; value: Vec3 }
   | { kind: 'toolLength'; value: number }
+  | { kind: 'probe'; at: Vec3; touched: boolean }
   | { kind: 'version'; text: string }
   | { kind: 'options'; text: string }
   | { kind: 'other'; line: string };
@@ -171,6 +172,12 @@ export function parseLine(line: string): Message {
     if (tag === 'TLO') {
       const v = num(body);
       return v === null ? { kind: 'other', line } : { kind: 'toolLength', value: v };
+    }
+    if (tag === 'PRB') {
+      // "[PRB:x,y,z:1]": a posição de máquina no toque e se tocou.
+      const pm = /^(.*):([01])$/.exec(body);
+      const v = pm ? vec3(pm[1]!) : null;
+      return v ? { kind: 'probe', at: v, touched: pm![2] === '1' } : { kind: 'other', line };
     }
     if (tag === 'VER') {
       // "[VER:3.9 FluidNC v3.9.9:]": o texto legível fica entre o espaço e o último ':'.

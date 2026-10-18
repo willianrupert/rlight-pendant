@@ -3,6 +3,7 @@
 // idade da última mensagem que chegou aqui, e servidor → máquina, pelo que o
 // servidor diz.
 
+import type { ProbeProgress } from './automations';
 import {
   combineLinks,
   initialLink,
@@ -32,7 +33,8 @@ export type CommandRequest =
   | { command: 'jogAxisTo'; axis: Axis; value: number }
   | { command: 'zero'; axis: Axis | 'all' }
   | { command: 'spindleOn' | 'spindleSpeed'; rpm: number }
-  | { command: 'cancelJog' | 'unlock' | 'home' | 'softReset' | 'feedHold' | 'resume' | 'undoZero' | 'spindleOff' };
+  | { command: 'cancelJog' | 'unlock' | 'home' | 'softReset' | 'feedHold' | 'resume' | 'undoZero' | 'spindleOff' }
+  | { command: 'probeZ'; thicknessMm: number };
 
 export type CommandName = CommandRequest['command'];
 
@@ -47,7 +49,8 @@ type ServerMessage =
   | { type: 'alarm'; code: number }
   | { type: 'control'; inControl: boolean; reason?: string }
   | { type: 'result'; id?: string; ok: boolean; reason?: string; hitLimit?: boolean; undoable?: boolean }
-  | { type: 'invalid'; reason?: string };
+  | { type: 'invalid'; reason?: string }
+  | { type: 'probe'; status: ProbeProgress['status']; reason?: string };
 
 const BACKOFF_MS = [500, 1_000, 2_000, 5_000];
 
@@ -63,6 +66,8 @@ export class Connection {
   onControl: ((inControl: boolean, reason: string | null) => void) | null = null;
   /** Resposta a um comando, pelo id que `command` devolveu. */
   onResult: ((id: string, command: CommandName, result: CommandResult) => void) | null = null;
+  /** O andamento da placa de toque (Automações), para todas as telas. */
+  onProbe: ((p: ProbeProgress) => void) | null = null;
   /** O servidor fechou: os comandos sem resposta não vão ter resposta. */
   onClose: (() => void) | null = null;
 
@@ -174,6 +179,9 @@ export class Connection {
         this.profile = p.profile;
         this.limits = p.limits;
         this.onProfile?.(p.profile);
+      } else if (msg.type === 'probe') {
+        const p = msg as { status: ProbeProgress['status']; reason?: string };
+        this.onProbe?.(p.reason ? { status: p.status, reason: p.reason } : { status: p.status });
       } else if (msg.type === 'alarm') {
         this.alarmCode = (msg as { code: number }).code;
       } else if (msg.type === 'control') {
