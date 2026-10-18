@@ -50,7 +50,8 @@ type ServerMessage =
   | { type: 'control'; inControl: boolean; reason?: string }
   | { type: 'result'; id?: string; ok: boolean; reason?: string; hitLimit?: boolean; undoable?: boolean }
   | { type: 'invalid'; reason?: string }
-  | { type: 'probe'; status: ProbeProgress['status']; reason?: string };
+  | { type: 'probe'; status: ProbeProgress['status']; reason?: string }
+  | { type: 'boardError'; code: number; line: string };
 
 const BACKOFF_MS = [500, 1_000, 2_000, 5_000];
 
@@ -81,6 +82,8 @@ export class Connection {
   onControl: ((inControl: boolean, reason: string | null) => void) | null = null;
   /** Resposta a um comando, pelo id que `command` devolveu. */
   onResult: ((id: string, command: CommandName, result: CommandResult) => void) | null = null;
+  /** A placa recusou uma linha (error:n). */
+  onBoardError: ((code: number, line: string) => void) | null = null;
   /** O andamento da placa de toque (Automações), para todas as telas. */
   onProbe: ((p: ProbeProgress) => void) | null = null;
   /** O servidor fechou: os comandos sem resposta não vão ter resposta. */
@@ -198,6 +201,9 @@ export class Connection {
         this.profile = p.profile;
         this.limits = p.limits;
         this.onProfile?.(p.profile);
+      } else if (msg.type === 'boardError') {
+        const e = msg as { code: number; line: string };
+        this.onBoardError?.(e.code, e.line);
       } else if (msg.type === 'probe') {
         const p = msg as { status: ProbeProgress['status']; reason?: string };
         this.onProbe?.(p.reason ? { status: p.status, reason: p.reason } : { status: p.status });

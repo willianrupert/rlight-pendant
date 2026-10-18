@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatMm, formatRpm, formatFeed, presentState, linkLine, splitMm } from './present';
+import { boardErrorText, formatMm, formatRpm, formatFeed, presentState, linkLine, splitMm } from './present';
 
 // DESIGN.md: palavras do ponto de vista de quem opera, vírgula decimal, ponto de milhar.
 
@@ -86,5 +86,14 @@ describe('linkLine: um indicador, não três', () => {
 
   it('idade longa em minutos', () => {
     expect(linkLine({ mode: 'no-signal', ageMs: 125_000, showBack: false, failedHop: 'server' })).toBe('Sem sinal da máquina · há 2 min');
+  });
+});
+
+describe('a placa recusou', () => {
+  it('cada código conhecido vira uma frase; o resto diz o número', () => {
+    expect(boardErrorText(15)).toBe('A placa recusou: o destino passa do curso da máquina.');
+    expect(boardErrorText(9)).toBe('A placa recusou: a máquina está travada.');
+    expect(boardErrorText(8)).toBe('A placa recusou: espere a máquina parar.');
+    expect(boardErrorText(77)).toBe('A placa recusou o comando (erro 77).');
   });
 });

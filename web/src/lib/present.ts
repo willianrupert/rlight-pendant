@@ -55,6 +55,19 @@ const ALARMS: Record<number, string> = {
   9: 'O homing não encontrou o fim de curso.',
 };
 
+// Os error:n do Grbl/FluidNC que um comando do app pode receber.
+const BOARD_ERRORS: Record<number, string> = {
+  8: 'espere a máquina parar.',
+  9: 'a máquina está travada.',
+  15: 'o destino passa do curso da máquina.',
+};
+
+/** Uma recusa da placa, numa frase. */
+export function boardErrorText(code: number): string {
+  const why = BOARD_ERRORS[code];
+  return why ? `A placa recusou: ${why}` : `A placa recusou o comando (erro ${code}).`;
+}
+
 /** O que resolve o alarme agora: homing se a posição se perdeu, desbloquear se não. */
 export function alarmAction(homed: boolean): 'home' | 'unlock' {
   return homed ? 'unlock' : 'home';

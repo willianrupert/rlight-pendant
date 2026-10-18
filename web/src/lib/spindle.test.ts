@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DIAL_SWEEP_DEG, OFF, OFF_DEG, angleFromRpm, dialAngle, rampMs, releaseAction, ringFill, spindleStatus, rpmFromAngle, snapRpm, spindleButtons, thousandsCrossed } from './spindle';
+import { DIAL_SWEEP_DEG, OFF, OFF_DEG, angleFromRpm, dialAngle, rampMs, releaseAction, ringFill, spindleStatus, spinupOver, rpmFromAngle, snapRpm, spindleButtons, thousandsCrossed } from './spindle';
 
 const r = { min: 1_800, max: 24_000 }; // minRunningRpm..maxRpm da máquina de referência
 
@@ -84,6 +84,23 @@ describe('o anel', () => {
 
   it('sem estimativa no perfil, chega direto', () => {
     expect(ringFill({ ...base, spinupMs: 0, holdProgress: 1, spinupStartedAt: 0, now: 0, running: false }).phase).toBe('running');
+  });
+});
+
+describe('o fim do spin-up estimado', () => {
+  // Visto na máquina: ligou a 3.100, trocou para 5.100, e o anel parou nos 3.100,
+  // preso à estimativa do primeiro arranque.
+  it('a placa confirmou e a rampa acabou: o anel passa a seguir a rotação reportada', () => {
+    expect(spinupOver({ running: true, phase: 'running', target: 3_100, spinupTarget: 3_100 })).toBe(true);
+  });
+
+  it('trocou a rotação no meio: a estimativa do arranque não vale mais', () => {
+    expect(spinupOver({ running: true, phase: 'spinup', target: 5_100, spinupTarget: 3_100 })).toBe(true);
+  });
+
+  it('ainda acelerando, ou a placa sem confirmar: a estimativa continua', () => {
+    expect(spinupOver({ running: true, phase: 'spinup', target: 3_100, spinupTarget: 3_100 })).toBe(false);
+    expect(spinupOver({ running: false, phase: 'running', target: 3_100, spinupTarget: 3_100 })).toBe(false);
   });
 });
 

@@ -333,8 +333,9 @@ describe('o alcance que a régua desenha', () => {
     const { m } = setup(100);
     m.sync(375, 0);
     m.reported = 375;
-    // 375 ± 400, recortado pelo curso 0..1215: do traço −3 (75) ao +4 (775)
-    expect(m.reachTicks()).toEqual({ lo: -3, hi: 4 });
+    // 375 ± 400, recortado pelo curso 0..1215: do fim do curso (o 0, traço −3,75,
+    // que é o último traço) ao +4 (775)
+    expect(m.reachTicks()).toEqual({ lo: -3.75, hi: 4 });
   });
 
   it('anda com a máquina', () => {

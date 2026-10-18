@@ -145,6 +145,16 @@ export function spindleStatus(input: {
   return 'Parado';
 }
 
+/**
+ * A estimativa do arranque deixa de valer quando a placa confirma que está ligado
+ * e a rampa estimada acabou, ou quando a rotação mudou no meio: daí o anel segue a
+ * rotação que a placa reporta.
+ */
+export function spinupOver(input: { running: boolean; phase: Ring['phase']; target: number; spinupTarget: number | null }): boolean {
+  if (!input.running) return false;
+  return input.phase === 'running' || input.target !== input.spinupTarget;
+}
+
 export interface SpindleButtons {
   /** Segurar para ligar: só com o spindle parado segundo a placa. */
   start: boolean;

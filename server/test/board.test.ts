@@ -63,6 +63,23 @@ describe('Board: leitura', () => {
     expect(board.sessions).toBe(1);
   });
 
+  it('um error da placa vem junto com a linha que o causou', async () => {
+    // Antes o servidor mandava a linha e seguia: uma recusa da placa (fora do
+    // curso, em alarme) passava em silêncio e a régua voltava sem explicação.
+    await setup(); // o falso liga em alarme: jog é recusado com error:9
+    const errors: { line: string; code: number }[] = [];
+    board.on('lineError', (e) => errors.push(e));
+    await until(() => board.profile);
+    board.send('$J=G53 G90 X10.000 F1000');
+    board.send('$X');
+    board.send('BOGUS');
+    await until(() => errors.length === 2);
+    expect(errors).toEqual([
+      { line: '$J=G53 G90 X10.000 F1000', code: 9 },
+      { line: 'BOGUS', code: 20 },
+    ]);
+  });
+
   it('as outras linhas viram mensagens tipadas', async () => {
     await setup();
     const kinds: string[] = [];

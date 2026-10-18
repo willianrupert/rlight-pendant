@@ -105,12 +105,29 @@ export class RulerModel {
     this.#batcher = new NudgeBatcher(axis, step);
   }
 
+  /**
+   * As pontas do curso, em traços, exatas (podem ser fracionárias): o fim do curso
+   * é o último traço da régua em qualquer passo. Com X em 0,9 no passo de 1 mm, o
+   * traço abaixo é o 0,0 (um passo menor), não o −0,1 que passaria do curso.
+   */
   get minTick(): number {
-    return this.limits ? Math.ceil(r6((this.limits.min - this.base) / this.step)) : -Infinity;
+    return this.limits ? r6((this.limits.min - this.base) / this.step) : -Infinity;
   }
 
   get maxTick(): number {
-    return this.limits ? Math.floor(r6((this.limits.max - this.base) / this.step)) : Infinity;
+    return this.limits ? r6((this.limits.max - this.base) / this.step) : Infinity;
+  }
+
+  /** O traço mais perto de `v`: os inteiros dentro do curso e as duas pontas exatas. */
+  #snap(v: number): number {
+    const lo = this.minTick;
+    const hi = this.maxTick;
+    const c = Math.min(hi, Math.max(lo, v));
+    let best = Math.min(Math.floor(hi), Math.max(Math.ceil(lo), Math.round(c)));
+    for (const edge of [lo, hi]) {
+      if (Number.isFinite(edge) && Math.abs(c - edge) < Math.abs(c - best)) best = edge;
+    }
+    return best;
   }
 
   /** O valor de máquina sob a linha agora. */
@@ -252,7 +269,7 @@ export class RulerModel {
       const cmd = this.#batcher.flush(now);
       if (cmd) this.deps.send({ ...cmd, to: this.#sentValue() });
     }
-    const tick = Math.round(Math.min(this.maxTick, Math.max(this.minTick, this.pos)));
+    const tick = this.#snap(this.pos);
     if (tick !== this.#clickTick) {
       const gliding = this.mode === 'glide';
       const kind = clickFor({ tick, gliding, ticksToTarget: gliding && this.target !== null ? this.target - this.pos : 0 });
@@ -265,7 +282,7 @@ export class RulerModel {
 
   /** Tocar durante o deslize segura a régua no traço mais próximo. */
   #catch(): void {
-    const caught = Math.round(Math.min(this.maxTick, Math.max(this.minTick, this.pos)));
+    const caught = this.#snap(this.pos);
     this.pos = caught;
     this.#sentTick = caught;
     const value = r6(this.base + caught * this.step);
@@ -276,7 +293,7 @@ export class RulerModel {
 
   #queueTicks(t: number): void {
     const raw = Math.min(this.maxTick, Math.max(this.minTick, this.pos));
-    const tick = this.#withinLead(Math.round(raw));
+    const tick = this.#withinLead(this.#snap(raw));
     if (tick === this.#sentTick) return;
     const dir = Math.sign(tick - this.#sentTick);
     if (this.#dir !== 0 && dir === -this.#dir && Math.abs(raw - this.#sentTick) < 0.5 + REVERSE_HYSTERESIS_TICKS) return;
@@ -308,7 +325,10 @@ export class RulerModel {
   reachTicks(): { lo: number; hi: number } | null {
     if (this.reported === null) return null;
     const r = reachOf(this.reported, this.step, this.limits);
-    return { lo: Math.ceil(r6((r.lo - this.base) / this.step) - 1e-9), hi: Math.floor(r6((r.hi - this.base) / this.step) + 1e-9) };
+    // Quando o alcance chega ao fim do curso, a ponta exata conta como traço.
+    const lo = this.limits && r.lo === this.limits.min ? this.minTick : Math.ceil(r6((r.lo - this.base) / this.step) - 1e-9);
+    const hi = this.limits && r.hi === this.limits.max ? this.maxTick : Math.floor(r6((r.hi - this.base) / this.step) + 1e-9);
+    return { lo, hi };
   }
 
   #leadWindow(): { lo: number; hi: number } | null {

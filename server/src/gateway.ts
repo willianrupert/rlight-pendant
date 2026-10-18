@@ -105,6 +105,12 @@ export class Gateway {
       }),
       b.on('disconnected', () => this.scheduleAll()),
       b.on('profile', () => this.broadcastProfile()),
+      // Uma recusa da placa não passa mais em silêncio: fica no registro do
+      // servidor e chega a todas as telas, com a linha que a causou.
+      b.on('lineError', ({ line, code }) => {
+        console.log(`placa recusou "${line}": error:${code}`);
+        this.broadcast({ type: 'boardError', code, line });
+      }),
       b.on('status', (snap) => this.onStatus(snap.state)),
       b.on('message', (m) => {
         if (m.kind === 'ok' || m.kind === 'error') this.flushDeferredSpindle();

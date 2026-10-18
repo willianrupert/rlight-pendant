@@ -46,6 +46,8 @@ export type ServerMessage =
   | { type: 'result'; id?: string; ok: true; hitLimit?: boolean; undoable?: boolean }
   | { type: 'result'; id?: string; ok: false; reason: string }
   | { type: 'alarm'; code: number }
+  /** A placa recusou uma linha (error:n): qual, para a tela dizer o motivo. */
+  | { type: 'boardError'; code: number; line: string }
   /** O andamento da placa de toque, para todas as telas. */
   | { type: 'probe'; status: 'seeking' | 'measuring' | 'done' | 'failed'; reason?: string; zeroMachineZ?: number }
   | { type: 'invalid'; reason: string };

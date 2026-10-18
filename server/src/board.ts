@@ -48,6 +48,8 @@ export interface BoardEvents {
   profile: (profile: MachineProfile) => void;
   /** Qualquer outra linha que a placa mandou (ok, error, ALARM, [MSG], ...). */
   message: (message: Message) => void;
+  /** A placa recusou uma linha nossa: qual e o código do error. */
+  lineError: (e: { line: string; code: number }) => void;
 }
 
 type Listeners = { [K in keyof BoardEvents]: Set<BoardEvents[K]> };
@@ -77,6 +79,7 @@ export class Board {
     status: new Set(),
     profile: new Set(),
     message: new Set(),
+    lineError: new Set(),
   };
   private readonly backoffMs: readonly number[];
   private readonly deadAfterMs: number;
@@ -142,6 +145,7 @@ export class Board {
     if (!this.connected || !this.sock) return false;
     this.sock.write(`${line}\n`);
     this.linesSent++;
+    this.inFlight.push(line);
     return true;
   }
 
@@ -149,7 +153,10 @@ export class Board {
     if (!this.connected || !this.sock) return false;
     this.sock.write(Buffer.from([byte]));
     // O reset descarta tudo o que a placa tinha na fila: nada mais vai responder.
-    if (byte === SOFT_RESET) this.linesAcked = this.linesSent;
+    if (byte === SOFT_RESET) {
+      this.linesAcked = this.linesSent;
+      this.inFlight = [];
+    }
     return true;
   }
 
@@ -157,6 +164,8 @@ export class Board {
   // diz se uma linha já terminou: um M3 só responde depois do spin-up (spinup_ms).
   private linesSent = 0;
   private linesAcked = 0;
+  /** As linhas ainda sem resposta, na ordem: o próximo ok/error é da primeira. */
+  private inFlight: string[] = [];
 
   /** O número da última linha enviada, para perguntar depois se ela já terminou. */
   get lastLine(): number {
@@ -187,6 +196,7 @@ export class Board {
       sock.write('$CD\n$I\n$G\n$#\n');
       this.linesSent = 4;
       this.linesAcked = 0;
+      this.inFlight = ['$CD', '$I', '$G', '$#'];
       this.startPolling();
       this.emit('connected');
     });
@@ -253,7 +263,17 @@ export class Board {
       this.emit('status', this.snapshot, message.report);
       return;
     }
-    if (message.kind === 'ok' || message.kind === 'error') this.linesAcked = Math.min(this.linesSent, this.linesAcked + 1);
+    if (message.kind === 'ok' || message.kind === 'error') {
+      this.linesAcked = Math.min(this.linesSent, this.linesAcked + 1);
+      const line = this.inFlight.shift();
+      if (message.kind === 'error' && line !== undefined) this.emit('lineError', { line, code: message.code });
+    }
+    // Um alarme descarta o que estava na fila da placa, e a linha que o causou
+    // (um G38.2 sem toque, por exemplo) não terá ok: a contagem recomeça daqui.
+    if (message.kind === 'alarm') {
+      this.linesAcked = this.linesSent;
+      this.inFlight = [];
+    }
     if (this.configLines) {
       if (message.kind === 'ok') {
         const text = this.configLines.join('\n');

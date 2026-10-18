@@ -136,6 +136,8 @@
     background: var(--sheet);
     border-radius: 28px 28px 0 0;
     padding: 14px 18px calc(env(safe-area-inset-bottom) + 24px);
+    /* A cor da folha continua até a borda de baixo, sem a faixa escurecida do iPhone. */
+    box-shadow: 0 200px 0 0 var(--sheet);
     display: flex;
     flex-direction: column;
     gap: 18px;

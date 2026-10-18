@@ -433,6 +433,18 @@ describe('gateway: mexer na máquina, de ponta a ponta', () => {
     expect(fake.received.filter((l) => l.startsWith('G10'))).toEqual([]);
   });
 
+  it('uma recusa da placa chega às telas com a linha e o código', async () => {
+    await setup({ state: 'Idle', mpos: { x: 100, y: 200, z: -10 } });
+    const b = await browser();
+    await until(() => live(b.state()) && b.of('profile')[0]);
+    b.send({ type: 'takeControl' });
+    await until(() => b.state()?.control.inControl);
+    fake.state = 'Alarm'; // a placa travou e o servidor ainda não viu
+    await b.command({ command: 'nudge', axis: 'x', delta: 1, step: 1, to: 101 });
+    const e = await until(() => b.of('boardError')[0], { what: 'a recusa' });
+    expect(e).toEqual({ type: 'boardError', code: 9, line: '$J=G53 G90 X101.000 F2000' });
+  });
+
   it('o alarme da placa chega a todas as telas', async () => {
     await setup();
     const a = await browser();

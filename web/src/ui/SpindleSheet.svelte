@@ -7,7 +7,7 @@
   import type { Clicker } from '../lib/feel';
   import { HOLD_MS, holdProgress, idleHold, pressHold } from '../lib/hold';
   import { formatRpm } from '../lib/present';
-  import { DIAL_SWEEP_DEG, OFF, OFF_DEG, angleFromRpm, dialAngle, rampMs, releaseAction, ringFill, rpmFromAngle, snapRpm, spindleButtons, spindleStatus, thousandsCrossed } from '../lib/spindle';
+  import { DIAL_SWEEP_DEG, OFF, OFF_DEG, angleFromRpm, dialAngle, rampMs, releaseAction, ringFill, rpmFromAngle, snapRpm, spindleButtons, spindleStatus, spinupOver, thousandsCrossed } from '../lib/spindle';
 
   interface Props {
     spindle: SpindleProfile;
@@ -92,6 +92,8 @@
   let raf = 0;
   let holdP = $state(0);
   let spinupAt = $state<number | null>(null);
+  /** A rotação do arranque em andamento: trocar no meio encerra a estimativa. */
+  let spinupTarget: number | null = null;
   let now = $state(performance.now());
   // O dedo ainda no ligar: os botões não mudam de lugar até ele sair (ver spindleButtons).
   let holding = $state(false);
@@ -116,6 +118,7 @@
       if (r.fire) {
         clicker.play('confirm');
         spinupAt = t;
+        spinupTarget = target;
         onstart(rpm);
         tickSpinup();
         return;
@@ -171,6 +174,13 @@
     }),
   );
   const spinningUp = $derived(ring.phase === 'spinup');
+  // A placa confirmou e a rampa acabou (ou a rotação mudou): o anel segue a rotação reportada.
+  $effect(() => {
+    if (spinupAt !== null && spinupOver({ running, phase: ring.phase, target, spinupTarget })) {
+      spinupAt = null;
+      spinupTarget = null;
+    }
+  });
   const buttons = $derived(spindleButtons({ on, spinningUp: spinupAt !== null && (spinningUp || !!pending), pending, holding }));
   function stop() {
     if (holding || performance.now() < guardUntil) return;
@@ -310,6 +320,9 @@
     background: var(--sheet);
     border-radius: 28px 28px 0 0;
     padding: 14px 22px calc(env(safe-area-inset-bottom) + 18px);
+    /* No iPhone instalado, sobrava uma faixa da tela escurecida entre a folha e a
+       borda de baixo (a área do indicador de início): a cor da folha continua até lá. */
+    box-shadow: 0 200px 0 0 var(--sheet);
     display: flex;
     flex-direction: column;
     gap: 6px;

@@ -12,7 +12,7 @@
   import { HOLD_MS, holdProgress, idleHold, pressHold, type Hold } from './lib/hold';
   import type { TableLimits } from './lib/map-view';
   import { Presence } from './lib/presence';
-  import { formatFeed, formatRpm, linkLine, presentState } from './lib/present';
+  import { boardErrorText, formatFeed, formatRpm, linkLine, presentState } from './lib/present';
   import HoldButton from './ui/HoldButton.svelte';
   import Ruler from './ui/Ruler.svelte';
   import SpindleSheet from './ui/SpindleSheet.svelte';
@@ -241,6 +241,10 @@
     conn.onProfile = (p) => {
       profile = p;
       limits = conn.limits;
+    };
+    // Só quem tem o controle mandou a linha: só ele vê a recusa.
+    conn.onBoardError = (code) => {
+      if (inControl) flash(boardErrorText(code), 4_000);
     };
     conn.onProbe = (p) => {
       probe = p;
