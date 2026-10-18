@@ -52,7 +52,9 @@ régua só mostra os traços que a máquina alcança.
 
 **Toque na mesa e "Ir".** O mapa é a mesa em escala. Um toque põe um fantasma no
 destino, com a linha do caminho. "Ir" manda um único movimento absoluto, na
-velocidade máxima que a placa informa para os eixos.
+velocidade máxima que a placa informa para os eixos. O alvo fica na mesa até a
+máquina chegar, com **quanto falta, em segundos, diminuindo ao vivo**, calculado
+com as rampas de aceleração da própria máquina.
 
 </td>
 </tr>
@@ -86,7 +88,25 @@ por 30 s.
 
 **O spindle pelo que a placa diz.** "Ligado" vem do campo `A:` do relatório, nunca
 de rotação > 0. O anel sobe pela rampa real do inversor até a rotação escolhida, e
-o app diz que isso é uma estimativa.
+o app diz que isso é uma estimativa. Desligar funciona até no meio da espera do
+spin-up do FluidNC.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+**Automações, fora da tela de controle.** A placa de toque zera o Z sozinha: desce
+rápido até encostar, recua, mede de novo devagar e zera pela espessura da placa.
+É ali que vão morar as [receitas](docs/RECEITAS.md) do Romney Rupert, o CAM
+conversacional que ele escreveu no Mach3.
+
+</td>
+<td valign="top">
+
+**Feito para a oficina.** A tela não apaga com o controle nas mãos. Uma recusa
+da placa vira uma frase, nunca um silêncio. O hodômetro conta quanto cada eixo
+andou e quanto o spindle girou, hoje e desde sempre.
 
 </td>
 </tr>
