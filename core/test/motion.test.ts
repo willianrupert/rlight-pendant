@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampToLimits, formatJog, goTo, leadForStep, nudge, resync, zBarrier, type MachineLimits } from '../src/motion';
+import { clampToLimits, formatJog, goTo, leadForStep, nudge, nudgeTo, resync, zBarrier, type MachineLimits } from '../src/motion';
 
 // ADR-0002: todo movimento manual é absoluto, tem destino e respeita o curso.
 // Os limites vêm da placa (ADR-0008); aqui usamos um perfil de exemplo.
@@ -21,6 +21,33 @@ describe('clampToLimits', () => {
 
   it('eixo sem limites conhecidos passa sem recorte', () => {
     expect(clampToLimits({}, 'x', 5000)).toEqual({ value: 5000, hitLimit: false });
+  });
+});
+
+describe('nudgeTo: a régua manda o valor absoluto sob a linha', () => {
+  // Absoluto, como o resto do movimento (ADR-0002): a tela e o servidor nunca
+  // discordam do alvo. Antes, um nudge relativo recusado deixava os dois
+  // desencontrados e a régua pulava para trás (visto na máquina, no Z e no X).
+  it('vai até o valor pedido dentro da folga', () => {
+    expect(nudgeTo({ axis: 'x', to: 101.5, commanded: 100, reported: 100, limits })).toEqual({ target: 101.5, refused: null });
+  });
+
+  it('além da folga, recorta na folga em vez de recusar', () => {
+    expect(nudgeTo({ axis: 'x', to: 110, commanded: 101, reported: 100, limits })).toEqual({ target: 102, refused: 'lead' });
+  });
+
+  it('nunca puxa para trás um alvo já aceito: a folga anda com a máquina', () => {
+    // O alvo aceito (103) está além da folga de agora (100 + 2): fica onde está.
+    expect(nudgeTo({ axis: 'x', to: 110, commanded: 103, reported: 100, limits })).toEqual({ target: 103, refused: 'lead' });
+  });
+
+  it('voltar é sempre permitido, até a folga do outro lado', () => {
+    expect(nudgeTo({ axis: 'x', to: 99, commanded: 101, reported: 100, limits }).target).toBe(99);
+    expect(nudgeTo({ axis: 'x', to: 90, commanded: 101, reported: 100, limits }).target).toBe(98);
+  });
+
+  it('o curso recorta primeiro', () => {
+    expect(nudgeTo({ axis: 'x', to: 1300, commanded: 1214, reported: 1214, limits })).toEqual({ target: 1215, refused: 'limit' });
   });
 });
 

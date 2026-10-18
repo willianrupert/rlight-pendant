@@ -10,6 +10,7 @@ import {
   goTo,
   limitsOf,
   nudge,
+  nudgeTo,
   type Axis,
   type AxisValues,
   type LinkMode,
@@ -220,15 +221,14 @@ export function planCommand(req: CommandRequest, ctx: CommandContext): Plan {
   const scale = req.step === undefined ? null : stepMotion(req.step);
   const maxLeadMm = scale ? Math.max(scale.leadMm, ctx.motion.maxLeadMm ?? 0) : ctx.motion.maxLeadMm;
   const commanded = ctx.commanded[axis] ?? mpos[axis];
-  const result = nudge({
-    axis,
-    delta,
-    commanded,
-    reported: mpos[axis],
-    limits,
-    ...(maxLeadMm === undefined ? {} : { maxLeadMm }),
-  });
-  if (result.refused === 'lead') return refuse('A régua está à frente da máquina');
+  const lead = maxLeadMm === undefined ? {} : { maxLeadMm };
+  // Com `to`, o valor absoluto da régua, recortado pela folga em vez de recusado
+  // (ADR-0002): a tela e o servidor nunca discordam do alvo. Sem `to`, o relativo antigo.
+  const result =
+    req.to !== undefined
+      ? nudgeTo({ axis, to: req.to, commanded, reported: mpos[axis], limits, ...lead })
+      : nudge({ axis, delta, commanded, reported: mpos[axis], limits, ...lead });
+  if (result.refused === 'lead' && req.to === undefined) return refuse('A régua está à frente da máquina');
   const hitLimit = result.refused === 'limit';
   // Na parede: nada a mandar, mas o pedido foi entendido.
   if (result.target === commanded) {

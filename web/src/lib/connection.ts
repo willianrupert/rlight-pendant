@@ -27,7 +27,7 @@ export interface ServerState {
 
 /** Os comandos que a tela manda (server/PROTOCOL.md, incluindo os da v1). */
 export type CommandRequest =
-  | { command: 'nudge'; axis: Axis; delta: number; step?: number }
+  | { command: 'nudge'; axis: Axis; delta: number; step?: number; to?: number }
   | { command: 'jogTo'; x: number; y: number }
   | { command: 'jogAxisTo'; axis: Axis; value: number }
   | { command: 'zero'; axis: Axis | 'all' }

@@ -14,7 +14,7 @@ export const PROTOCOL_VERSION = 1;
 
 /** Os comandos que o servidor sabe executar hoje. */
 export type CommandRequest =
-  | { command: 'nudge'; axis: Axis; delta: number; step?: number }
+  | { command: 'nudge'; axis: Axis; delta: number; step?: number; to?: number }
   | { command: 'jogTo'; x: number; y: number }
   | { command: 'jogAxisTo'; axis: Axis; value: number }
   | { command: 'zero'; axis: Axis | 'all' }
@@ -73,7 +73,9 @@ export function parseClientMessage(raw: string): ClientMessage | { invalid: stri
     if (!isNum(o.delta)) return { invalid: 'delta inválido' };
     if (o.step !== undefined && !(isNum(o.step) && o.step > 0)) return { invalid: 'Passo inválido' };
     const step = o.step === undefined ? {} : { step: o.step };
-    return { type: 'command', ...id, command: 'nudge', axis: o.axis, delta: o.delta, ...step };
+    if (o.to !== undefined && !isNum(o.to)) return { invalid: 'Destino inválido' };
+    const to = o.to === undefined ? {} : { to: o.to };
+    return { type: 'command', ...id, command: 'nudge', axis: o.axis, delta: o.delta, ...step, ...to };
   }
   if (o.command === 'jogTo') {
     if (!isNum(o.x) || !isNum(o.y)) return { invalid: 'Destino inválido' };

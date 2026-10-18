@@ -104,6 +104,16 @@ describe('planCommand: movimento absoluto (ADR-0002)', () => {
     expect(p).toMatchObject({ writes: [{ line: '$J=G53 G90 X10.000 Y10.000 F3000' }] });
   });
 
+  it('nudge com o valor absoluto: vai até ele dentro da folga', () => {
+    const p = planCommand({ command: 'nudge', axis: 'x', delta: 0, to: 101, step: 0.1 }, ctx());
+    expect(p).toMatchObject({ ok: true, writes: [{ line: '$J=G53 G90 X101.000 F1000' }], commanded: { x: 101 } });
+  });
+
+  it('nudge absoluto além da folga recorta e segue, nunca recusa (a régua não pula para trás)', () => {
+    const p = planCommand({ command: 'nudge', axis: 'x', delta: 0, to: 150, step: 0.1 }, ctx());
+    expect(p).toMatchObject({ ok: true, writes: [{ line: '$J=G53 G90 X102.000 F1000' }], commanded: { x: 102 } });
+  });
+
   it('parar manda 0x85 e o alvo volta a seguir a posição real', () => {
     const jog = snap('<Jog|MPos:100,200,-10|FS:1000,0>');
     const p = planCommand({ command: 'cancelJog' }, ctx({ snapshot: jog, commanded: { x: 101 } }));

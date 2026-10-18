@@ -67,6 +67,78 @@ describe('arrastar = nudges em lotes', () => {
   });
 });
 
+describe('o dedo decide o lado antes de a máquina andar', () => {
+  // Visto na máquina (Z e X): ao começar a deslizar, a máquina às vezes girava um
+  // pouco para o lado contrário. O ponto de contato do dedo escorrega uns pixels
+  // para trás quando ele assenta, e a régua tomava isso como arrasto.
+  it('o escorregão para trás ao assentar o dedo não manda nada para trás', () => {
+    const { m, sent } = setup();
+    let t = 0;
+    m.down(200, t);
+    m.frame(t);
+    for (const x of [203, 206, 207]) { // o dedo assenta: 7 px para trás (para a direita volta)
+      t += 40;
+      m.move(x, t);
+      m.frame(t);
+    }
+    for (let k = 1; k <= 6; k++) { // e então desliza para a frente
+      t += 30;
+      m.move(200 - k * PX_PER_TICK, t);
+      m.frame(t);
+    }
+    t += 200;
+    m.frame(t);
+    const tos = sent.filter((s) => s.command === 'nudge').map((s) => (s as { to: number }).to);
+    expect(tos.length).toBeGreaterThan(0);
+    for (const v of tos) expect(v).toBeGreaterThanOrEqual(412.3);
+  });
+
+  it('um tremor de menos de um traço contra o sentido não volta', () => {
+    const { m, sent } = setup();
+    let t = 0;
+    m.down(200, t);
+    m.frame(t);
+    for (let k = 1; k <= 3; k++) {
+      t += 30;
+      m.move(200 - k * PX_PER_TICK, t);
+      m.frame(t);
+    }
+    t += 150;
+    m.frame(t);
+    const before = sent.length;
+    t += 30;
+    m.move(200 - 3 * PX_PER_TICK + PX_PER_TICK * 0.7, t); // 0,7 traço de volta
+    for (let k = 0; k < 10; k++) m.frame((t += 20));
+    expect(sent.slice(before).filter((s) => s.command === 'nudge')).toEqual([]);
+  });
+
+  it('voltar de propósito, mais de um traço e meio, volta', () => {
+    const { m, sent } = setup();
+    let t = 0;
+    m.down(200, t);
+    m.frame(t);
+    for (let k = 1; k <= 3; k++) {
+      t += 30;
+      m.move(200 - k * PX_PER_TICK, t);
+      m.frame(t);
+    }
+    t += 150;
+    m.frame(t);
+    t += 30;
+    m.move(200 - 3 * PX_PER_TICK + PX_PER_TICK * 1.6, t);
+    for (let k = 0; k < 10; k++) m.frame((t += 20));
+    const last = sent.filter((s) => s.command === 'nudge').pop() as { to: number };
+    expect(last.to).toBeCloseTo(412.4, 6); // 412,3 + 3 traços, e 1,6 de volta arredonda para 2
+  });
+
+  it('cada nudge leva o valor absoluto sob a linha, para o servidor e a tela não desencontrarem', () => {
+    const { m, sent } = setup();
+    slowDrag(m, 4);
+    const last = sent.filter((s) => s.command === 'nudge').pop() as { to: number };
+    expect(last.to).toBeCloseTo(412.7, 6);
+  });
+});
+
 describe('soltar com inércia = um único jogAxisTo para o destino anunciado', () => {
   function flick(m: RulerModel) {
     m.down(300, 0);

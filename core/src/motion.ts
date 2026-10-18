@@ -78,6 +78,32 @@ export function nudge(input: NudgeInput): NudgeResult {
   return { target, refused: clamped.hitLimit ? 'limit' : null };
 }
 
+export interface NudgeToInput {
+  axis: Axis;
+  /** O valor absoluto sob a linha da régua, em mm de máquina. */
+  to: number;
+  commanded: number;
+  reported: number;
+  limits: MachineLimits;
+  maxLeadMm?: number;
+}
+
+/**
+ * A régua manda o valor absoluto que mostra (ADR-0002), e o servidor recorta:
+ * primeiro pelo curso, depois pela folga em volta da posição real. Recortar em vez
+ * de recusar mantém a tela e o servidor de acordo sobre o alvo; um alvo já aceito
+ * além da folga não é puxado para trás, só não avança até a máquina chegar perto.
+ */
+export function nudgeTo(input: NudgeToInput): NudgeResult {
+  const maxLead = input.maxLeadMm ?? DEFAULT_MAX_LEAD_MM;
+  const clamped = clampToLimits(input.limits, input.axis, input.to);
+  const lo = Math.min(input.reported - maxLead, input.commanded);
+  const hi = Math.max(input.reported + maxLead, input.commanded);
+  const target = roundMm(Math.min(hi, Math.max(lo, clamped.value)));
+  const refused = clamped.hitLimit ? 'limit' : target !== roundMm(clamped.value) ? 'lead' : null;
+  return { target, refused };
+}
+
 /** O fantasma do mapa: um destino em X e Y, recortado pelo curso. */
 export function goTo(
   point: { x: number; y: number },

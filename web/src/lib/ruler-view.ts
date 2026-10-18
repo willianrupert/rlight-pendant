@@ -30,6 +30,18 @@ export const PX_PER_TICK = BASE_PX_PER_TICK;
 const SETTLE_MS = 55;
 /** Um toque, não um arrasto: anda menos que isto e dura menos que aquilo. */
 const TAP_SLOP_PX = 8;
+/**
+ * O dedo decide o lado antes de a régua andar: o ponto de contato escorrega uns
+ * pixels ao assentar, às vezes para trás, e isso virava a máquina girando um pouco
+ * ao contrário (visto no Z e no X). Como no seletor do iOS, o arrasto só começa
+ * depois desta distância, medida de onde o dedo pousou.
+ */
+const DRAG_SLOP_PX = 8;
+/**
+ * Inverter o sentido pede mais que meio traço: um tremor de menos de um traço
+ * contra o sentido não manda a máquina voltar e ir de novo.
+ */
+const REVERSE_HYSTERESIS_TICKS = 0.35;
 const TAP_MS = 350;
 /** Depois de um gesto, a régua espera o servidor confirmar o alvo antes de voltar a seguir a máquina. */
 const EXPECT_MS = 2_500;
@@ -77,6 +89,10 @@ export class RulerModel {
   #expect: { value: number; until: number } | null = null;
   #startAbove = false;
   #tap: { x: number; t: number } | null = null;
+  #downX = 0;
+  #engaged = false;
+  /** O sentido do último traço enviado neste gesto: 1, −1 ou 0. */
+  #dir = 0;
   #atBarrier = false;
 
   constructor(
@@ -163,10 +179,19 @@ export class RulerModel {
     this.target = null;
     this.#samples = [{ t, x }];
     this.#lastX = x;
+    this.#downX = x;
+    this.#engaged = false;
+    this.#dir = 0;
   }
 
   move(x: number, t: number): void {
     if (this.mode !== 'drag') return;
+    if (!this.#engaged) {
+      // Dentro da folga, o dedo ainda está assentando: nada anda, nada vai.
+      if (Math.abs(x - this.#downX) < DRAG_SLOP_PX) return;
+      this.#engaged = true;
+      this.#lastX = this.#downX;
+    }
     const d = dragDelta({ dxPx: x - this.#lastX, pxPerTick: this.spacing, pos: this.pos, minTick: this.minTick, maxTick: this.maxTick });
     this.#lastX = x;
     this.pos = this.#barrierClamp(this.pos + this.#leadResist(d));
@@ -225,7 +250,7 @@ export class RulerModel {
     } else if (this.mode === 'drag') {
       // Só o que o dedo arrastou sai; com o dedo parado, nada vai para a placa.
       const cmd = this.#batcher.flush(now);
-      if (cmd) this.deps.send(cmd);
+      if (cmd) this.deps.send({ ...cmd, to: this.#sentValue() });
     }
     const tick = Math.round(Math.min(this.maxTick, Math.max(this.minTick, this.pos)));
     if (tick !== this.#clickTick) {
@@ -250,10 +275,19 @@ export class RulerModel {
   }
 
   #queueTicks(t: number): void {
-    const tick = this.#withinLead(Math.round(Math.min(this.maxTick, Math.max(this.minTick, this.pos))));
+    const raw = Math.min(this.maxTick, Math.max(this.minTick, this.pos));
+    const tick = this.#withinLead(Math.round(raw));
     if (tick === this.#sentTick) return;
+    const dir = Math.sign(tick - this.#sentTick);
+    if (this.#dir !== 0 && dir === -this.#dir && Math.abs(raw - this.#sentTick) < 0.5 + REVERSE_HYSTERESIS_TICKS) return;
     this.#batcher.add(tick - this.#sentTick, t);
     this.#sentTick = tick;
+    this.#dir = dir;
+  }
+
+  /** O valor absoluto do último traço enviado: vai em todo nudge (ADR-0002). */
+  #sentValue(): number {
+    return r6(this.base + this.#sentTick * this.step);
   }
 
   #flushTo(tick: number, t: number): void {
@@ -262,7 +296,7 @@ export class RulerModel {
     const cmd = this.#batcher.flush(t, true);
     if (cmd) {
       this.#expectValue(r6(this.base + tick * this.step), t);
-      this.deps.send(cmd);
+      this.deps.send({ ...cmd, to: this.#sentValue() });
     }
   }
 
