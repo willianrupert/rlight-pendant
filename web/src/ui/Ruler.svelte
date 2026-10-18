@@ -63,7 +63,13 @@
     shownAxis = a;
     step = savedStep(a, opts);
     model.step = step;
-    model.setAxis(a, positionOf(a) ?? model.value);
+    const at = positionOf(a);
+    model.setAxis(a, at ?? model.value);
+    // A faixa do "quanto falta" é desenhada contra as posições recentes da máquina:
+    // as do eixo anterior não valem, senão ela aparece por um instante como se a
+    // máquina estivesse andando (visto no iPhone ao trocar X, Y e Z).
+    view?.clearReported();
+    if (at !== null) view?.pushReported(at, performance.now());
     view?.invalidate();
   });
 
