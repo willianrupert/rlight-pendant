@@ -46,6 +46,11 @@
     view?.clear();
   }
 
+  /** O "Ir" foi recusado: o alvo some do mapa. */
+  export function clearTarget(): void {
+    view?.clearTarget();
+  }
+
   onMount(() => {
     view = new MapView(svg, limits);
     view.attachGauge(gauge);
@@ -90,7 +95,10 @@
     const p = view?.model.go();
     preview = null;
     pill = null;
-    if (p) onjog(p);
+    if (p) {
+      view?.setTarget(p);
+      onjog(p);
+    }
   }
 
   $effect(() => {
@@ -163,6 +171,10 @@
   .map :global(.halo) { fill: var(--acc); opacity: 0.16; }
   .map.active :global(.halo) { opacity: 0.22; }
   .map :global(.ghost circle) { fill: none; stroke: var(--acc); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
+  /* O alvo em curso: anel vazado na cor de destaque, o caminho que falta tracejado. */
+  .map :global(.target circle) { fill: none; stroke: var(--acc); stroke-width: 2; vector-effect: non-scaling-stroke; opacity: 0.9; transition: opacity 0.26s ease, transform 0.26s ease; transform-box: fill-box; transform-origin: center; }
+  .map :global(.target.arrived circle) { opacity: 0; transform: scale(1.6); }
+  .map :global(.target-path) { stroke: var(--acc); stroke-width: 1.5; stroke-dasharray: 3 5; vector-effect: non-scaling-stroke; opacity: 0.55; }
   .map :global(.path) { stroke: var(--acc); stroke-width: 2; stroke-dasharray: 4 5; vector-effect: non-scaling-stroke; opacity: 0.8; }
   /* A legenda mora dentro do mapa, embaixo: não empurra a tela. */
   .caption {

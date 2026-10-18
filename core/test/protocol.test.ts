@@ -157,6 +157,15 @@ describe('applyReport: o estado vivo da máquina', () => {
     expect(s.spindleOn).toBe(false);
   });
 
+  it('rotação reportada acima de zero já prova que está ligado, sem esperar o A:', () => {
+    // O A: vem a cada ~10 relatórios; a rotação vem em todos. O Grbl zera a rotação
+    // no M5, então rotação > 0 só existe com o spindle acionado. Antes, "Ligando…"
+    // durava ~2,5 s para uma rampa de 0,3 s (visto na máquina).
+    let s = applyReport(null, parseStatus('<Idle|MPos:0.000,0.000,0.000|FS:0,0>')!);
+    s = applyReport(s, parseStatus('<Idle|MPos:0.000,0.000,0.000|FS:0,1100>')!);
+    expect(s.spindleOn).toBe(true);
+  });
+
   it('spindle girando em S0 (máquina que não desliga com S0) continua ligado', () => {
     const s = applyReport(null, parseStatus('<Idle|MPos:0.000,0.000,0.000|FS:0,0|Ov:100,100,100|A:S>')!);
     expect(s.spindle).toBe(0);

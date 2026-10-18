@@ -27,6 +27,10 @@ export function rubber(v: number, min: number, max: number, dim: number): number
 
 /** Menos que isto não é um gesto, é um toque: nada vai para a placa. */
 export const MIN_MOVE_MM = 1;
+/** Perto assim do alvo, com a máquina parada, ela chegou. */
+export const ARRIVED_MM = 0.5;
+/** Sem ver a máquina andar até aqui depois do "Ir", o jog não começou (recusado ou perdido). */
+const NEVER_STARTED_MS = 1_500;
 export class GhostModel {
   limits: TableLimits;
   dragging = false;
@@ -37,6 +41,14 @@ export class GhostModel {
    * move a máquina pela mesa (ADR-0005). Arrastar e soltar continua indo direto.
    */
   preview: Point | null = null;
+  /**
+   * O alvo em curso: depois do "Ir" (ou de soltar o fantasma), ele fica na mesa até
+   * a máquina chegar. Se ela parar antes, some na hora: o mapa nunca mostra um
+   * destino que a máquina não vai mais buscar.
+   */
+  target: Point | null = null;
+  #targetAt = 0;
+  #sawMoving = false;
   #from: Point = { x: 0, y: 0 };
   #grab: Point = { x: 0, y: 0 };
 
@@ -107,6 +119,38 @@ export class GhostModel {
     return dest;
   }
 
+  setTarget(p: Point, now: number): void {
+    this.target = { ...p };
+    this.#targetAt = now;
+    this.#sawMoving = false;
+  }
+
+  clearTarget(): void {
+    this.target = null;
+  }
+
+  /**
+   * A cada relatório: 'arrived' quando a máquina chegou e parou (o alvo esmaece),
+   * 'stopped' quando parou em outro lugar ou nunca andou (o alvo some), null enquanto vai.
+   */
+  track(real: Point, state: MachineState | null, now: number): 'arrived' | 'stopped' | null {
+    const t = this.target;
+    if (!t) return null;
+    if (state === 'Jog') {
+      this.#sawMoving = true;
+      return null;
+    }
+    if (Math.hypot(real.x - t.x, real.y - t.y) <= ARRIVED_MM && state === 'Idle') {
+      this.target = null;
+      return 'arrived';
+    }
+    if (this.#sawMoving || state === 'Alarm' || now - this.#targetAt > NEVER_STARTED_MS) {
+      this.target = null;
+      return 'stopped';
+    }
+    return null;
+  }
+
   /** "Ir": o destino da prévia, uma vez. */
   go(): Point | null {
     const dest = this.preview;
@@ -167,6 +211,9 @@ export class MapView {
   readonly #zring: SVGCircleElement;
   readonly #trail: SVGLineElement;
   readonly #speed: SVGTextElement;
+  readonly #target: SVGGElement;
+  readonly #targetLine: SVGLineElement;
+  #fadeTimer: ReturnType<typeof setTimeout> | null = null;
   #speedShown = '';
   #recent: { x: number; y: number; t: number }[] = [];
   #tapStart: { x: number; y: number } | null = null;
@@ -219,7 +266,17 @@ export class MapView {
     this.#trail.setAttribute('class', 'trail');
     this.#speed = document.createElementNS(NS, 'text');
     this.#speed.setAttribute('class', 'speed');
-    svg.append(grid, this.#line, this.#trail, this.#halo, this.#zring, this.#real, this.#ghost, this.#speed);
+    // O alvo em curso: um anel vazado na cor de destaque e o caminho que falta.
+    this.#target = document.createElementNS(NS, 'g');
+    this.#target.setAttribute('class', 'target');
+    const tring = document.createElementNS(NS, 'circle');
+    tring.setAttribute('r', '1');
+    this.#target.append(tring);
+    this.#target.style.display = 'none';
+    this.#targetLine = document.createElementNS(NS, 'line');
+    this.#targetLine.setAttribute('class', 'target-path');
+    this.#targetLine.style.display = 'none';
+    svg.append(grid, this.#targetLine, this.#line, this.#trail, this.#halo, this.#zring, this.#target, this.#real, this.#ghost, this.#speed);
     this.setLimits(limits);
     svg.addEventListener('pointerdown', this.#down);
     svg.addEventListener('pointermove', this.#move);
@@ -375,7 +432,10 @@ export class MapView {
     if (!this.model.dragging) return;
     const dest = this.model.up();
     this.onGhost?.(null);
-    if (dest) this.onRelease?.(dest);
+    if (dest) {
+      this.setTarget(dest);
+      this.onRelease?.(dest);
+    }
   };
 
   #cancel = () => {
@@ -385,6 +445,56 @@ export class MapView {
     this.onGhost?.(null);
     if (had) this.onPreview?.(null);
   };
+
+  /** Um "Ir" saiu: o alvo fica na mesa até a máquina chegar. */
+  setTarget(p: Point): void {
+    if (this.#fadeTimer) clearTimeout(this.#fadeTimer);
+    this.#fadeTimer = null;
+    this.#target.classList.remove('arrived');
+    this.model.setTarget(p, performance.now());
+  }
+
+  /** O "Ir" foi recusado ou a tela perdeu o controle: o alvo some. */
+  clearTarget(): void {
+    this.model.clearTarget();
+  }
+
+  #drawTarget(now: number, rx: number | null, ry: number | null, k: number): void {
+    const xs = this.#bx.items;
+    const ys = this.#by.items;
+    const lx = xs[xs.length - 1]?.value;
+    const ly = ys[ys.length - 1]?.value;
+    const shown = this.model.target;
+    if (shown && lx != null && ly != null) {
+      const r = this.model.track({ x: lx, y: ly }, this.state, now);
+      if (r === 'arrived') {
+        // Esmaece no lugar e só então sai.
+        this.#target.classList.add('arrived');
+        this.#targetLine.style.display = 'none';
+        this.#fadeTimer = setTimeout(() => {
+          this.#target.style.display = 'none';
+          this.#target.classList.remove('arrived');
+          this.#fadeTimer = null;
+        }, 260);
+        return;
+      }
+    }
+    const t = this.model.target;
+    if (!t) {
+      if (!this.#fadeTimer) this.#target.style.display = 'none';
+      this.#targetLine.style.display = 'none';
+      return;
+    }
+    this.#target.style.display = '';
+    this.#target.setAttribute('transform', `translate(${t.x} ${-t.y}) scale(${12 * k})`);
+    if (rx != null && ry != null) {
+      this.#targetLine.style.display = '';
+      this.#targetLine.setAttribute('x1', String(rx));
+      this.#targetLine.setAttribute('y1', String(-ry));
+      this.#targetLine.setAttribute('x2', String(t.x));
+      this.#targetLine.setAttribute('y2', String(-t.y));
+    }
+  }
 
   #draw(now: number): void {
     const xs = this.#bx.items;
@@ -427,6 +537,7 @@ export class MapView {
       }
     }
     this.#drawMotion(now, rx ?? null, ry ?? null, k);
+    this.#drawTarget(now, rx ?? null, ry ?? null, k);
     const g = this.model.ghost ?? this.model.preview;
     if (g && rx != null && ry != null) {
       this.#ghost.style.display = '';

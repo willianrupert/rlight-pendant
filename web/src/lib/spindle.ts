@@ -127,7 +127,18 @@ export function ringFill(input: {
  * confirmar (o campo A: chega a cada ~10 relatórios), diz "Ligando…": nem
  * "Ligado", que a placa ainda não disse, nem "Parado", com o motor girando.
  */
-export function spindleStatus(input: { phase: Ring['phase']; estimatedRpm: number; on: boolean; started: boolean; reported: number }): string {
+export function spindleStatus(input: {
+  phase: Ring['phase'];
+  estimatedRpm: number;
+  on: boolean;
+  started: boolean;
+  reported: number;
+  /** Uma troca de rotação pedida que a placa ainda não reportou. */
+  adjustingTo?: number | null;
+}): string {
+  if (input.on && input.adjustingTo != null && input.reported !== input.adjustingTo) {
+    return `Ajustando · ${formatRpm(input.reported)} → ${formatRpm(input.adjustingTo)} rpm`;
+  }
   if (input.on) return input.reported > 0 ? `Ligado · ${formatRpm(input.reported)} rpm` : 'Ligado';
   if (input.phase === 'spinup') return `Acelerando · ~${formatRpm(input.estimatedRpm)} rpm`;
   if (input.started) return 'Ligando…';

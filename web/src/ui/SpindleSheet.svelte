@@ -65,10 +65,20 @@
     if (thousandsCrossed(rpm, next) > 0) clicker.play(next === OFF || next % 5000 < 1000 ? 'major' : 'minor');
     rpm = next;
   }
+  // Uma troca de rotação pedida: a folha diz "Ajustando" até a placa reportar a nova.
+  let adjustingTo = $state<number | null>(null);
+  let adjustingSince = 0;
+  $effect(() => {
+    if (adjustingTo !== null && (reported === adjustingTo || !on || performance.now() - adjustingSince > 20_000)) adjustingTo = null;
+  });
   function release() {
     const act = releaseAction({ rpm, on, canAdjust, canStop });
     if (act?.command === 'spindleOff') onstop();
-    else if (act) onadjust(act.rpm);
+    else if (act) {
+      adjustingTo = act.rpm;
+      adjustingSince = performance.now();
+      onadjust(act.rpm);
+    }
   }
   function turnUp() {
     if (!turning) return;
@@ -248,7 +258,7 @@
       <text x="150" y="178" class="unit">rpm</text>
     {/if}
     <text x="150" y="212" class="now">
-      {spindleStatus({ phase: ring.phase, estimatedRpm: ring.estimatedRpm, on: running, started: spinupAt !== null, reported })}
+      {spindleStatus({ phase: ring.phase, estimatedRpm: ring.estimatedRpm, on: running, started: spinupAt !== null, reported, adjustingTo })}
     </text>
   </svg>
 

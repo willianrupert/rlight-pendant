@@ -231,6 +231,9 @@ export function applyReport(prev: MachineSnapshot | null, r: StatusReport): Mach
     sd: r.sd ?? null,
     pins: r.pins ?? '',
     // Como no Grbl: o A: vem no mesmo relatório do Ov; Ov sem A: quer dizer tudo desligado.
-    spindleOn: r.overrides ? /[SC]/.test(r.accessories ?? '') : (prev?.spindleOn ?? false),
+    // Rotação > 0 já prova que está ligado (o Grbl zera a rotação no M5); o contrário
+    // não vale (S0 com M3 gira em algumas máquinas), então desligado só pelo A:.
+    spindleOn:
+      (r.spindle ?? 0) > 0 || (r.overrides ? /[SC]/.test(r.accessories ?? '') : (prev?.spindleOn ?? false)),
   };
 }

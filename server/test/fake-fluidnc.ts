@@ -47,6 +47,8 @@ export interface FakeOptions {
    * do ok, e as linhas seguintes esperam na fila. Só o tempo real (0x18) passa.
    */
   spinupMs?: number;
+  /** Como o spindown_ms: a espera ao baixar a rotação e no M5. Padrão: o spinupMs. */
+  spindownMs?: number;
 }
 
 const fmt = (v: number) => (Object.is(v, -0) ? 0 : v).toFixed(3);
@@ -72,6 +74,7 @@ export class FakeFluidNC {
   private readonly homingMs: number;
   private readonly tickMs: number;
   private readonly spinupMs: number;
+  private readonly spindownMs: number;
   private dwellTimer: NodeJS.Timeout | null = null;
   private waiting: { sock: net.Socket; cmd: string }[] = [];
   private queue: Segment[] = [];
@@ -94,6 +97,7 @@ export class FakeFluidNC {
     this.homingMs = options.homingMs ?? 50;
     this.tickMs = options.tickMs ?? 10;
     this.spinupMs = options.spinupMs ?? 0;
+    this.spindownMs = options.spindownMs ?? this.spinupMs;
     this.ticker = setInterval(() => this.step(this.tickMs), this.tickMs);
   }
 
@@ -320,19 +324,22 @@ export class FakeFluidNC {
       this.write(sock, 'error:9');
       return;
     }
+    // A espera do FluidNC: ao ligar e ao subir a rotação, spinup; ao baixar e no M5, spindown.
+    const before = this.spindleOn ? this.rpm : 0;
     if (m[2] !== undefined) this.rpm = Number(m[2]);
     if (m[1] === 'M5') this.spindleOn = false;
+    if (m[1] === 'M3') this.spindleOn = true;
     if (m[1]) this.ovDirty = true;
-    if (m[1] === 'M3' && !this.spindleOn && this.spinupMs > 0) {
-      this.spindleOn = true;
+    const after = this.spindleOn ? this.rpm : 0;
+    const wait = after > before ? this.spinupMs : after < before ? this.spindownMs : 0;
+    if (wait > 0) {
       this.dwellTimer = setTimeout(() => {
         this.dwellTimer = null;
         this.write(sock, 'ok');
         this.drain();
-      }, this.spinupMs);
+      }, wait);
       return;
     }
-    if (m[1] === 'M3') this.spindleOn = true;
     this.write(sock, 'ok');
   }
 

@@ -102,6 +102,12 @@ describe('a linha de estado do mostrador', () => {
     expect(spindleStatus({ phase: 'running', estimatedRpm: 0, on: true, started: false, reported: 0 })).toBe('Ligado');
   });
 
+  it('trocando a rotação: diz de onde para onde, até a placa reportar a nova', () => {
+    // Visto na máquina: a folha mostrava a rotação antiga por 6 a 8 s depois da troca.
+    expect(spindleStatus({ phase: 'running', estimatedRpm: 0, on: true, started: false, reported: 6_900, adjustingTo: 6_000 })).toBe('Ajustando · 6.900 → 6.000 rpm');
+    expect(spindleStatus({ phase: 'running', estimatedRpm: 0, on: true, started: false, reported: 6_000, adjustingTo: 6_000 })).toBe('Ligado · 6.000 rpm');
+  });
+
   it('sem pedido e sem a placa dizer que gira: parado', () => {
     expect(spindleStatus({ phase: 'idle', estimatedRpm: 0, on: false, started: false, reported: 0 })).toBe('Parado');
   });

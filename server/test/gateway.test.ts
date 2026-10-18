@@ -344,6 +344,50 @@ describe('gateway: mexer na máquina, de ponta a ponta', () => {
     expect(fake.received).not.toContain('M5');
   });
 
+  it('trocas de rotação durante a espera não fazem fila: só a última vai', async () => {
+    // Visto na máquina: cada S espera o spinup/spindown (5/10 s) e as trocas se
+    // empilhavam, com a rotação na tela atrasada 6 a 8 s.
+    await setup({ state: 'Idle', mpos: { x: 100, y: 200, z: -10 }, spinupMs: 800 });
+    const b = await browser();
+    await until(() => live(b.state()) && b.of('profile')[0]);
+    b.send({ type: 'takeControl' });
+    await until(() => b.state()?.control.inControl);
+    await b.command({ command: 'spindleOn', rpm: 6000 });
+    await b.command({ command: 'spindleSpeed', rpm: 7000 });
+    await b.command({ command: 'spindleSpeed', rpm: 8000 });
+    expect(await b.command({ command: 'spindleSpeed', rpm: 9000 })).toMatchObject({ ok: true });
+    await until(() => fake.rpm === 9000, { what: 'a última rotação', timeoutMs: 4_000 });
+    expect(fake.received.filter((l) => /^(M3|S)/.test(l))).toEqual(['M3 S6000', 'S9000']);
+  });
+
+  it('desligar durante a espera de uma troca de rotação também para na hora', async () => {
+    await setup({ state: 'Idle', mpos: { x: 100, y: 200, z: -10 }, spinupMs: 3_000 });
+    const b = await browser();
+    await until(() => live(b.state()) && b.of('profile')[0]);
+    b.send({ type: 'takeControl' });
+    await until(() => b.state()?.control.inControl);
+    fake.spindleOn = true; // já girando, sem espera
+    fake.rpm = 6000;
+    await b.command({ command: 'spindleSpeed', rpm: 9000 }); // espera 3 s
+    await sleep(100);
+    const t = Date.now();
+    await b.command({ command: 'spindleOff' });
+    await until(() => !fake.spindleOn, { what: 'o spindle parado', timeoutMs: 1_000 });
+    expect(Date.now() - t).toBeLessThan(1_000);
+    expect(fake.received).toContain('0x18');
+  });
+
+  it('depois de um comando do spindle, a placa é lida 10 vezes por segundo, para a confirmação chegar logo', async () => {
+    await setup({ state: 'Idle', mpos: { x: 100, y: 200, z: -10 } });
+    const b = await browser();
+    await until(() => live(b.state()) && b.of('profile')[0]);
+    b.send({ type: 'takeControl' });
+    await until(() => b.state()?.control.inControl);
+    expect(board.currentPollHz).toBe(4);
+    await b.command({ command: 'spindleOn', rpm: 6000 });
+    await until(() => board.currentPollHz === 10, { what: 'leitura rápida' });
+  });
+
   it('depois do spin-up, desligar volta a ser um M5', async () => {
     await setup({ state: 'Idle', mpos: { x: 100, y: 200, z: -10 }, spinupMs: 200 });
     const b = await browser();

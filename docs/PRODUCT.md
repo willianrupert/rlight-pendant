@@ -91,7 +91,7 @@ celular fechado no meio, e o tempo estimado erra menos de 10 %.
 
 ### Ideias anotadas
 
-- **O alvo fica no mapa até a máquina chegar.** Depois do "Ir", o ponto escolhido
+- ✅ *Feito em 18/10/2026.* **O alvo fica no mapa até a máquina chegar.** Depois do "Ir", o ponto escolhido
   não some: fica na mesa como um anel vazado na cor de destaque (o azul do
   fantasma, `--acc`), com a linha tracejada do caminho encolhendo à medida que a
   máquina se aproxima. Sai com um esmaecer curto quando a posição real chega ao

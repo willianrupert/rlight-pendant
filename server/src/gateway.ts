@@ -35,6 +35,8 @@ export interface GatewayOptions {
   controlGraceMs?: number;
 }
 
+/** Depois de um comando do spindle, quanto tempo a placa é lida depressa. */
+const SPINDLE_FAST_MS = 3_000;
 /** Depois de um jog, quanto tempo a frequência fica alta e o alvo não é ressincronizado. */
 const MOTION_GRACE_MS = 1_000;
 const RESYNC_AFTER_MS = 300;
@@ -57,8 +59,12 @@ export class Gateway {
   private nextId = 1;
   private commanded: AxisValues = {};
   private lastZero: ZeroMemory | null = null;
-  /** A linha do último M3, enquanto a placa não responde a ela (a espera do spin-up). */
-  private spinupLine: number | null = null;
+  /** A última linha do spindle (M3, S, M5): até a placa responder, ela está na espera. */
+  private spindleLine: number | null = null;
+  /** A troca de rotação guardada durante a espera; sai quando ela acabar. */
+  private deferredSpindle: string | null = null;
+  /** Até quando ler a placa depressa, para a confirmação do spindle chegar logo. */
+  private spindleFastUntil = -Infinity;
   private lastJogAt = -Infinity;
   private sawHoming = false;
   private firstReport = true;
@@ -88,7 +94,8 @@ export class Gateway {
       b.on('connected', () => {
         // Conexão nova: nada do que se mandou antes vale (ADR-0007).
         this.commanded = {};
-        this.spinupLine = null;
+        this.spindleLine = null;
+        this.deferredSpindle = null;
         this.firstReport = true;
         this.prevState = null;
       }),
@@ -96,6 +103,7 @@ export class Gateway {
       b.on('profile', () => this.broadcastProfile()),
       b.on('status', (snap) => this.onStatus(snap.state)),
       b.on('message', (m) => {
+        if (m.kind === 'ok' || m.kind === 'error') this.flushDeferredSpindle();
         if (m.kind !== 'alarm') return;
         this.commanded = {};
         if (!alarmKeepsHoming(m.code)) this.setHomed(false);
@@ -153,10 +161,29 @@ export class Gateway {
     this.scheduleAll();
   }
 
+  private spindleDwelling(): boolean {
+    return this.spindleLine !== null && !this.board.answered(this.spindleLine);
+  }
+
+  /** A espera acabou: a troca de rotação guardada sai agora, uma só. */
+  private flushDeferredSpindle(): void {
+    if (!this.deferredSpindle || this.spindleDwelling()) return;
+    const line = this.deferredSpindle;
+    this.deferredSpindle = null;
+    if (this.board.send(line)) {
+      this.spindleLine = this.board.lastLine;
+      this.spindleFastUntil = this.board.now() + SPINDLE_FAST_MS;
+      this.updatePoll();
+    }
+  }
+
   private updatePoll(): void {
     const state = this.board.snapshot?.state;
+    // O spindle confirma pelo campo A:, que vem a cada ~10 relatórios: depois de um
+    // comando dele, e durante a espera, ler depressa para a tela saber em ~1 s.
+    const spindleBusy = this.board.now() < this.spindleFastUntil || this.spindleDwelling();
     const moving =
-      state === 'Jog' || state === 'Home' || this.board.now() - this.lastJogAt < MOTION_GRACE_MS;
+      spindleBusy || state === 'Jog' || state === 'Home' || this.board.now() - this.lastJogAt < MOTION_GRACE_MS;
     const running = state === 'Run' || state === 'Hold';
     this.board.setPollHz(pollHzFor({ viewers: this.clients.size, moving, running }));
   }
@@ -234,7 +261,7 @@ export class Gateway {
       motion: this.motion,
       now: this.board.now(),
       lastZero: this.lastZero,
-      spindleDwelling: this.spinupLine !== null && !this.board.answered(this.spinupLine),
+      spindleDwelling: this.spindleDwelling(),
     });
     if (!plan.ok) {
       this.send(client, { type: 'result', ...ids, ok: false, reason: plan.reason });
@@ -247,7 +274,13 @@ export class Gateway {
         this.send(client, { type: 'result', ...ids, ok: false, reason: 'Sem sinal da máquina' });
         return;
       }
-      if ('line' in w && /^M3\b/.test(w.line)) this.spinupLine = this.board.lastLine;
+      if ('line' in w && /^(M3|M5|S)/.test(w.line)) this.spindleLine = this.board.lastLine;
+    }
+    if (plan.deferredLine !== undefined) this.deferredSpindle = plan.deferredLine;
+    // Desligar com o reset descarta o que estava guardado.
+    if (req.command === 'spindleOff') this.deferredSpindle = null;
+    if (req.command === 'spindleOn' || req.command === 'spindleOff' || req.command === 'spindleSpeed') {
+      this.spindleFastUntil = this.board.now() + SPINDLE_FAST_MS;
     }
     this.commanded = plan.commanded;
     if (plan.lastZero !== undefined) this.lastZero = plan.lastZero;

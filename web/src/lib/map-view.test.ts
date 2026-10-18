@@ -73,6 +73,52 @@ describe('tocar na mesa: prévia e "Ir"', () => {
   });
 });
 
+describe('o alvo fica no mapa até a máquina chegar', () => {
+  const at = (x: number, y: number) => ({ x, y });
+
+  it('depois do "Ir", o alvo fica enquanto a máquina anda', () => {
+    const m = new GhostModel(limits);
+    m.setTarget(at(600, 300), 0);
+    expect(m.track(at(100, 100), 'Idle', 50)).toBeNull(); // o jog ainda não começou
+    expect(m.target).toEqual(at(600, 300));
+    expect(m.track(at(300, 200), 'Jog', 500)).toBeNull();
+    expect(m.target).toEqual(at(600, 300));
+  });
+
+  it('a máquina chega e para: o alvo sai, com o aviso para esmaecer', () => {
+    const m = new GhostModel(limits);
+    m.setTarget(at(600, 300), 0);
+    m.track(at(300, 200), 'Jog', 500);
+    expect(m.track(at(600, 300), 'Idle', 3_000)).toBe('arrived');
+    expect(m.target).toBeNull();
+  });
+
+  it('parou antes (Parar, alarme): o alvo some na hora, nunca mostra um destino abandonado', () => {
+    const m = new GhostModel(limits);
+    m.setTarget(at(600, 300), 0);
+    m.track(at(300, 200), 'Jog', 500);
+    expect(m.track(at(350, 220), 'Idle', 900)).toBe('stopped');
+    expect(m.target).toBeNull();
+    m.setTarget(at(600, 300), 1_000);
+    m.track(at(300, 200), 'Jog', 1_200);
+    expect(m.track(at(310, 205), 'Alarm', 1_300)).toBe('stopped');
+  });
+
+  it('o jog nunca começou (recusado): depois de um tempo sem andar, some', () => {
+    const m = new GhostModel(limits);
+    m.setTarget(at(600, 300), 0);
+    expect(m.track(at(100, 100), 'Idle', 1_000)).toBeNull();
+    expect(m.track(at(100, 100), 'Idle', 2_000)).toBe('stopped');
+  });
+
+  it('um alvo novo substitui o anterior', () => {
+    const m = new GhostModel(limits);
+    m.setTarget(at(600, 300), 0);
+    m.setTarget(at(200, 100), 10);
+    expect(m.target).toEqual(at(200, 100));
+  });
+});
+
 describe('elástico', () => {
   it('dentro é identidade, fora encolhe', () => {
     expect(rubber(50, 0, 100, 10)).toBe(50);

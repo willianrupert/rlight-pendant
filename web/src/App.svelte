@@ -248,7 +248,10 @@
       if (outcome) pendingRev++;
       if (!result.ok) {
         flash(result.reason);
-        if (command === 'jogTo') mapMoveAt = null;
+        if (command === 'jogTo') {
+          mapMoveAt = null;
+          map?.clearTarget();
+        }
         if (MOVES.has(command)) ruler?.abort();
         return;
       }

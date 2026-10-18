@@ -61,7 +61,10 @@ export interface CommandContext {
   now: number;
   /** O último zero, para desfazer. */
   lastZero: ZeroMemory | null;
-  /** Um M3 ainda na espera do spin-up (spinup_ms): a placa não lê a próxima linha antes. */
+  /**
+   * Uma linha do spindle (M3, S, M5) ainda na espera do spinup_ms/spindown_ms: a
+   * placa não lê a próxima linha antes de ela acabar.
+   */
   spindleDwelling?: boolean;
 }
 
@@ -86,6 +89,11 @@ export type Plan =
       undoable?: boolean;
       /** Ausente: a memória do zero fica como está. */
       lastZero?: ZeroMemory | null;
+      /**
+       * Uma troca de rotação durante a espera do spindle: não vai agora (ficaria na
+       * fila), fica guardada e sai quando a espera acabar. Só a última conta.
+       */
+      deferredLine?: string;
     }
   | { ok: false; reason: string };
 
@@ -178,6 +186,10 @@ export function planCommand(req: CommandRequest, ctx: CommandContext): Plan {
       const hitLimit = clamped !== rpm;
       rpm = clamped;
       const line = req.command === 'spindleOn' ? `M3 S${rpm}` : `S${rpm}`;
+      // Trocar a rotação no meio da espera: guarda, e só a última troca sai no fim dela.
+      if (req.command === 'spindleSpeed' && ctx.spindleDwelling) {
+        return { ok: true, writes: [], commanded: ctx.commanded, hitLimit, moves: false, deferredLine: line };
+      }
       return { ...simple({ line }, false), hitLimit };
     }
     case 'nudge':
