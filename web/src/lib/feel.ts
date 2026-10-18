@@ -2,7 +2,13 @@
 // reutilizado, e vibração só onde o navegador vibra de verdade. No iPhone não há
 // chamada de vibração nenhuma (iOS 26 não deixa páginas vibrarem).
 
-const MIN_GAP_MS = 38; // acima de ~26 por segundo os cliques se espaçam, como no seletor do iOS
+const MIN_GAP_MS = 38;
+/**
+ * O clique: um tom curto que desce de 1600 para 840 Hz em 20 ms. Era 1900 → 1000;
+ * desceu ~3 semitons (×0,84) porque estava um pouco agudo demais no iPhone.
+ */
+const CLICK_START_HZ = 1_600;
+const CLICK_SWEEP_HZ = 760; // acima de ~26 por segundo os cliques se espaçam, como no seletor do iOS
 const SOUND_KEY = 'rlight.sound';
 
 export function isIOS(nav: Navigator = navigator): boolean {
@@ -71,7 +77,7 @@ export class Clicker {
       const ch = buf.getChannelData(0);
       for (let i = 0; i < n; i++) {
         const t = i / sr;
-        ch[i] = Math.sin(2 * Math.PI * (1900 - (900 * t) / 0.02) * t) * Math.exp(-t * 320) * 0.5;
+        ch[i] = Math.sin(2 * Math.PI * (CLICK_START_HZ - (CLICK_SWEEP_HZ * t) / 0.02) * t) * Math.exp(-t * 320) * 0.5;
       }
       this.#ctx = ctx;
       this.#buf = buf;
