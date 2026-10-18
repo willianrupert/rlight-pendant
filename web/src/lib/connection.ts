@@ -51,6 +51,21 @@ type ServerMessage =
 
 const BACKOFF_MS = [500, 1_000, 2_000, 5_000];
 
+/** O pedaço do WebSocket do navegador que a tela usa. A demonstração passa um cano em memória. */
+export interface SocketLike {
+  readonly readyState: number;
+  send(data: string): void;
+  close(): void;
+  onopen: (() => void) | null;
+  onmessage: ((e: { data: unknown }) => void) | null;
+  onclose: (() => void) | null;
+  onerror: (() => void) | null;
+}
+
+export type OpenSocket = (url: string) => SocketLike;
+
+const OPEN = 1;
+
 export class Connection {
   state: ServerState | null = null;
   profile: MachineProfile | null = null;
@@ -70,12 +85,16 @@ export class Connection {
   /** Pedidos sem resposta, em ordem de envio (o servidor responde em ordem). */
   #waiting: { id: string; command: CommandName }[] = [];
 
-  #ws: WebSocket | null = null;
+  #ws: SocketLike | null = null;
   #toServer: LinkState = initialLink();
   #attempt = 0;
   #stopped = false;
 
-  constructor(private readonly url: string) {}
+  constructor(
+    private readonly url: string,
+    // Os handlers do WebSocket recebem o evento; a Connection não usa, por isso a conversão.
+    private readonly openSocket: OpenSocket = (u) => new WebSocket(u) as unknown as SocketLike,
+  ) {}
 
   start(): void {
     this.#stopped = false;
@@ -88,7 +107,7 @@ export class Connection {
   }
 
   get open(): boolean {
-    return this.#ws?.readyState === WebSocket.OPEN;
+    return this.#ws?.readyState === OPEN;
   }
 
   takeControl(): boolean {
@@ -125,7 +144,7 @@ export class Connection {
 
   #send(msg: object): boolean {
     const ws = this.#ws;
-    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    if (!ws || ws.readyState !== OPEN) return false;
     ws.send(JSON.stringify(msg));
     return true;
   }
@@ -147,7 +166,7 @@ export class Connection {
   }
 
   #open(): void {
-    const ws = new WebSocket(this.url);
+    const ws = this.openSocket(this.url);
     this.#ws = ws;
     ws.onopen = () => {
       this.#attempt = 0;

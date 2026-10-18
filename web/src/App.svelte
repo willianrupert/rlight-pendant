@@ -17,8 +17,11 @@
   import Ruler from './ui/Ruler.svelte';
   import SpindleSheet from './ui/SpindleSheet.svelte';
   import TableMap from './ui/TableMap.svelte';
+  import { openDemoSocket } from '$demo';
 
-  const conn = new Connection(serverUrl());
+  // Na demonstração pública, o servidor e a máquina são um simulador dentro da página.
+  const demo = openDemoSocket !== null;
+  const conn = openDemoSocket ? new Connection('demo:', openDemoSocket) : new Connection(serverUrl());
   const telemetry = new Telemetry();
   const clicker = new Clicker();
   const tracker = new PendingTracker();
@@ -315,6 +318,7 @@
   <header>
     <div class="title">
       <span class="name">{profile?.name ?? 'RLight'}</span>
+      {#if demo}<span class="demo" title="Nenhuma máquina de verdade: o servidor e a CNC são simulados no navegador.">Demonstração · simulador</span>{/if}
       <h1>{live || !machine ? pres.label : 'Sem sinal'}</h1>
     </div>
     {#if hands}
@@ -542,6 +546,16 @@
   .detail { flex-basis: 100%; }
   /* O nome da máquina como sobretítulo: caixa alta, espaçada, discreta. */
   .name { font-size: 12px; font-weight: 600; color: var(--fg-3); text-transform: uppercase; letter-spacing: 0.08em; }
+  /* Honesto e discreto: ninguém confunde a demonstração com uma máquina de verdade. */
+  .demo {
+    align-self: flex-start;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--fg-2);
+    border: 1px solid var(--fg-3);
+  }
   h1 { margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -0.02em; }
   main.hands h1 { font-size: 28px; }
   .detail { margin: 6px 0 0; font-size: 16px; line-height: 1.4; color: var(--fg-2); max-width: 32ch; }
