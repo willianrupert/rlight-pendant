@@ -99,10 +99,36 @@ celular fechado no meio, e o tempo estimado erra menos de 10 %.
   o mapa nunca mostra um destino que a máquina não vai mais buscar.
   *(Pedido do usuário, 17/10/2026.)*
 
+### Roteiro do ecossistema (18/10/2026)
+
+Em ordem. Cada passo usa o que o anterior deixou pronto.
+
+1. **Fechar a v1 na máquina.** Validar na bancada o que mudou em 17–18/10
+   (spindle sem fila, desligar no spin-up, régua com folga e histerese, alvo no
+   mapa); PROC-07 (homing de X e Y juntos); a placa de toque do Z; alarmes
+   explicados.
+2. **v2 · Os trabalhos** (acima). Precisa de um cartão microSD na placa. É o
+   salto de pendant para companheiro da máquina.
+3. **Ver de fora da oficina.** Só assistir, por Tailscale, com Web Push de
+   pronto/pausa/alarme. Comandar continua só na rede local (ADR-0005).
+4. **Demonstração pública para o portfólio.** O app contra o simulador rodando no
+   próprio navegador (o FluidNC falso e o servidor num Web Worker), publicado no
+   GitHub Pages. Sem placa, sem servidor, sem dados da oficina:
+   `cnc.rlight.com.br` aponta para a rede local e continua só da oficina.
+5. **A máquina cuidando de si.** O servidor já vê tempo de spindle ligado e o
+   quanto cada eixo anda: contadores de manutenção (lubrificar, correias, horas
+   do spindle). E um diário de sessão escrito sozinho no Cortex: o que foi
+   cortado, quanto tempo, qual ferramenta.
+6. **Depois:** câmera da mesa (v3), as receitas do Romney (v4, abaixo) e um
+   volante físico (ESP32 + encoder) falando o mesmo protocolo do app: o servidor
+   é o único cliente da placa, então qualquer aparelho pode ser um pendant.
+
 ### Depois
 
 - **v3 · Câmera:** vídeo da mesa atrás do percurso.
-- **v4 · Receitas:** os geradores de peça do Romney como funções puras.
+- **v4 · Receitas:** os geradores de peça do Romney como funções puras, com a
+  peça desenhada em escala no mapa da mesa. O desenho das telas está em
+  [RECEITAS.md](RECEITAS.md).
 
 ### Nunca
 
