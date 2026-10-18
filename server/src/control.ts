@@ -12,8 +12,12 @@ import { dirname } from 'node:path';
 
 export const REASON_TAKEN = 'Outra tela assumiu o controle';
 
-/** Quanto tempo o controle espera pela tela que caiu. */
-export const CONTROL_GRACE_MS = 60_000;
+/**
+ * Quanto tempo o controle espera pela tela que caiu. Cinco minutos: dá para ir a
+ * outro app e voltar sem perder o controle; ninguém comanda nesse meio-tempo, e
+ * outra tela ainda pode assumir de propósito.
+ */
+export const CONTROL_GRACE_MS = 5 * 60_000;
 
 export class ControlSession {
   private holder: { clientId: string; token: string | undefined } | null = null;

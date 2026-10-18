@@ -39,6 +39,12 @@ export interface GatewayOptions {
   odometerMemory?: OdometerMemory;
   /** O fuso da oficina, para o "hoje" do hodômetro. */
   timeZone?: string;
+  /**
+   * De quanto em quanto tempo pingar as telas. Uma tela que não responde a um ping
+   * até o próximo (Wi-Fi morto, aba suspensa) é largada: o controle dela fica
+   * reservado e a tela retoma ao voltar.
+   */
+  pingMs?: number;
 }
 
 /** O hodômetro vai às telas a cada tanto, e é gravado a cada tanto. */
@@ -57,6 +63,8 @@ const SERVER_HOP: LinkView = { mode: 'live', ageMs: 0, showBack: false };
 interface Client {
   id: string;
   ws: WebSocket;
+  /** Respondeu ao último ping. */
+  alive: boolean;
   lastStateAt: number;
   timer: NodeJS.Timeout | null;
 }
@@ -87,6 +95,7 @@ export class Gateway {
   private firstReport = true;
   private prevState: MachineState | null = null;
   private heartbeat: NodeJS.Timeout | null = null;
+  private pinger: NodeJS.Timeout | null = null;
   private readonly unsubscribe: (() => void)[] = [];
   private readonly board: Board;
   private readonly motion: MotionSettings;
@@ -147,6 +156,7 @@ export class Gateway {
     this.wss = wss;
     wss.on('connection', (ws) => this.accept(ws));
     await new Promise<void>((resolve) => wss.once('listening', resolve));
+    this.pinger = setInterval(() => this.pingAll(), this.options.pingMs ?? 10_000);
     this.heartbeat = setInterval(() => {
       this.scheduleAll();
       this.tickOdometer();
@@ -169,7 +179,29 @@ export class Gateway {
     }
   }
 
+  /** Telas que não responderam ao último ping são largadas; as outras, pingadas de novo. */
+  private pingAll(): void {
+    for (const c of this.clients.values()) {
+      if (!c.alive) {
+        c.ws.terminate();
+        continue;
+      }
+      c.alive = false;
+      try {
+        c.ws.ping();
+      } catch {
+        /* já fechando */
+      }
+    }
+  }
+
+  /** Quantas telas estão conectadas agora. */
+  get clientCount(): number {
+    return this.clients.size;
+  }
+
   async close(): Promise<void> {
+    if (this.pinger) clearInterval(this.pinger);
     this.odometerMemory.write(this.odometer.snapshot);
     if (this.heartbeat) clearInterval(this.heartbeat);
     for (const off of this.unsubscribe) off();
@@ -255,9 +287,10 @@ export class Gateway {
   // ── As telas ───────────────────────────────────────────────────────────────
 
   private accept(ws: WebSocket): void {
-    const client: Client = { id: `c${this.nextId++}`, ws, lastStateAt: -Infinity, timer: null };
+    const client: Client = { id: `c${this.nextId++}`, ws, alive: true, lastStateAt: -Infinity, timer: null };
     this.clients.set(client.id, client);
     ws.on('message', (data) => this.onMessage(client, data.toString()));
+    ws.on('pong', () => (client.alive = true));
     ws.on('close', () => this.drop(client));
     ws.on('error', () => {});
     this.send(client, { type: 'welcome', protocol: PROTOCOL_VERSION, clientId: client.id });

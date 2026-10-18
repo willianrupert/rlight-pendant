@@ -55,6 +55,16 @@ type ServerMessage =
   | ({ type: 'odometer' } & Odometer);
 
 const BACKOFF_MS = [500, 1_000, 2_000, 5_000];
+/**
+ * O vigia: o servidor manda algo ~4 vezes por segundo. Uma conexão morta pelo
+ * Wi-Fi não fecha sozinha; sem notícias por isto, ela é dada por morta e o app
+ * reconecta na hora (e retoma o controle pelo token).
+ */
+const SILENT_MS = 4_000;
+/** Conectando há mais que isto sem abrir: tenta de novo. */
+const CONNECT_TIMEOUT_MS = 5_000;
+/** Ao voltar para o app, uma conexão quieta há mais que isto já é suspeita. */
+const RESUME_SILENT_MS = 1_200;
 
 /** O pedaço do WebSocket do navegador que a tela usa. A demonstração passa um cano em memória. */
 export interface SocketLike {
@@ -100,6 +110,11 @@ export class Connection {
   #toServer: LinkState = initialLink();
   #attempt = 0;
   #stopped = false;
+  /** Quando abriu o socket atual e quando chegou a última mensagem (ou abriu). */
+  #openedAt = 0;
+  #heardAt = 0;
+  #watch: ReturnType<typeof setInterval> | null = null;
+  #retry: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private readonly url: string,
@@ -110,11 +125,66 @@ export class Connection {
   start(): void {
     this.#stopped = false;
     this.#open();
+    this.#watch = setInterval(() => this.checkAlive(), 1_000);
   }
 
   stop(): void {
     this.#stopped = true;
+    if (this.#watch) clearInterval(this.#watch);
+    if (this.#retry) clearTimeout(this.#retry);
+    this.#watch = this.#retry = null;
     this.#ws?.close();
+  }
+
+  /** O vigia: uma conexão muda ou presa conectando é trocada por uma nova, na hora. */
+  checkAlive(now: number = performance.now()): void {
+    const ws = this.#ws;
+    if (this.#stopped || !ws) return;
+    const dead =
+      (ws.readyState === OPEN && now - this.#heardAt > SILENT_MS) ||
+      (ws.readyState !== OPEN && now - this.#openedAt > CONNECT_TIMEOUT_MS);
+    if (dead) this.#reconnectNow();
+  }
+
+  /**
+   * De volta ao app (tela destravada, outro app fechado, rede de volta): o iPhone
+   * pode ter suspendido a aba; uma conexão quieta já é trocada, sem esperar o vigia.
+   */
+  resume(now: number = performance.now()): void {
+    const ws = this.#ws;
+    if (this.#stopped) return;
+    if (!ws) {
+      this.#reconnectNow();
+      return;
+    }
+    if (ws.readyState !== OPEN || now - this.#heardAt > RESUME_SILENT_MS) this.#reconnectNow();
+  }
+
+  /** Larga o socket atual sem esperar ele fechar (pode nunca fechar) e abre outro. */
+  #reconnectNow(): void {
+    const old = this.#ws;
+    if (old) {
+      old.onopen = old.onmessage = old.onclose = old.onerror = null;
+      try {
+        old.close();
+      } catch {
+        /* já morto */
+      }
+      this.#lost();
+    }
+    if (this.#retry) clearTimeout(this.#retry);
+    this.#retry = null;
+    this.#attempt = 0;
+    this.#open();
+  }
+
+  /** O que estava esperando resposta não vai ter: avisa e esvazia. */
+  #lost(): void {
+    this.#ws = null;
+    const lost = this.#waiting;
+    this.#waiting = [];
+    for (const w of lost) this.onResult?.(w.id, w.command, { ok: false, reason: 'Sem sinal do servidor' });
+    this.onClose?.();
   }
 
   get open(): boolean {
@@ -179,12 +249,15 @@ export class Connection {
   #open(): void {
     const ws = this.openSocket(this.url);
     this.#ws = ws;
+    this.#openedAt = this.#heardAt = performance.now();
     ws.onopen = () => {
       this.#attempt = 0;
+      this.#heardAt = performance.now();
       if (this.#hadControl) this.#resuming = this.#send({ type: 'resumeControl', token: this.#token });
     };
     ws.onmessage = (e) => {
       const now = performance.now();
+      this.#heardAt = now;
       this.#toServer = onReport(this.#toServer, now);
       let msg: ServerMessage;
       try {
@@ -233,15 +306,15 @@ export class Connection {
       }
     };
     ws.onclose = () => {
-      this.#ws = null;
-      const lost = this.#waiting;
-      this.#waiting = [];
-      for (const w of lost) this.onResult?.(w.id, w.command, { ok: false, reason: 'Sem sinal do servidor' });
-      this.onClose?.();
+      if (this.#ws !== ws) return;
+      this.#lost();
       if (this.#stopped) return;
       const wait = BACKOFF_MS[Math.min(this.#attempt, BACKOFF_MS.length - 1)]!;
       this.#attempt++;
-      setTimeout(() => this.#open(), wait);
+      this.#retry = setTimeout(() => {
+        this.#retry = null;
+        if (!this.#stopped && !this.#ws) this.#open();
+      }, wait);
     };
     ws.onerror = () => ws.close();
   }

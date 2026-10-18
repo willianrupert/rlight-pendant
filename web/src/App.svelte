@@ -233,6 +233,14 @@
 
   onMount(() => {
     document.addEventListener('contextmenu', noSelect);
+    // De volta ao app (tela destravada, outro app fechado, rede de volta): o iPhone
+    // pode ter suspendido a aba e deixado a conexão morta; reconecta na hora.
+    const back = () => {
+      if (document.visibilityState === 'visible') conn.resume();
+    };
+    document.addEventListener('visibilitychange', back);
+    window.addEventListener('online', back);
+    window.addEventListener('pageshow', back);
     document.addEventListener('selectstart', noSelect);
     for (const a of axes) if (roots[a]) telemetry.attach(a, roots[a]!);
     conn.onState = (s, at) => {

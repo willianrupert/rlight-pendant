@@ -130,7 +130,7 @@ Assumir é sempre explícito e sempre funciona: quem tinha o controle recebe
 
 **Uma queda curta não tira o controle.** Se a conexão de quem tem o controle cai
 (tela apagada, Wi-Fi, reinício do servidor), o controle fica reservado para o
-token dela por 60 s; ninguém comanda nesse meio-tempo, e as outras telas veem
+token dela por 5 minutos; ninguém comanda nesse meio-tempo, e as outras telas veem
 `controlled: true`. A mesma aba, ao reconectar, manda `resumeControl` e recebe
 `control` com `inControl: true`, ou `false` se a janela passou ou outra tela
 assumiu. A reserva sobrevive a reinícios do servidor (`RLIGHT_STATE_DIR/control.json`).

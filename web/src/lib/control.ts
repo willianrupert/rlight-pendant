@@ -24,7 +24,7 @@ export interface ActionSlot {
   label: string;
   /** O perigoso se confirma segurando. */
   hold: boolean;
-  tone: 'primary' | 'normal' | 'danger';
+  tone: 'primary' | 'normal' | 'danger' | 'quiet';
 }
 
 /** Um lugar fixo na barra de ações. Vazio continua ocupando o lugar. */
@@ -80,8 +80,24 @@ export function barSlots(
     const tone = want === 'softReset' ? 'danger' : primary ? 'primary' : 'normal';
     return { kind: 'action', command: want, label: LABELS[want], hold: HOLD.has(want), tone };
   };
+  if (state === 'Alarm') return alarmSlots(ctx);
   const [a, b, c] = LAYOUT[state];
   return [slot(a, 0), slot(b, 1), slot(c, 2)];
+}
+
+/**
+ * No alarme, uma ação principal no meio: o homing se a posição se perdeu, o
+ * desbloquear se não. Desbloquear sem homing (para se afastar de um fim de curso,
+ * por exemplo) fica discreto ao lado. O Resetar não aparece: um reset não limpa o
+ * alarme, e três botões lado a lado confundiam (visto no iPhone).
+ */
+function alarmSlots(ctx: PolicyContext & { canHome: boolean }): [Slot, Slot, Slot] {
+  const action = (command: ActionCommand, tone: ActionSlot['tone'], hold: boolean): Slot =>
+    allowed(command, 'Alarm', ctx).ok ? { kind: 'action', command, label: LABELS[command], hold, tone } : null;
+  if (alarmAction(ctx.homed) === 'home' && ctx.canHome) {
+    return [null, action('home', 'primary', true), action('unlock', 'quiet', false)];
+  }
+  return [null, action('unlock', 'primary', false), null];
 }
 
 /** O que o comando muda e por isso confirma quando o estado novo chega. */

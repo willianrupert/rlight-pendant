@@ -42,7 +42,7 @@ describe('a barra de ações: três lugares fixos', () => {
     expect(view('Jog')).toEqual(['spindle', 'Parar', '—']);
     expect(view('Run')).toEqual(['spindle', 'Pausar', 'Resetar']);
     expect(view('Hold')).toEqual(['spindle', 'Retomar', 'Resetar']);
-    expect(view('Alarm')).toEqual(['Homing', 'Desbloquear', 'Resetar']);
+    expect(view('Alarm')).toEqual(['—', 'Desbloquear', '—']);
   });
 
   it('durante o homing, Resetar fica no meio', () => {
@@ -51,9 +51,12 @@ describe('a barra de ações: três lugares fixos', () => {
 
   it('no alarme, o destaque vai para o que resolve: homing se a posição se perdeu, desbloquear se não', () => {
     // Os lugares não mudam (nada pula); só o destaque.
-    expect(barSlots('Alarm', { ...ctx, homed: false })[0]).toMatchObject({ command: 'home', tone: 'primary' });
-    expect(barSlots('Alarm', { ...ctx, homed: false })[1]).toMatchObject({ command: 'unlock', tone: 'normal' });
-    expect(barSlots('Alarm', ctx)[0]).toMatchObject({ command: 'home', tone: 'normal' });
+    // Visto no iPhone: Homing, Desbloquear e Resetar lado a lado confundiam. Agora
+    // uma ação principal no meio; desbloquear sem homing fica discreto ao lado, e o
+    // Resetar sai (um reset não limpa o alarme).
+    expect(view('Alarm', { ...ctx, homed: false })).toEqual(['—', 'Homing', 'Desbloquear']);
+    expect(barSlots('Alarm', { ...ctx, homed: false })[1]).toMatchObject({ command: 'home', tone: 'primary', hold: true });
+    expect(barSlots('Alarm', { ...ctx, homed: false })[2]).toMatchObject({ command: 'unlock', tone: 'quiet', hold: false });
     expect(barSlots('Alarm', ctx)[1]).toMatchObject({ command: 'unlock', tone: 'primary' });
   });
 
@@ -64,13 +67,14 @@ describe('a barra de ações: três lugares fixos', () => {
   });
 
   it('homing e resetar se confirmam segurando; resetar é perigoso', () => {
-    expect(barSlots('Alarm', ctx)[0]).toMatchObject({ command: 'home', hold: true });
-    expect(barSlots('Alarm', ctx)[2]).toMatchObject({ command: 'softReset', hold: true, tone: 'danger' });
+    expect(barSlots('Idle', ctx)[1]).toMatchObject({ command: 'home', hold: true });
+    expect(barSlots('Run', ctx)[2]).toMatchObject({ command: 'softReset', hold: true, tone: 'danger' });
   });
 
   it('máquina sem homing nem spindle: os lugares ficam vazios, não somem', () => {
     const none = { ...ctx, canHome: false, hasSpindle: false };
-    expect(view('Alarm', none)).toEqual(['—', 'Desbloquear', 'Resetar']);
+    expect(view('Alarm', none)).toEqual(['—', 'Desbloquear', '—']);
+    expect(view('Alarm', { ...none, homed: false })).toEqual(['—', 'Desbloquear', '—']);
     expect(view('Idle', none)).toEqual(['—', '—', 'zeroAll']);
   });
 

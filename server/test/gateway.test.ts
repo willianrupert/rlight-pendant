@@ -179,6 +179,22 @@ describe('gateway: a sessão de controle', () => {
     expect(m).toEqual({ type: 'control', inControl: false });
   });
 
+  it('uma tela que parou de responder (Wi-Fi morto) é largada pelo ping, e o controle fica reservado', async () => {
+    fake = new FakeFluidNC({ state: 'Idle', mpos: { x: 100, y: 200, z: -10 } });
+    const port = await fake.listen();
+    board = new Board({ host: '127.0.0.1', port, backoffMs: [20, 40, 80], deadAfterMs: 5_000 });
+    board.start();
+    gateway = new Gateway({ board, pingMs: 150 });
+    wsPort = await gateway.start();
+    const a = await browser();
+    const watcher = await browser();
+    a.send({ type: 'takeControl', token: 'tok-a-0123456789abcdef' });
+    await until(() => a.of('control')[0]?.inControl);
+    a.ws.pause(); // não lê mais nada: os pings ficam sem resposta, como um Wi-Fi morto
+    await until(() => watcher.state()?.control.inControl === false && gateway.clientCount === 1, { what: 'a tela morta largada', timeoutMs: 2_000 });
+    expect(watcher.state()?.control.controlled).toBe(true); // reservado para ela voltar
+  });
+
   it('mensagem inválida volta com o motivo', async () => {
     await setup();
     const b = await browser();
