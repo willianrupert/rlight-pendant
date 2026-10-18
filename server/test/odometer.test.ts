@@ -20,6 +20,15 @@ describe('Odometer', () => {
     expect(o.snapshot.total).toEqual({ x: 40, y: 5, z: 2, spindleMs: 0 });
   });
 
+  it('um movimento curto que cabe entre dois relatórios também conta', () => {
+    // Visto na CI: 3 mm a 2000 mm/min acabam em 90 ms; os dois relatórios dizem
+    // Idle, mas a posição mudou, e a posição só muda andando.
+    const o = new Odometer(null, 'America/Sao_Paulo');
+    o.onReport(at(100), false, 'Idle', T0);
+    o.onReport(at(103), false, 'Idle', T0 + 100);
+    expect(o.snapshot.today.x).toBe(3);
+  });
+
   it('um salto de posição (reconexão, reset) não conta como andar', () => {
     const o = new Odometer(null, 'America/Sao_Paulo');
     o.onReport(at(0), false, 'Jog', T0);

@@ -24,7 +24,6 @@ export interface OdoState {
 const MAX_STEP_MM = 300;
 /** Um buraco de relatório não vira tempo de spindle além disto. */
 const MAX_SPINDLE_GAP_MS = 2_000;
-const MOVING: ReadonlySet<MachineState> = new Set(['Jog', 'Run', 'Home']);
 
 const zero = (): OdoTotals => ({ x: 0, y: 0, z: 0, spindleMs: 0 });
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
@@ -57,14 +56,13 @@ export class Odometer {
     }
     const last = this.#last;
     if (pos && last) {
-      // O trecho conta se a máquina andava num dos dois relatórios.
-      if (MOVING.has(last.state) || MOVING.has(state)) {
-        const d = { x: Math.abs(pos.x - last.pos.x), y: Math.abs(pos.y - last.pos.y), z: Math.abs(pos.z - last.pos.z) };
-        if (d.x <= MAX_STEP_MM && d.y <= MAX_STEP_MM && d.z <= MAX_STEP_MM) {
-          for (const a of ['x', 'y', 'z'] as const) {
-            this.#s.today[a] = r3(this.#s.today[a] + d[a]);
-            this.#s.total[a] = r3(this.#s.total[a] + d[a]);
-          }
+      // A posição só muda andando: todo trecho conta, mesmo um jog curto que coube
+      // entre dois relatórios em Idle. Só um salto (reconexão, reset) fica de fora.
+      const d = { x: Math.abs(pos.x - last.pos.x), y: Math.abs(pos.y - last.pos.y), z: Math.abs(pos.z - last.pos.z) };
+      if (d.x <= MAX_STEP_MM && d.y <= MAX_STEP_MM && d.z <= MAX_STEP_MM) {
+        for (const a of ['x', 'y', 'z'] as const) {
+          this.#s.today[a] = r3(this.#s.today[a] + d[a]);
+          this.#s.total[a] = r3(this.#s.total[a] + d[a]);
         }
       }
       if (last.spindle) {
