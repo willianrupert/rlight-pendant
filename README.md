@@ -18,6 +18,11 @@
 </p>
 
 <p align="center">
+  <a href="https://willianrupert.github.io/rlight-pendant/"><b>▶ Experimente no navegador</b></a><br>
+  <sub>Uma demonstração com a máquina simulada: a régua, o mapa com o Ir e o spindle, sem CNC nenhuma.</sub>
+</p>
+
+<p align="center">
   <img src="docs/images/hero.png" alt="Três telas do app: a máquina andando, o mapa com o destino e o botão Ir, e o mostrador do spindle">
 </p>
 
@@ -155,6 +160,13 @@ npm run typecheck  # TypeScript estrito nos três pacotes
 ```bash
 npm run sim   # simulador + servidor na porta 8787
 npm run dev   # o app em http://<ip-do-computador>:5180
+```
+
+**Só no navegador** (a demonstração do Pages: simulador e servidor rodando na
+página, sem processo nenhum):
+
+```bash
+npm run demo  # o app com a máquina simulada, em http://localhost:5180
 ```
 
 **Contra uma máquina de verdade:**
