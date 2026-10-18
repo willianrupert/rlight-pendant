@@ -104,6 +104,30 @@ export function nudgeTo(input: NudgeToInput): NudgeResult {
   return { target, refused };
 }
 
+/**
+ * Quanto falta para chegar, em segundos, com a rampa da máquina: aceleração
+ * constante até a velocidade máxima, cruzeiro e frenagem até parar (o trapézio
+ * do planejador do Grbl/FluidNC). `speedMmPerMin` é a velocidade agora (o FS da
+ * placa). Uma estimativa: as emendas entre trechos não entram, e o "Ir" é um só.
+ */
+export function remainingMoveSeconds(input: {
+  distanceMm: number;
+  speedMmPerMin: number;
+  maxMmPerMin: number;
+  accelMmPerS2: number;
+}): number {
+  const d = input.distanceMm;
+  const a = input.accelMmPerS2;
+  const vmax = input.maxMmPerMin / 60;
+  if (d <= 0 || a <= 0 || vmax <= 0) return 0;
+  const v0 = Math.min(vmax, Math.max(0, input.speedMmPerMin / 60));
+  // Já não dá para acelerar: só a frenagem, que termina no destino.
+  if (v0 > 0 && (v0 * v0) / (2 * a) >= d) return (2 * d) / v0;
+  const vp = Math.min(vmax, Math.sqrt(a * d + (v0 * v0) / 2));
+  const ramps = (2 * vp * vp - v0 * v0) / (2 * a);
+  return (vp - v0) / a + vp / a + Math.max(0, d - ramps) / vmax;
+}
+
 /** O fantasma do mapa: um destino em X e Y, recortado pelo curso. */
 export function goTo(
   point: { x: number; y: number },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampToLimits, formatJog, goTo, leadForStep, nudge, nudgeTo, resync, zBarrier, type MachineLimits } from '../src/motion';
+import { clampToLimits, formatJog, goTo, leadForStep, nudge, nudgeTo, remainingMoveSeconds, resync, zBarrier, type MachineLimits } from '../src/motion';
 
 // ADR-0002: todo movimento manual é absoluto, tem destino e respeita o curso.
 // Os limites vêm da placa (ADR-0008); aqui usamos um perfil de exemplo.
@@ -157,5 +157,30 @@ describe('leadForStep: quanto a régua pode ficar à frente, conforme o passo', 
     expect(leadForStep(1)).toBe(4);
     expect(leadForStep(10)).toBe(40);
     expect(leadForStep(100)).toBe(400);
+  });
+});
+
+describe('remainingMoveSeconds: quanto falta, com as rampas da máquina', () => {
+  // X e Y da RLight: 3000 mm/min (50 mm/s) e 250 mm/s², do Motor Tuning do Mach3.
+  const m = { maxMmPerMin: 3000, accelMmPerS2: 250 };
+
+  it('parado, longe: acelera 0,2 s, anda, freia 0,2 s', () => {
+    expect(remainingMoveSeconds({ ...m, distanceMm: 600, speedMmPerMin: 0 })).toBeCloseTo(12.2, 6);
+  });
+
+  it('parado, perto: nem chega à velocidade máxima', () => {
+    expect(remainingMoveSeconds({ ...m, distanceMm: 5, speedMmPerMin: 0 })).toBeCloseTo((2 * Math.sqrt(1250)) / 250, 6);
+  });
+
+  it('andando a toda: o que falta de cruzeiro mais a frenagem', () => {
+    expect(remainingMoveSeconds({ ...m, distanceMm: 10, speedMmPerMin: 3000 })).toBeCloseTo(0.3, 6);
+  });
+
+  it('já freando: o que resta da frenagem', () => {
+    expect(remainingMoveSeconds({ ...m, distanceMm: 2, speedMmPerMin: 3000 })).toBeCloseTo(0.08, 6);
+  });
+
+  it('chegou: zero', () => {
+    expect(remainingMoveSeconds({ ...m, distanceMm: 0, speedMmPerMin: 0 })).toBe(0);
   });
 });

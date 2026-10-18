@@ -17,7 +17,8 @@
   import Ruler from './ui/Ruler.svelte';
   import SpindleSheet from './ui/SpindleSheet.svelte';
   import AutomationsSheet from './ui/AutomationsSheet.svelte';
-  import type { ProbeProgress } from './lib/automations';
+  import type { Odometer, ProbeProgress } from './lib/automations';
+  import { ScreenAwake } from './lib/wake';
   import TableMap from './ui/TableMap.svelte';
   import { openDemoSocket } from '$demo';
 
@@ -49,6 +50,7 @@
   // A tela de Automações (placa de toque, receitas): fora da tela de controle.
   let automations = $state(false);
   let probe = $state<ProbeProgress | null>(null);
+  let odometer = $state<Odometer | null>(null);
   let ruler: ReturnType<typeof Ruler> | null = $state(null);
   let map: ReturnType<typeof TableMap> | null = $state(null);
   /** O estado que a tela mostra: o real, com histerese entre repouso e movimento. */
@@ -68,6 +70,9 @@
   const ov = $derived(machine?.overrides ?? null);
 
   const hands = $derived(controlsVisible({ live, inControl, hasMachine: !!machine }));
+  // Com o controle nas mãos, a tela não apaga (lib/wake.ts).
+  const awake = new ScreenAwake();
+  $effect(() => awake.set(inControl));
   const offerControl = $derived(canTakeControl({ live, inControl, hasMachine: !!machine }));
   const otherControls = $derived(!inControl && (st?.control.controlled ?? false));
   const ctx = $derived({ link: link.mode, inControl, homed, canHome: profile?.canHome ?? true });
@@ -76,6 +81,13 @@
   const shows = (c: Command) => !!shown && allowed(c, shown, ctx).ok;
 
   const table = $derived<TableLimits | null>(limits.x && limits.y ? { x: limits.x, y: limits.y } : null);
+  // O "Ir" anda na menor velocidade máxima e aceleração de X e Y (o servidor faz o mesmo).
+  const mapMotion = $derived.by(() => {
+    const x = profile?.axes.x;
+    const y = profile?.axes.y;
+    if (!x || !y || !(x.maxRateMmPerMin > 0 && y.maxRateMmPerMin > 0)) return null;
+    return { maxMmPerMin: Math.min(x.maxRateMmPerMin, y.maxRateMmPerMin), accelMmPerS2: Math.min(x.accelMmPerS2, y.accelMmPerS2) };
+  });
   const showMap = $derived(hands && !!table && !!shown && ['Idle', 'Jog'].includes(shown));
   const ghost = $derived(hands && shows('jogTo') && shown === 'Idle');
   // Depois de um movimento pelo mapa (longo, de propósito), a barra mostra o Parar
@@ -246,6 +258,7 @@
     conn.onBoardError = (code) => {
       if (inControl) flash(boardErrorText(code), 4_000);
     };
+    conn.onOdometer = (o) => (odometer = o);
     conn.onProbe = (p) => {
       probe = p;
       if (p.status === 'failed') clicker.play('wall');
@@ -355,6 +368,7 @@
     <TableMap
       bind:this={map}
       limits={table}
+      motion={mapMotion}
       {ghost}
       moving={machine?.state === 'Jog'}
       frozen={!live}
@@ -537,6 +551,7 @@
     {probe}
     canStop={may('feedHold')}
     {sound}
+    {odometer}
     {clicker}
     onprobe={(thicknessMm) => {
       probe = null;

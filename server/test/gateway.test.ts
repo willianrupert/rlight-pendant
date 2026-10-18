@@ -445,6 +445,22 @@ describe('gateway: mexer na máquina, de ponta a ponta', () => {
     expect(e).toEqual({ type: 'boardError', code: 9, line: '$J=G53 G90 X101.000 F2000' });
   });
 
+  it('o hodômetro soma o que a máquina andou e chega a quem conecta', async () => {
+    await setup({ state: 'Idle', mpos: { x: 100, y: 200, z: -10 } });
+    const b = await browser();
+    await until(() => live(b.state()) && b.of('profile')[0]);
+    expect(b.of('odometer')[0]).toMatchObject({ type: 'odometer', today: { x: 0, y: 0, z: 0, spindleMs: 0 } });
+    b.send({ type: 'takeControl' });
+    await until(() => b.state()?.control.inControl);
+    await b.command({ command: 'nudge', axis: 'x', delta: 0, step: 1, to: 103 });
+    await until(() => b.state()?.machine?.mpos?.x === 103 && b.state()?.machine?.state === 'Idle', { what: 'a máquina parada em 103' });
+    await sleep(300);
+    const later = await browser();
+    const odo = await until(() => later.of('odometer')[0], { what: 'o hodômetro' });
+    expect(odo.today.x).toBeCloseTo(3, 3);
+    expect(odo.total.x).toBeCloseTo(3, 3);
+  });
+
   it('o alarme da placa chega a todas as telas', async () => {
     await setup();
     const a = await browser();

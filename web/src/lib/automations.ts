@@ -24,6 +24,37 @@ export function probeLine(p: ProbeProgress | null): string | null {
   }
 }
 
+export interface OdoTotals {
+  x: number;
+  y: number;
+  z: number;
+  spindleMs: number;
+}
+
+export interface Odometer {
+  day: string;
+  today: OdoTotals;
+  total: OdoTotals;
+}
+
+const comma = (v: number, digits: number) => v.toFixed(digits).replace('.', ',');
+
+/** Quanto um eixo andou: mm perto, metros, quilômetros. */
+export function formatDistance(mm: number): string {
+  if (mm < 1_000) return `${Math.round(mm)} mm`;
+  if (mm < 1_000_000) return `${comma(mm / 1_000, 1)} m`;
+  return `${comma(mm / 1_000_000, 2)} km`;
+}
+
+/** Quanto tempo: segundos, minutos, horas e minutos. */
+export function formatDuration(ms: number): string {
+  const s = Math.round(ms / 1_000);
+  if (s < 60) return `${s} s`;
+  const min = Math.floor(s / 60);
+  if (min < 60) return `${min} min`;
+  return `${Math.floor(min / 60)} h ${min % 60} min`;
+}
+
 /** A espessura digitada, em mm (vírgula ou ponto), ou null se não vale (0 a 50 mm). */
 export function parseThickness(text: string): number | null {
   const v = Number(text.trim().replace(',', '.'));

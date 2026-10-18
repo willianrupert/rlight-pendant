@@ -15,6 +15,16 @@ export type Feel = 'minor' | 'major' | 'confirm' | 'wall';
 const VIBRATION: Record<Feel, number | number[]> = { minor: 6, major: 12, confirm: [10, 40, 10], wall: 18 };
 const GAIN: Record<Feel, number> = { minor: 0.26, major: 0.48, confirm: 0.5, wall: 0.6 };
 
+/**
+ * A afinação do clique pela velocidade da régua (traços por segundo): até 4/s o
+ * clique de sempre; mais rápido, sobe devagar, como uma catraca girando mais
+ * depressa, até meia oitava acima. Nunca vira um chiado.
+ */
+export function pitchFor(ticksPerSecond: number): number {
+  if (!(ticksPerSecond > 4)) return 1;
+  return Math.min(1.5, 1 + Math.log2(ticksPerSecond / 4) * 0.18);
+}
+
 export class Clicker {
   #ctx: AudioContext | null = null;
   #buf: AudioBuffer | null = null;
@@ -70,7 +80,7 @@ export class Clicker {
     }
   }
 
-  play(kind: Feel): void {
+  play(kind: Feel, rate = 1): void {
     const now = performance.now();
     if (kind !== 'confirm' && now - this.#last < MIN_GAP_MS) return;
     this.#last = now;
@@ -79,6 +89,7 @@ export class Clicker {
     const s = this.#ctx.createBufferSource();
     const g = this.#ctx.createGain();
     s.buffer = this.#buf;
+    s.playbackRate.value = rate;
     g.gain.value = GAIN[kind];
     s.connect(g).connect(this.#ctx.destination);
     s.start();

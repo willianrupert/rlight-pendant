@@ -3,7 +3,7 @@
 // idade da última mensagem que chegou aqui, e servidor → máquina, pelo que o
 // servidor diz.
 
-import type { ProbeProgress } from './automations';
+import type { Odometer, ProbeProgress } from './automations';
 import {
   combineLinks,
   initialLink,
@@ -51,7 +51,8 @@ type ServerMessage =
   | { type: 'result'; id?: string; ok: boolean; reason?: string; hitLimit?: boolean; undoable?: boolean }
   | { type: 'invalid'; reason?: string }
   | { type: 'probe'; status: ProbeProgress['status']; reason?: string }
-  | { type: 'boardError'; code: number; line: string };
+  | { type: 'boardError'; code: number; line: string }
+  | ({ type: 'odometer' } & Odometer);
 
 const BACKOFF_MS = [500, 1_000, 2_000, 5_000];
 
@@ -82,6 +83,8 @@ export class Connection {
   onControl: ((inControl: boolean, reason: string | null) => void) | null = null;
   /** Resposta a um comando, pelo id que `command` devolveu. */
   onResult: ((id: string, command: CommandName, result: CommandResult) => void) | null = null;
+  /** O hodômetro da máquina, a cada poucos segundos. */
+  onOdometer: ((o: Odometer) => void) | null = null;
   /** A placa recusou uma linha (error:n). */
   onBoardError: ((code: number, line: string) => void) | null = null;
   /** O andamento da placa de toque (Automações), para todas as telas. */
@@ -201,6 +204,9 @@ export class Connection {
         this.profile = p.profile;
         this.limits = p.limits;
         this.onProfile?.(p.profile);
+      } else if (msg.type === 'odometer') {
+        const o = msg as { day: string; today: Odometer['today']; total: Odometer['total'] };
+        this.onOdometer?.({ day: o.day, today: o.today, total: o.total });
       } else if (msg.type === 'boardError') {
         const e = msg as { code: number; line: string };
         this.onBoardError?.(e.code, e.line);

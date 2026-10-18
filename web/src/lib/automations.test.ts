@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseThickness, probeLine } from './automations';
+import { formatDistance, formatDuration, parseThickness, probeLine } from './automations';
 
 describe('a placa de toque, em frases', () => {
   it('cada fase diz o que a máquina está fazendo', () => {
@@ -29,5 +29,21 @@ describe('a espessura da placa', () => {
     expect(parseThickness('0')).toBeNull();
     expect(parseThickness('60')).toBeNull();
     expect(parseThickness('abc')).toBeNull();
+  });
+});
+
+describe('o hodômetro, em palavras', () => {
+  it('distância: mm perto, metros, quilômetros', () => {
+    expect(formatDistance(0)).toBe('0 mm');
+    expect(formatDistance(640.4)).toBe('640 mm');
+    expect(formatDistance(12_400)).toBe('12,4 m');
+    expect(formatDistance(1_234_000)).toBe('1,23 km');
+  });
+
+  it('tempo: segundos, minutos, horas e minutos', () => {
+    expect(formatDuration(0)).toBe('0 s');
+    expect(formatDuration(45_000)).toBe('45 s');
+    expect(formatDuration(12 * 60_000 + 20_000)).toBe('12 min');
+    expect(formatDuration(72 * 60_000)).toBe('1 h 12 min');
   });
 });

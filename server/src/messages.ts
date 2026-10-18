@@ -10,6 +10,8 @@ import type {
   MachineSnapshot,
 } from '@rlight/core';
 
+import type { OdoTotals } from './odometer';
+
 export const PROTOCOL_VERSION = 1;
 
 /** Os comandos que o servidor sabe executar hoje. */
@@ -46,6 +48,8 @@ export type ServerMessage =
   | { type: 'result'; id?: string; ok: true; hitLimit?: boolean; undoable?: boolean }
   | { type: 'result'; id?: string; ok: false; reason: string }
   | { type: 'alarm'; code: number }
+  /** O hodômetro: quanto cada eixo andou e o spindle ficou ligado, hoje e no total. */
+  | { type: 'odometer'; day: string; today: OdoTotals; total: OdoTotals }
   /** A placa recusou uma linha (error:n): qual, para a tela dizer o motivo. */
   | { type: 'boardError'; code: number; line: string }
   /** O andamento da placa de toque, para todas as telas. */

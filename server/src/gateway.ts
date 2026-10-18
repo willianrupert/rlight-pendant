@@ -11,6 +11,7 @@ import { pollHzFor, type Board } from './board';
 import { DEFAULT_MOTION, planCommand, type MotionSettings, type ZeroMemory } from './commands';
 import { ControlSession, noControlMemory, REASON_TAKEN, type ControlMemory } from './control';
 import { ProbeSequence, type ProbeStep } from './probe';
+import { Odometer, noOdometerMemory, type OdometerMemory } from './odometer';
 import {
   parseClientMessage,
   PROTOCOL_VERSION,
@@ -34,7 +35,15 @@ export interface GatewayOptions {
   controlMemory?: ControlMemory;
   /** Quanto tempo o controle espera pela tela que caiu. */
   controlGraceMs?: number;
+  /** Onde guardar o hodômetro, para sobreviver a reinícios. */
+  odometerMemory?: OdometerMemory;
+  /** O fuso da oficina, para o "hoje" do hodômetro. */
+  timeZone?: string;
 }
+
+/** O hodômetro vai às telas a cada tanto, e é gravado a cada tanto. */
+const ODOMETER_SEND_MS = 5_000;
+const ODOMETER_SAVE_MS = 30_000;
 
 /** Depois de um comando do spindle, quanto tempo a placa é lida depressa. */
 const SPINDLE_FAST_MS = 3_000;
@@ -68,6 +77,11 @@ export class Gateway {
   private spindleFastUntil = -Infinity;
   /** A placa de toque em andamento: cada [PRB] da placa decide a próxima fase. */
   private probe: ProbeSequence | null = null;
+  private readonly odometer: Odometer;
+  private readonly odometerMemory: OdometerMemory;
+  private odometerSentAt = -Infinity;
+  private odometerSavedAt = Date.now();
+  private odometerDirty = false;
   private lastJogAt = -Infinity;
   private sawHoming = false;
   private firstReport = true;
@@ -85,6 +99,8 @@ export class Gateway {
     this.sawHoming = this.homingMemory.read();
     this.control = new ControlSession(options.controlGraceMs);
     this.controlMemory = options.controlMemory ?? noControlMemory;
+    this.odometerMemory = options.odometerMemory ?? noOdometerMemory;
+    this.odometer = new Odometer(this.odometerMemory.read(), options.timeZone ?? 'America/Sao_Paulo');
     const saved = this.controlMemory.read();
     if (saved) this.control.reserve(saved, this.board.now());
     this.motion = options.motion ?? DEFAULT_MOTION;
@@ -99,6 +115,7 @@ export class Gateway {
         this.commanded = {};
         this.spindleLine = null;
         this.deferredSpindle = null;
+        this.odometer.reconnected();
         if (this.probe) this.probeStep({ status: 'failed', lines: [], reason: 'A conexão com a máquina caiu durante a medição.' });
         this.firstReport = true;
         this.prevState = null;
@@ -111,7 +128,11 @@ export class Gateway {
         console.log(`placa recusou "${line}": error:${code}`);
         this.broadcast({ type: 'boardError', code, line });
       }),
-      b.on('status', (snap) => this.onStatus(snap.state)),
+      b.on('status', (snap) => {
+        this.odometer.onReport(snap.mpos, snap.spindleOn, snap.state, Date.now());
+        this.odometerDirty = true;
+        this.onStatus(snap.state);
+      }),
       b.on('message', (m) => {
         if (m.kind === 'ok' || m.kind === 'error') this.flushDeferredSpindle();
         if (m.kind === 'probe' && this.probe) this.probeStep(this.probe.onProbe(m.at, m.touched));
@@ -126,12 +147,30 @@ export class Gateway {
     this.wss = wss;
     wss.on('connection', (ws) => this.accept(ws));
     await new Promise<void>((resolve) => wss.once('listening', resolve));
-    this.heartbeat = setInterval(() => this.scheduleAll(), this.options.heartbeatMs ?? 250);
+    this.heartbeat = setInterval(() => {
+      this.scheduleAll();
+      this.tickOdometer();
+    }, this.options.heartbeatMs ?? 250);
     this.updatePoll();
     return (wss.address() as AddressInfo).port;
   }
 
+  /** Manda o hodômetro às telas e o grava, cada um no seu ritmo. */
+  private tickOdometer(): void {
+    const now = Date.now();
+    if (this.odometerDirty && now - this.odometerSentAt >= ODOMETER_SEND_MS) {
+      this.odometerSentAt = now;
+      this.broadcast({ type: 'odometer', ...this.odometer.snapshot });
+    }
+    if (this.odometerDirty && now - this.odometerSavedAt >= ODOMETER_SAVE_MS) {
+      this.odometerSavedAt = now;
+      this.odometerDirty = false;
+      this.odometerMemory.write(this.odometer.snapshot);
+    }
+  }
+
   async close(): Promise<void> {
+    this.odometerMemory.write(this.odometer.snapshot);
     if (this.heartbeat) clearInterval(this.heartbeat);
     for (const off of this.unsubscribe) off();
     for (const c of this.clients.values()) {
@@ -222,6 +261,7 @@ export class Gateway {
     ws.on('close', () => this.drop(client));
     ws.on('error', () => {});
     this.send(client, { type: 'welcome', protocol: PROTOCOL_VERSION, clientId: client.id });
+    this.send(client, { type: 'odometer', ...this.odometer.snapshot });
     this.sendProfile(client);
     this.schedule(client);
     this.updatePoll();

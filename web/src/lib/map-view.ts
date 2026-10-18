@@ -2,7 +2,7 @@
 // não move a máquina; soltar manda um único `jogTo`. O modelo do gesto é puro;
 // o desenho escreve direto em atributos do SVG num laço de rAF, fora do Svelte.
 
-import { ReportBuffer, displayValue, goTo, type AxisLimits } from '@rlight/core';
+import { ReportBuffer, displayValue, goTo, remainingMoveSeconds, type AxisLimits } from '@rlight/core';
 import type { MachineState } from '@rlight/core';
 import { heading, speedText, speedVisible, trailPx } from './motion-look';
 import { formatMm } from './present';
@@ -213,6 +213,10 @@ export class MapView {
   readonly #speed: SVGTextElement;
   readonly #target: SVGGElement;
   readonly #targetLine: SVGLineElement;
+  readonly #eta: SVGTextElement;
+  #etaShown = '';
+  /** Para a estimativa de chegada; sem isto, o mapa não mostra o tempo. */
+  motion: MapMotion | null = null;
   #fadeTimer: ReturnType<typeof setTimeout> | null = null;
   #speedShown = '';
   #recent: { x: number; y: number; t: number }[] = [];
@@ -276,7 +280,11 @@ export class MapView {
     this.#targetLine = document.createElementNS(NS, 'line');
     this.#targetLine.setAttribute('class', 'target-path');
     this.#targetLine.style.display = 'none';
-    svg.append(grid, this.#targetLine, this.#line, this.#trail, this.#halo, this.#zring, this.#target, this.#real, this.#ghost, this.#speed);
+    // Quanto falta, ao lado do alvo, diminuindo enquanto a máquina anda.
+    this.#eta = document.createElementNS(NS, 'text');
+    this.#eta.setAttribute('class', 'eta');
+    this.#eta.style.display = 'none';
+    svg.append(grid, this.#targetLine, this.#line, this.#trail, this.#halo, this.#zring, this.#target, this.#eta, this.#real, this.#ghost, this.#speed);
     this.setLimits(limits);
     svg.addEventListener('pointerdown', this.#down);
     svg.addEventListener('pointermove', this.#move);
@@ -454,6 +462,13 @@ export class MapView {
     this.model.setTarget(p, performance.now());
   }
 
+  /** Quanto leva, saindo parado da posição mostrada agora, até `p`. */
+  etaTo(p: Point): number | null {
+    const r = this.#shownReal;
+    if (!r || !this.motion) return null;
+    return remainingMoveSeconds({ distanceMm: Math.hypot(p.x - r.x, p.y - r.y), speedMmPerMin: 0, ...this.motion });
+  }
+
   /** O "Ir" foi recusado ou a tela perdeu o controle: o alvo some. */
   clearTarget(): void {
     this.model.clearTarget();
@@ -471,6 +486,7 @@ export class MapView {
         // Esmaece no lugar e só então sai.
         this.#target.classList.add('arrived');
         this.#targetLine.style.display = 'none';
+        this.#eta.style.display = 'none';
         this.#fadeTimer = setTimeout(() => {
           this.#target.style.display = 'none';
           this.#target.classList.remove('arrived');
@@ -483,7 +499,30 @@ export class MapView {
     if (!t) {
       if (!this.#fadeTimer) this.#target.style.display = 'none';
       this.#targetLine.style.display = 'none';
+      this.#eta.style.display = 'none';
       return;
+    }
+    // Quanto falta: a distância que resta e a velocidade que a placa reporta agora.
+    if (this.motion && rx != null && ry != null) {
+      const s = remainingMoveSeconds({
+        distanceMm: Math.hypot(t.x - rx, t.y - ry),
+        speedMmPerMin: this.state === 'Jog' ? this.feed : 0,
+        ...this.motion,
+      });
+      const text = formatEta(s);
+      if (text !== this.#etaShown) {
+        this.#etaShown = text;
+        this.#eta.textContent = text;
+      }
+      // Do lado de dentro da mesa, para nunca sair da vista.
+      const right = t.x < (this.#limits.x.min + this.#limits.x.max) / 2;
+      this.#eta.setAttribute('x', String(t.x + (right ? 22 : -22) * k));
+      this.#eta.setAttribute('y', String(-t.y + 5 * k));
+      this.#eta.setAttribute('text-anchor', right ? 'start' : 'end');
+      this.#eta.setAttribute('font-size', String(13 * k));
+      this.#eta.style.display = text ? '' : 'none';
+    } else {
+      this.#eta.style.display = 'none';
     }
     this.#target.style.display = '';
     this.#target.setAttribute('transform', `translate(${t.x} ${-t.y}) scale(${12 * k})`);
@@ -590,6 +629,22 @@ export class MapView {
 }
 
 /** "X 410,00 · Y 220,00", nas coordenadas do DRO. */
-export function destinationText(p: Point, offset: Point = { x: 0, y: 0 }): string {
-  return `X ${formatMm(p.x - offset.x)} · Y ${formatMm(p.y - offset.y)}`;
+export function destinationText(p: Point, offset: Point = { x: 0, y: 0 }, etaS: number | null = null): string {
+  const eta = etaS === null ? '' : formatEta(etaS);
+  return `X ${formatMm(p.x - offset.x)} · Y ${formatMm(p.y - offset.y)}${eta ? ` · ${eta}` : ''}`;
+}
+
+/** Quanto falta, como no Mapas: com décimo perto, segundos longe; nada chegando. */
+export function formatEta(s: number): string {
+  if (!(s >= 0.05)) return '';
+  if (s < 10) return `${(Math.round(s * 10) / 10).toFixed(1).replace('.', ',')} s`;
+  const r = Math.round(s);
+  if (r < 60) return `${r} s`;
+  return `${Math.floor(r / 60)} min ${String(r % 60).padStart(2, '0')} s`;
+}
+
+/** A velocidade e a aceleração de um "Ir" em X e Y, do perfil da placa. */
+export interface MapMotion {
+  maxMmPerMin: number;
+  accelMmPerS2: number;
 }

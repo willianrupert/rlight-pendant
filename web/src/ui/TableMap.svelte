@@ -4,7 +4,7 @@
   // Movendo, o mapa fica limpo e não aceita gestos: o Parar é o da barra.
   import { onDestroy, onMount } from 'svelte';
   import type { AxisLimits, MachineState, Vec3 } from '@rlight/core';
-  import { MapView, destinationText, mapPad, type Point, type TableLimits } from '../lib/map-view';
+  import { MapView, destinationText, mapPad, type MapMotion, type Point, type TableLimits } from '../lib/map-view';
   import HoldButton from './HoldButton.svelte';
 
   interface Props {
@@ -25,11 +25,13 @@
     zLimits: AxisLimits | null;
     zZero: number | null;
     onjog: (p: Point) => void;
+    /** Velocidade e aceleração do "Ir", para o tempo de chegada. */
+    motion: MapMotion | null;
     ongrab: () => void;
     onhome: () => void;
   }
 
-  let { limits, ghost, moving, frozen, offset, needsHoming, homingPending, machineState, feed, zLimits, zZero, onjog, ongrab, onhome }: Props = $props();
+  let { limits, ghost, moving, frozen, offset, needsHoming, homingPending, machineState, feed, zLimits, zZero, onjog, ongrab, onhome, motion }: Props = $props();
   let gauge: HTMLElement;
 
   let svg: SVGSVGElement;
@@ -89,6 +91,7 @@
     if (!view) return;
     view.state = machineState;
     view.feed = feed;
+    view.motion = motion;
   });
 
   function go() {
@@ -134,7 +137,7 @@
     <p class="caption" class:dest={!!(dest || preview)}>
       <span>
         {#if dest || preview}
-          {destinationText((dest ?? preview)!, offset)}
+          {destinationText((dest ?? preview)!, offset, view?.etaTo((dest ?? preview)!) ?? null)}
         {:else}
           Arraste o ponto, ou toque na mesa
         {/if}
@@ -174,6 +177,7 @@
   /* O alvo em curso: anel vazado na cor de destaque, o caminho que falta tracejado. */
   .map :global(.target circle) { fill: none; stroke: var(--acc); stroke-width: 2; vector-effect: non-scaling-stroke; opacity: 0.9; transition: opacity 0.26s ease, transform 0.26s ease; transform-box: fill-box; transform-origin: center; }
   .map :global(.target.arrived circle) { opacity: 0; transform: scale(1.6); }
+  .map :global(.eta) { fill: var(--acc); font-family: var(--mono); font-weight: 600; font-variant-numeric: tabular-nums; }
   .map :global(.target-path) { stroke: var(--acc); stroke-width: 1.5; stroke-dasharray: 3 5; vector-effect: non-scaling-stroke; opacity: 0.55; }
   .map :global(.path) { stroke: var(--acc); stroke-width: 2; stroke-dasharray: 4 5; vector-effect: non-scaling-stroke; opacity: 0.8; }
   /* A legenda mora dentro do mapa, embaixo: não empurra a tela. */

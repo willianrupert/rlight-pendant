@@ -50,7 +50,8 @@ export type RulerMode = 'rest' | 'drag' | 'glide' | 'settle';
 
 export interface RulerDeps {
   send: (req: CommandRequest) => void;
-  click: (kind: 'major' | 'minor' | 'wall') => void;
+  /** `ticksPerSecond`: a velocidade com que a régua atravessa os traços, para afinar o clique. */
+  click: (kind: 'major' | 'minor' | 'wall', ticksPerSecond?: number) => void;
 }
 
 const r6 = (v: number) => Math.round(v * 1e6) / 1e6;
@@ -83,6 +84,7 @@ export class RulerModel {
   #samples: Sample[] = [];
   #lastX = 0;
   #lastFrame = 0;
+  #lastClickAt = -Infinity;
   #clickTick = 0;
   #sentTick = 0;
   #batcher: NudgeBatcher;
@@ -273,7 +275,11 @@ export class RulerModel {
     if (tick !== this.#clickTick) {
       const gliding = this.mode === 'glide';
       const kind = clickFor({ tick, gliding, ticksToTarget: gliding && this.target !== null ? this.target - this.pos : 0 });
-      if (kind) this.deps.click(kind);
+      if (kind) {
+        const gap = now - this.#lastClickAt;
+        this.deps.click(kind, gap > 0 && gap < 1_000 ? 1_000 / gap : 0);
+        this.#lastClickAt = now;
+      }
       this.#clickTick = tick;
       dirty = true;
     }

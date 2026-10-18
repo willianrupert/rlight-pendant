@@ -4,7 +4,7 @@
   import { onDestroy, onMount } from 'svelte';
   import type { Axis, AxisLimits, MachineState } from '@rlight/core';
   import type { CommandRequest } from '../lib/connection';
-  import type { Clicker } from '../lib/feel';
+  import { pitchFor, type Clicker } from '../lib/feel';
   import { formatMm } from '../lib/present';
   import { RulerModel, RulerView } from '../lib/ruler-view';
   import { DEFAULT_STEP_INDEX, stepLadder } from '../lib/step-dial';
@@ -30,7 +30,7 @@
 
   const model = new RulerModel('x', 0.1, {
     send: (r) => send(r),
-    click: (k) => clicker.play(k),
+    click: (k, speed) => clicker.play(k, k === 'wall' ? 1 : pitchFor(speed ?? 0)),
   });
 
   function savedStep(a: Axis, options: number[]): number {

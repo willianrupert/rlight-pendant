@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GhostModel, destinationText, rubber, zLook } from './map-view';
+import { GhostModel, destinationText, formatEta, rubber, zLook } from './map-view';
 
 const limits = { x: { min: 0, max: 1215 }, y: { min: 0, max: 604 } };
 
@@ -152,5 +152,21 @@ describe('o Z visto de cima', () => {
   it('o zero da peça na régua vertical, se cabe no curso', () => {
     expect(zLook(-10, z, -79).zeroDepth).toBeCloseTo(0.5, 6);
     expect(zLook(-10, z, 5).zeroDepth).toBeNull();
+  });
+});
+
+describe('quanto falta, no mapa', () => {
+  it('perto: com décimo; longe: segundos inteiros; mais de um minuto: min e s', () => {
+    expect(formatEta(3.24)).toBe('3,2 s');
+    expect(formatEta(12.4)).toBe('12 s');
+    expect(formatEta(65)).toBe('1 min 05 s');
+  });
+
+  it('chegando: nada (o número some em vez de mostrar 0,0 s)', () => {
+    expect(formatEta(0.04)).toBe('');
+  });
+
+  it('o destino com a estimativa', () => {
+    expect(destinationText({ x: 371.3, y: 217.86 }, { x: 0, y: 0 }, 4.1)).toBe('X 371,30 · Y 217,86 · 4,1 s');
   });
 });

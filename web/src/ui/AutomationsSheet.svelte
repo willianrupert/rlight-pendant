@@ -3,7 +3,7 @@
   // controle não ganhar botões: hoje a placa de toque do Z, depois as receitas
   // do Romney (docs/RECEITAS.md). E o som da régua, que saiu do cabeçalho.
   import type { Clicker } from '../lib/feel';
-  import { parseThickness, probeLine, type ProbeProgress } from '../lib/automations';
+  import { formatDistance, formatDuration, parseThickness, probeLine, type Odometer, type ProbeProgress } from '../lib/automations';
   import HoldButton from './HoldButton.svelte';
 
   interface Props {
@@ -14,6 +14,8 @@
     probe: ProbeProgress | null;
     canStop: boolean;
     sound: boolean;
+    /** O hodômetro da máquina, do servidor. */
+    odometer: Odometer | null;
     clicker: Clicker;
     onprobe: (thicknessMm: number) => void;
     onstop: () => void;
@@ -21,7 +23,7 @@
     onclose: () => void;
   }
 
-  let { hasProbe, canProbe, homed, probe, canStop, sound, clicker, onprobe, onstop, onsound, onclose }: Props = $props();
+  let { hasProbe, canProbe, homed, probe, canStop, sound, odometer, clicker, onprobe, onstop, onsound, onclose }: Props = $props();
 
   const KEY = 'rlight.plateThickness';
   let text = $state(read());
@@ -101,6 +103,23 @@
     </div>
   </section>
 
+  {#if odometer}
+    <section>
+      <h3>Hoje</h3>
+      <div class="card">
+        <div class="odo">
+          <div><small>X</small><strong>{formatDistance(odometer.today.x)}</strong></div>
+          <div><small>Y</small><strong>{formatDistance(odometer.today.y)}</strong></div>
+          <div><small>Z</small><strong>{formatDistance(odometer.today.z)}</strong></div>
+          <div><small>Spindle</small><strong>{formatDuration(odometer.today.spindleMs)}</strong></div>
+        </div>
+        <p class="muted small">
+          Desde que o app começou a contar: X {formatDistance(odometer.total.x)} · Y {formatDistance(odometer.total.y)} · Z {formatDistance(odometer.total.z)} · spindle {formatDuration(odometer.total.spindleMs)}.
+        </p>
+      </div>
+    </section>
+  {/if}
+
   <section>
     <h3>Receitas</h3>
     <div class="card">
@@ -151,6 +170,11 @@
   .card { background: var(--panel); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
   .lead { margin: 0; font-size: 17px; font-weight: 600; }
   .muted { margin: 0; font-size: 15px; line-height: 1.4; color: var(--fg-2); }
+  .muted.small { font-size: 13px; color: var(--fg-3); }
+  .odo { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .odo div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .odo small { font-size: 12px; color: var(--fg-3); }
+  .odo strong { font: 600 17px var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: 15px; line-height: 1.4; color: var(--fg-2); }
   .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; font-size: 16px; }
   .field { display: flex; align-items: baseline; gap: 6px; }
