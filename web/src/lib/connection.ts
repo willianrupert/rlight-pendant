@@ -3,6 +3,7 @@
 // idade da última mensagem que chegou aqui, e servidor → máquina, pelo que o
 // servidor diz.
 
+import type { SavedPin } from './map-view';
 import type { Odometer, ProbeProgress } from './automations';
 import {
   combineLinks,
@@ -34,7 +35,10 @@ export type CommandRequest =
   | { command: 'zero'; axis: Axis | 'all' }
   | { command: 'spindleOn' | 'spindleSpeed'; rpm: number }
   | { command: 'cancelJog' | 'unlock' | 'home' | 'softReset' | 'feedHold' | 'resume' | 'undoZero' | 'spindleOff' }
-  | { command: 'probeZ'; thicknessMm: number };
+  | { command: 'probeZ'; thicknessMm: number }
+  | { command: 'savePoint'; name: string }
+  | { command: 'goToPoint' | 'deletePoint'; pointId: string }
+  | { command: 'undoMove' };
 
 export type CommandName = CommandRequest['command'];
 
@@ -52,6 +56,7 @@ type ServerMessage =
   | { type: 'invalid'; reason?: string }
   | { type: 'probe'; status: ProbeProgress['status']; reason?: string }
   | { type: 'boardError'; code: number; line: string }
+  | { type: 'points'; points: SavedPin[] }
   | ({ type: 'odometer' } & Odometer);
 
 const BACKOFF_MS = [500, 1_000, 2_000, 5_000];
@@ -93,6 +98,8 @@ export class Connection {
   onControl: ((inControl: boolean, reason: string | null) => void) | null = null;
   /** Resposta a um comando, pelo id que `command` devolveu. */
   onResult: ((id: string, command: CommandName, result: CommandResult) => void) | null = null;
+  /** Os pontos salvos (o Save X/Y/Z do Romney), a cada mudança. */
+  onPoints: ((points: SavedPin[]) => void) | null = null;
   /** O hodômetro da máquina, a cada poucos segundos. */
   onOdometer: ((o: Odometer) => void) | null = null;
   /** A placa recusou uma linha (error:n). */
@@ -277,6 +284,8 @@ export class Connection {
         this.profile = p.profile;
         this.limits = p.limits;
         this.onProfile?.(p.profile);
+      } else if (msg.type === 'points') {
+        this.onPoints?.((msg as { points: SavedPin[] }).points);
       } else if (msg.type === 'odometer') {
         const o = msg as { day: string; today: Odometer['today']; total: Odometer['total'] };
         this.onOdometer?.({ day: o.day, today: o.today, total: o.total });

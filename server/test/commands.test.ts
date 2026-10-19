@@ -90,7 +90,7 @@ describe('planCommand: movimento absoluto (ADR-0002)', () => {
   });
 
   it('o fantasma é recortado pelo curso e vai na velocidade máxima do eixo (S2 aprovado)', () => {
-    const p = planCommand({ command: 'jogTo', x: 5000, y: 300 }, ctx());
+    const p = planCommand({ command: 'jogTo', x: 5000, y: 300 }, ctx({ snapshot: idleAt(100, 200, 0) }));
     expect(p).toMatchObject({
       ok: true,
       writes: [{ line: '$J=G53 G90 X1215.000 Y300.000 F3000' }],
@@ -100,7 +100,7 @@ describe('planCommand: movimento absoluto (ADR-0002)', () => {
   });
 
   it('o avanço nunca passa do máximo do eixo', () => {
-    const p = planCommand({ command: 'jogTo', x: 10, y: 10 }, ctx({ motion: { ...DEFAULT_MOTION, jogToFeedMmPerMin: 9000 } }));
+    const p = planCommand({ command: 'jogTo', x: 10, y: 10 }, ctx({ snapshot: idleAt(100, 200, 0), motion: { ...DEFAULT_MOTION, jogToFeedMmPerMin: 9000 } }));
     expect(p).toMatchObject({ writes: [{ line: '$J=G53 G90 X10.000 Y10.000 F3000' }] });
   });
 
@@ -128,10 +128,86 @@ describe('planCommand: movimento absoluto (ADR-0002)', () => {
   });
 });
 
+describe('planCommand: o Ir sobe a fresa antes de atravessar a mesa', () => {
+  // Peça zerada em Z −70 de máquina (wco.z = −70); a fresa em −68, quase na peça.
+  const low = () => ctx({ snapshot: snap('<Idle|MPos:100,200,-68|FS:0,0|WCO:0,0,-70>') });
+
+  it('fresa baixa: sobe até 10 mm acima da peça, e só então atravessa', () => {
+    expect(planCommand({ command: 'jogTo', x: 600, y: 300 }, low())).toMatchObject({
+      ok: true,
+      writes: [{ line: '$J=G53 G90 Z-60.000 F4000' }, { line: '$J=G53 G90 X600.000 Y300.000 F3000' }],
+      commanded: { x: 600, y: 300, z: -60 },
+      undo: 'record',
+    });
+  });
+
+  it('já acima da altura segura: atravessa direto', () => {
+    const high = ctx({ snapshot: snap('<Idle|MPos:100,200,-40|FS:0,0|WCO:0,0,-70>') });
+    expect(planCommand({ command: 'jogTo', x: 600, y: 300 }, high)).toMatchObject({ writes: [{ line: '$J=G53 G90 X600.000 Y300.000 F3000' }] });
+  });
+
+  it('sem o offset da peça ainda: a superfície é o topo, sobe até lá', () => {
+    expect(planCommand({ command: 'jogTo', x: 600, y: 300 }, ctx())).toMatchObject({
+      writes: [{ line: '$J=G53 G90 Z0.000 F4000' }, { line: '$J=G53 G90 X600.000 Y300.000 F3000' }],
+    });
+  });
+});
+
+describe('planCommand: pontos salvos, o "Posicionar Job" do Romney', () => {
+  const point = { id: 'p1', name: 'Canto', x: 50, y: 60, z: -68 };
+  const withPoint = (over: Partial<CommandContext> = {}) => ctx({ findPoint: (id) => (id === 'p1' ? point : null), ...over });
+
+  it('sobe ao topo, vai em X e Y, desce rápido até 20 mm acima e os últimos 20 mm a F600', () => {
+    expect(planCommand({ command: 'goToPoint', pointId: 'p1' }, withPoint())).toMatchObject({
+      ok: true,
+      writes: [
+        { line: '$J=G53 G90 Z0.000 F4000' },
+        { line: '$J=G53 G90 X50.000 Y60.000 F3000' },
+        { line: '$J=G53 G90 Z-48.000 F4000' },
+        { line: '$J=G53 G90 Z-68.000 F600' },
+      ],
+      commanded: { x: 50, y: 60, z: -68 },
+      undo: 'record',
+    });
+  });
+
+  it('um ponto que não existe mais: recusa com o motivo', () => {
+    expect(planCommand({ command: 'goToPoint', pointId: 'p9' }, withPoint())).toEqual({ ok: false, reason: 'Esse ponto não existe mais' });
+  });
+
+  it('exige homing, como o Ir', () => {
+    expect(planCommand({ command: 'goToPoint', pointId: 'p1' }, withPoint({ homed: false }))).toMatchObject({ ok: false });
+  });
+});
+
+describe('planCommand: desfazer o último movimento', () => {
+  // A máquina estava em (100, 200, −68) e o Ir a levou, subindo, a (600, 300, −60).
+  const after = (over: Partial<CommandContext> = {}) =>
+    ctx({
+      snapshot: snap('<Idle|MPos:600,300,-60|FS:0,0|WCO:0,0,-70>'),
+      undoFrom: { pos: { x: 100, y: 200, z: -68 }, at: 1_000_000 - 5_000 },
+      ...over,
+    });
+
+  it('volta pelo mesmo caminho seguro: X e Y, e desce o Z de volta devagar', () => {
+    expect(planCommand({ command: 'undoMove' }, after())).toMatchObject({
+      ok: true,
+      writes: [{ line: '$J=G53 G90 X100.000 Y200.000 F3000' }, { line: '$J=G53 G90 Z-68.000 F600' }],
+      commanded: { x: 100, y: 200, z: -68 },
+      undo: 'clear',
+    });
+  });
+
+  it('depois de 2 minutos, ou sem nada para desfazer: recusa', () => {
+    expect(planCommand({ command: 'undoMove' }, after({ undoFrom: null }))).toEqual({ ok: false, reason: 'Nada para desfazer' });
+    expect(planCommand({ command: 'undoMove' }, after({ now: 1_000_000 + 200_000 }))).toEqual({ ok: false, reason: 'Nada para desfazer' });
+  });
+});
+
 describe('planCommand: velocidade do fantasma sem perfil de velocidade', () => {
   it('sem velocidade máxima conhecida no eixo, cai para 2000 mm/min', () => {
     const semVelocidade = { ...profile, axes: { x: { ...profile.axes.x!, maxRateMmPerMin: 0 }, y: { ...profile.axes.y!, maxRateMmPerMin: 0 }, z: profile.axes.z! } };
-    expect(planCommand({ command: 'jogTo', x: 10, y: 10 }, ctx({ profile: semVelocidade }))).toMatchObject({
+    expect(planCommand({ command: 'jogTo', x: 10, y: 10 }, ctx({ snapshot: idleAt(100, 200, 0), profile: semVelocidade }))).toMatchObject({
       writes: [{ line: '$J=G53 G90 X10.000 Y10.000 F2000' }],
     });
   });

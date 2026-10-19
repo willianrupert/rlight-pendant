@@ -213,13 +213,29 @@ export class PendingTracker {
 export const UNDO_WINDOW_MS = 30_000;
 
 /** Zerar tem desfazer por 30 s, uma vez só (server/PROTOCOL.md). */
+/** O "Desfazer" de um Ir dura menos que o do zero: é um atalho, não uma proteção. */
+export const MOVE_UNDO_MS = 10_000;
+
 export class UndoWindow {
   #until: number | null = null;
   #label = '';
+  #kind: 'zero' | 'move' = 'zero';
+  #ms = UNDO_WINDOW_MS;
 
-  open(label: string, now: number, ms = UNDO_WINDOW_MS): void {
+  open(label: string, now: number, ms = UNDO_WINDOW_MS, kind: 'zero' | 'move' = 'zero'): void {
     this.#until = now + ms;
     this.#label = label;
+    this.#kind = kind;
+    this.#ms = ms;
+  }
+
+  /** O que o "Desfazer" desfaz: o zero ou o último movimento. */
+  get kind(): 'zero' | 'move' {
+    return this.#kind;
+  }
+
+  get durationMs(): number {
+    return this.#ms;
   }
 
   /** O rótulo a mostrar, ou null se o desfazer já não vale. */

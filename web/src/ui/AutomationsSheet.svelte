@@ -5,6 +5,8 @@
   import type { Clicker } from '../lib/feel';
   import { formatDistance, formatDuration, parseThickness, probeLine, type Odometer, type ProbeProgress } from '../lib/automations';
   import HoldButton from './HoldButton.svelte';
+  import type { SavedPin } from '../lib/map-view';
+  import { formatMm } from '../lib/present';
 
   interface Props {
     hasProbe: boolean;
@@ -16,6 +18,15 @@
     sound: boolean;
     /** O hodômetro da máquina, do servidor. */
     odometer: Odometer | null;
+    /** Os pontos salvos (o Save X/Y/Z do Romney). */
+    points: SavedPin[];
+    canSavePoint: boolean;
+    canGoToPoint: boolean;
+    /** O zero da peça, para mostrar os pontos nas mesmas coordenadas do DRO. */
+    offset: { x: number; y: number; z: number };
+    onsavepoint: (name: string) => void;
+    ongopoint: (p: SavedPin) => void;
+    ondeletepoint: (p: SavedPin) => void;
     clicker: Clicker;
     onprobe: (thicknessMm: number) => void;
     onstop: () => void;
@@ -23,7 +34,28 @@
     onclose: () => void;
   }
 
-  let { hasProbe, canProbe, homed, probe, canStop, sound, odometer, clicker, onprobe, onstop, onsound, onclose }: Props = $props();
+  let {
+    hasProbe,
+    canProbe,
+    homed,
+    probe,
+    canStop,
+    sound,
+    odometer,
+    points,
+    canSavePoint,
+    canGoToPoint,
+    offset,
+    clicker,
+    onprobe,
+    onstop,
+    onsound,
+    onsavepoint,
+    ongopoint,
+    ondeletepoint,
+    onclose,
+  }: Props = $props();
+  let pointName = $state('');
 
   const KEY = 'rlight.plateThickness';
   let text = $state(read());
@@ -103,6 +135,42 @@
     </div>
   </section>
 
+  <section>
+    <h3>Pontos salvos</h3>
+    <div class="card">
+      <p class="muted small">Como o "Save X/Y/Z" do Romney: salve onde a máquina está e volte depois. A volta sobe ao topo, vai, e desce os últimos 20 mm devagar.</p>
+      <div class="row save">
+        <input type="text" class="name" placeholder="Nome (opcional)" maxlength="40" bind:value={pointName} enterkeyhint="done" />
+        <HoldButton
+          label="Salvar posição"
+          tone="primary"
+          disabled={!canSavePoint}
+          onpress={() => clicker.wake()}
+          onfire={() => {
+            clicker.play('confirm');
+            onsavepoint(pointName);
+            pointName = '';
+          }}
+        />
+      </div>
+      {#if !homed}<p class="muted small">Faça o homing para salvar e voltar a pontos.</p>{/if}
+      {#if points.length}
+        <ul class="points">
+          {#each points as p (p.id)}
+            <li>
+              <div class="pinfo">
+                <strong>{p.name}</strong>
+                <span>X {formatMm(p.x - offset.x)} · Y {formatMm(p.y - offset.y)} · Z {formatMm(p.z - offset.z)}</span>
+              </div>
+              <button class="go" disabled={!canGoToPoint} onclick={() => ongopoint(p)}>Ir</button>
+              <HoldButton label="Apagar" hold tone="quiet" onfire={() => ondeletepoint(p)} />
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </div>
+  </section>
+
   {#if odometer}
     <section>
       <h3>Hoje</h3>
@@ -171,6 +239,27 @@
   .lead { margin: 0; font-size: 17px; font-weight: 600; }
   .muted { margin: 0; font-size: 15px; line-height: 1.4; color: var(--fg-2); }
   .muted.small { font-size: 13px; color: var(--fg-3); }
+  .row.save { gap: 10px; }
+  /* Mais específico que o campo numérico da espessura: o nome é texto comum. */
+  input[type='text'].name {
+    flex: 1;
+    width: auto;
+    text-align: left;
+    min-width: 0;
+    border: 1px solid var(--line-2);
+    border-radius: 12px;
+    background: transparent;
+    color: var(--fg);
+    font: 500 16px var(--sans);
+    padding: 10px 12px;
+  }
+  .points { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .points li { display: flex; align-items: center; gap: 10px; min-height: 52px; }
+  .pinfo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .pinfo strong { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pinfo span { font: 500 12px var(--mono); color: var(--fg-3); font-variant-numeric: tabular-nums; }
+  .go { border: 0; border-radius: 999px; background: var(--acc); color: var(--acc-ink); font: 700 15px var(--sans); min-width: 56px; min-height: 40px; cursor: pointer; }
+  .go:disabled { opacity: 0.45; }
   .odo { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
   .odo div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .odo small { font-size: 12px; color: var(--fg-3); }

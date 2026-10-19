@@ -23,6 +23,8 @@ export const COMMANDS = [
   'spindleOff',
   'spindleSpeed',
   'probeZ',
+  'goToPoint',
+  'undoMove',
 ] as const;
 export type Command = (typeof COMMANDS)[number];
 
@@ -37,8 +39,8 @@ export interface PolicyContext {
 export type Decision = { ok: true } | { ok: false; reason: string };
 
 const PERMITTED: Record<MachineState, readonly Command[]> = {
-  Idle: ['home', 'softReset', 'jogTo', 'jogAxisTo', 'nudge', 'zero', 'undoZero', 'spindleOn', 'spindleOff', 'spindleSpeed', 'probeZ'],
-  Jog: ['softReset', 'feedHold', 'cancelJog', 'jogTo', 'jogAxisTo', 'nudge'],
+  Idle: ['home', 'softReset', 'jogTo', 'jogAxisTo', 'nudge', 'zero', 'undoZero', 'spindleOn', 'spindleOff', 'spindleSpeed', 'probeZ', 'goToPoint', 'undoMove'],
+  Jog: ['softReset', 'feedHold', 'cancelJog', 'jogTo', 'jogAxisTo', 'nudge', 'goToPoint', 'undoMove'],
   Run: ['softReset', 'feedHold', 'spindleSpeed'],
   Hold: ['softReset', 'resume', 'spindleOff'],
   Alarm: ['unlock', 'home', 'softReset'],
@@ -71,5 +73,7 @@ export function allowed(command: Command, state: MachineState, ctx: PolicyContex
   if (command === 'jogAxisTo' && !ctx.homed) return { ok: false, reason: 'Faça o homing para mover até um ponto' };
   // A descida do apalpador é limitada pelo fundo do curso do Z, que só existe com homing.
   if (command === 'probeZ' && !ctx.homed) return { ok: false, reason: 'Faça o homing para usar a placa de toque' };
+  if (command === 'goToPoint' && !ctx.homed) return { ok: false, reason: 'Faça o homing para ir a um ponto salvo' };
+  if (command === 'undoMove' && !ctx.homed) return { ok: false, reason: 'Faça o homing para desfazer o movimento' };
   return { ok: true };
 }

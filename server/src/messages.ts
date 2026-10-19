@@ -11,6 +11,7 @@ import type {
 } from '@rlight/core';
 
 import type { OdoTotals } from './odometer';
+import type { SavedPoint } from './points';
 
 export const PROTOCOL_VERSION = 1;
 
@@ -24,6 +25,13 @@ export type CommandRequest =
   | { command: 'undoZero' | 'spindleOff' }
   /** A placa de toque (tela de Automações): mede o Z e zera pela espessura da placa. */
   | { command: 'probeZ'; thicknessMm: number }
+  /** Os pontos salvos (o Save X/Y/Z do Romney): salvar a posição atual, ir, apagar. */
+  | { command: 'savePoint'; name: string }
+  // `pointId`, não `id`: o `id` da mensagem é o do pedido, que volta no `result`.
+  | { command: 'goToPoint'; pointId: string }
+  | { command: 'deletePoint'; pointId: string }
+  /** Volta para onde a máquina estava antes do último Ir ou ida a um ponto. */
+  | { command: 'undoMove' }
   | { command: 'cancelJog' | 'unlock' | 'home' | 'softReset' | 'feedHold' | 'resume' };
 
 export type ClientMessage =
@@ -52,11 +60,13 @@ export type ServerMessage =
   | { type: 'odometer'; day: string; today: OdoTotals; total: OdoTotals }
   /** A placa recusou uma linha (error:n): qual, para a tela dizer o motivo. */
   | { type: 'boardError'; code: number; line: string }
+  /** Os pontos salvos, para todas as telas: a cada conexão e a cada mudança. */
+  | { type: 'points'; points: SavedPoint[] }
   /** O andamento da placa de toque, para todas as telas. */
   | { type: 'probe'; status: 'seeking' | 'measuring' | 'done' | 'failed'; reason?: string; zeroMachineZ?: number }
   | { type: 'invalid'; reason: string };
 
-const SIMPLE = new Set(['cancelJog', 'unlock', 'home', 'softReset', 'feedHold', 'resume', 'undoZero', 'spindleOff']);
+const SIMPLE = new Set(['cancelJog', 'unlock', 'home', 'softReset', 'feedHold', 'resume', 'undoZero', 'spindleOff', 'undoMove']);
 const isAxis = (v: unknown): v is Axis => v === 'x' || v === 'y' || v === 'z';
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
@@ -86,6 +96,16 @@ export function parseClientMessage(raw: string): ClientMessage | { invalid: stri
     if (o.to !== undefined && !isNum(o.to)) return { invalid: 'Destino inválido' };
     const to = o.to === undefined ? {} : { to: o.to };
     return { type: 'command', ...id, command: 'nudge', axis: o.axis, delta: o.delta, ...step, ...to };
+  }
+  if (o.command === 'savePoint') {
+    if (o.name !== undefined && typeof o.name !== 'string') return { invalid: 'Nome inválido' };
+    return { type: 'command', ...id, command: 'savePoint', name: (o.name as string | undefined) ?? '' };
+  }
+  if (o.command === 'goToPoint' || o.command === 'deletePoint') {
+    if (typeof o.pointId !== 'string' || !o.pointId) return { invalid: 'Ponto inválido' };
+    return o.command === 'goToPoint'
+      ? { type: 'command', ...id, command: 'goToPoint', pointId: o.pointId }
+      : { type: 'command', ...id, command: 'deletePoint', pointId: o.pointId };
   }
   if (o.command === 'probeZ') {
     if (!isNum(o.thicknessMm)) return { invalid: 'Espessura inválida' };

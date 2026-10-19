@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GhostModel, destinationText, formatEta, rubber, zLook } from './map-view';
+import { GhostModel, destinationText, formatEta, plannedSeconds, rubber, zLook } from './map-view';
 
 const limits = { x: { min: 0, max: 1215 }, y: { min: 0, max: 604 } };
 
@@ -168,5 +168,36 @@ describe('quanto falta, no mapa', () => {
 
   it('o destino com a estimativa', () => {
     expect(destinationText({ x: 371.3, y: 217.86 }, { x: 0, y: 0 }, 4.1)).toBe('X 371,30 · Y 217,86 · 4,1 s');
+  });
+});
+
+describe('o tempo de um Ir com a subida, e da volta a um ponto', () => {
+  const xy = { maxMmPerMin: 3000, accelMmPerS2: 250 };
+  const z = { maxMmPerMin: 4000, accelMmPerS2: 200 };
+
+  it('sem subir: só X e Y', () => {
+    const t = plannedSeconds({ from: { x: 0, y: 0, z: 0 }, to: { x: 600, y: 0 }, lift: null, descent: null, xy, z });
+    expect(t).toBeCloseTo(12.2, 3);
+  });
+
+  it('com a subida: o Z sobe primeiro e soma', () => {
+    const plain = plannedSeconds({ from: { x: 0, y: 0, z: -68 }, to: { x: 600, y: 0 }, lift: null, descent: null, xy, z });
+    const lifted = plannedSeconds({ from: { x: 0, y: 0, z: -68 }, to: { x: 600, y: 0 }, lift: -60, descent: null, xy, z });
+    expect(lifted).toBeGreaterThan(plain);
+  });
+
+  it('a volta a um ponto inclui a descida, com os últimos 20 mm devagar', () => {
+    const t = plannedSeconds({ from: { x: 0, y: 0, z: 0 }, to: { x: 0, y: 0 }, lift: null, descent: { from: 0, fastTo: -48, slowTo: -68 }, xy, z });
+    expect(t).toBeGreaterThan(2); // 20 mm a 600 mm/min já são 2 s
+  });
+});
+
+describe('a chegada de um ponto salvo espera a descida', () => {
+  it('com Z no alvo, só chega quando o Z também chegou', () => {
+    const m = new GhostModel(limits);
+    m.setTarget({ x: 50, y: 60 }, 0, -68);
+    m.track({ x: 40, y: 60, z: 0 }, 'Jog', 100);
+    expect(m.track({ x: 50, y: 60, z: -30 }, 'Jog', 200)).toBeNull(); // ainda descendo
+    expect(m.track({ x: 50, y: 60, z: -68 }, 'Idle', 300)).toBe('arrived');
   });
 });
