@@ -190,6 +190,32 @@ com essa posição, se a máquina estiver longe dela; a oferta vale 15 minutos.
 `resumePosition` volta pelo mesmo caminho seguro de `goToPoint`;
 `dismissResume` dispensa. `resume` com `pos: null` diz que não há oferta.
 
+### Avisos no celular (Web Push)
+
+```json
+{ "type": "pushKey", "publicKey": "BNc…" }
+{ "type": "pushSubscribe", "subscription": { "endpoint": "https://web.push.apple.com/…", "keys": { "p256dh": "…", "auth": "…" } } }
+{ "type": "push", "subscribed": true }
+{ "type": "pushUnsubscribe", "endpoint": "https://web.push.apple.com/…" }
+{ "type": "watching", "endpoint": "https://web.push.apple.com/…" }
+```
+
+O servidor manda `pushKey` (a chave pública VAPID) logo depois do `welcome`. A
+tela inscreve o aparelho com `pushSubscribe` (a cada conexão, para o servidor
+nunca perder a inscrição) e recebe `push`; uma inscrição nova ganha um aviso de
+prova. O servidor só aceita endereços dos serviços de push dos navegadores
+(Apple, Google, Mozilla, Microsoft), até 8 aparelhos, e esquece quem o serviço
+diz que desistiu (404/410). As chaves nascem no primeiro uso e ficam com os
+aparelhos em `RLIGHT_STATE_DIR/push.json`.
+
+`watching` diz que o app está à vista neste aparelho (`null` quando sai):
+quem já está olhando a máquina não recebe aviso.
+
+Quando o servidor avisa (`server/src/alerts.ts`): um `ALARM:n` da placa; o
+spindle girando com a máquina parada por 10 minutos; e o sinal da máquina
+perdido por 30 s quando ela estava ocupada (spindle ligado ou em movimento). O
+mesmo tipo de aviso não se repete antes de 1 minuto.
+
 ### `command`
 
 Todo comando passa por `allowed()` do core antes de chegar à placa. Sem sinal,

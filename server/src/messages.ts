@@ -11,6 +11,7 @@ import type {
 } from '@rlight/core';
 
 import type { OdoTotals } from './odometer';
+import type { PushSubscriptionJSON } from './push';
 import type { SavedPoint } from './points';
 
 export const PROTOCOL_VERSION = 1;
@@ -41,6 +42,11 @@ export type ClientMessage =
   | { type: 'takeControl'; token?: string }
   | { type: 'resumeControl'; token: string }
   | { type: 'releaseControl' }
+  /** Avisos no celular: este aparelho quer (ou não quer mais) receber. */
+  | { type: 'pushSubscribe'; subscription: PushSubscriptionJSON }
+  | { type: 'pushUnsubscribe'; endpoint: string }
+  /** A tela deste aparelho está à vista (endpoint) ou não (null): à vista, ele não recebe aviso. */
+  | { type: 'watching'; endpoint: string | null }
   | ({ type: 'command'; id?: string } & CommandRequest);
 
 export type ServerMessage =
@@ -69,6 +75,10 @@ export type ServerMessage =
   | { type: 'points'; points: SavedPoint[] }
   /** O andamento da placa de toque, para todas as telas. */
   | { type: 'probe'; status: 'seeking' | 'measuring' | 'done' | 'failed'; reason?: string; zeroMachineZ?: number }
+  /** A chave pública dos avisos (VAPID); só quando o servidor sabe mandar avisos. */
+  | { type: 'pushKey'; publicKey: string }
+  /** A resposta a pushSubscribe/pushUnsubscribe: se este aparelho recebe avisos agora. */
+  | { type: 'push'; subscribed: boolean }
   | { type: 'invalid'; reason: string };
 
 const SIMPLE = new Set(['cancelJog', 'unlock', 'home', 'softReset', 'feedHold', 'resume', 'undoZero', 'spindleOff', 'undoMove', 'resumePosition', 'dismissResume']);
@@ -86,6 +96,20 @@ export function parseClientMessage(raw: string): ClientMessage | { invalid: stri
   if (typeof m !== 'object' || m === null) return { invalid: 'Mensagem precisa ser um objeto' };
   const o = m as Record<string, unknown>;
   if (o.type === 'releaseControl') return { type: o.type };
+  const endpoint = typeof o.endpoint === 'string' && o.endpoint.length <= 1024 ? o.endpoint : undefined;
+  if (o.type === 'pushUnsubscribe') return endpoint ? { type: o.type, endpoint } : { invalid: 'Endereço inválido' };
+  if (o.type === 'watching') {
+    if (o.endpoint === null) return { type: o.type, endpoint: null };
+    return endpoint ? { type: o.type, endpoint } : { invalid: 'Endereço inválido' };
+  }
+  if (o.type === 'pushSubscribe') {
+    const sub = o.subscription as { endpoint?: unknown; keys?: { p256dh?: unknown; auth?: unknown } } | null;
+    const k = sub?.keys;
+    if (typeof sub?.endpoint !== 'string' || typeof k?.p256dh !== 'string' || typeof k?.auth !== 'string') {
+      return { invalid: 'Inscrição inválida' };
+    }
+    return { type: o.type, subscription: { endpoint: sub.endpoint, keys: { p256dh: k.p256dh, auth: k.auth } } };
+  }
   // O token é o que identifica a tela para retomar o controle depois de uma queda.
   const token = typeof o.token === 'string' && o.token.length >= 16 && o.token.length <= 128 ? o.token : undefined;
   if (o.type === 'takeControl') return token ? { type: o.type, token } : { type: o.type };

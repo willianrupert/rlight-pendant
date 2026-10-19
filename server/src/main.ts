@@ -9,14 +9,26 @@ import { fileHomingMemory } from './homing-memory';
 import { fileOdometerMemory } from './odometer';
 import { filePointsMemory } from './points';
 import { fileResumeMemory } from './resume';
+import { noDeviceMemory } from './push';
+import { filePushState, newVapidKeys, webPush } from './push-send';
 
 const env = process.env;
 const board = new Board({
   host: env.RLIGHT_BOARD_HOST ?? '192.168.1.50',
   port: Number(env.RLIGHT_BOARD_PORT ?? 23),
 });
+// Os avisos no celular: as chaves nascem no primeiro uso, no RLIGHT_STATE_DIR.
+// Sem ele (desenvolvimento), valem até o servidor reiniciar.
+const pushState = env.RLIGHT_STATE_DIR
+  ? filePushState(join(env.RLIGHT_STATE_DIR, 'push.json'))
+  : { vapid: newVapidKeys(), devices: noDeviceMemory };
+// Quem manda os avisos, para o serviço de push (a Apple exige um https:).
+const pushSubject = env.RLIGHT_PUSH_SUBJECT ?? `https://${env.RLIGHT_DOMAIN ?? 'localhost'}`;
+
 const gateway = new Gateway({
   board,
+  push: webPush(pushState.vapid, pushSubject),
+  pushDevices: pushState.devices,
   // RLIGHT_STATE_DIR: onde o servidor guarda o que precisa sobreviver a reinícios.
   ...(env.RLIGHT_STATE_DIR
     ? {

@@ -20,6 +20,8 @@
   import type { Odometer, ProbeProgress } from './lib/automations';
   import { destinationText, type SavedPin } from './lib/map-view';
   import { ScreenAwake } from './lib/wake';
+  import { PushDevice } from './lib/push-device';
+  import { badgeFor, type NotifyStatus } from './lib/alerts';
   import { LastSeenStore, browserStorage, lastSeenCaption, snapshotOf } from './lib/last-seen';
   import TableMap from './ui/TableMap.svelte';
   import { openDemoSocket } from '$demo';
@@ -95,6 +97,11 @@
   const hands = $derived(controlsVisible({ live, inControl, hasMachine: !!machine }));
   // Com o controle nas mãos, a tela não apaga (lib/wake.ts).
   const awake = new ScreenAwake();
+  // Os avisos no celular (Automações) e o número no ícone do app.
+  const pushDevice = new PushDevice(conn);
+  let notify = $state<NotifyStatus>('unavailable');
+  pushDevice.onStatus = (s) => (notify = s);
+  let badge: number | null = null;
   $effect(() => awake.set(inControl));
   const offerControl = $derived(canTakeControl({ live, inControl, hasMachine: !!machine }));
   const otherControls = $derived(!inControl && (st?.control.controlled ?? false));
@@ -295,6 +302,8 @@
         } else if (m.state !== 'Idle') moveUndo = null;
       }
       shown = presence.update(m?.state ?? null, at);
+      const b = badgeFor(m?.state ?? null, s.link.mode === 'live');
+      if (b !== null && b !== badge) PushDevice.badge((badge = b));
       // O movimento do mapa acabou quando a máquina para (ou nunca chegou a andar).
       if (mapMoveAt !== null && m?.state !== 'Jog' && at - mapMoveAt > 1_000) mapMoveAt = null;
       const pos = m?.wco ? m.wpos : m?.mpos;
@@ -674,6 +683,11 @@
     }}
     onstop={() => send({ command: 'feedHold' })}
     onsound={(on) => (sound = clicker.sound = on)}
+    {notify}
+    onnotify={async (on) => {
+      await (on ? pushDevice.enable() : pushDevice.disable());
+      return notify === 'on';
+    }}
     onclose={() => (automations = false)}
   />
 {/if}

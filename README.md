@@ -106,7 +106,9 @@ conversacional que ele escreveu no Mach3.
 
 **Feito para a oficina.** A tela não apaga com o controle nas mãos. Uma recusa
 da placa vira uma frase, nunca um silêncio. O hodômetro conta quanto cada eixo
-andou e quanto o spindle girou, hoje e desde sempre.
+andou e quanto o spindle girou, hoje e desde sempre. E o servidor avisa no
+celular, com o app fechado, quando a máquina precisa de alguém: alarme, spindle
+esquecido girando, sinal perdido no meio do trabalho.
 
 </td>
 </tr>
