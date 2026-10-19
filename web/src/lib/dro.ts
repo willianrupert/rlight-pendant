@@ -9,12 +9,15 @@ const STRIP = '0123456789';
 
 /** Um número com dígitos que rolam sozinhos, como o numericText do iOS. */
 export class DigitNumber {
+  readonly #root: HTMLElement;
   readonly #sign: HTMLElement;
   readonly #strips: HTMLElement[] = [];
   #shown = '';
 
   constructor(root: HTMLElement) {
-    root.classList.add('digits');
+    this.#root = root;
+    // Sem leitura ainda, um traço: os rolos em zero diriam "0000,00", uma posição que ninguém leu.
+    root.classList.add('digits', 'empty');
     root.textContent = '';
     this.#sign = el('span', 'sign');
     root.append(this.#sign);
@@ -35,6 +38,7 @@ export class DigitNumber {
     const [i, d] = Math.abs(r).toFixed(2).split('.') as [string, string];
     const text = (r < 0 ? '−' : ' ') + i.padStart(SLOTS, ' ').slice(-SLOTS) + d;
     if (text === this.#shown) return;
+    if (!this.#shown) this.#root.classList.remove('empty');
     this.#shown = text;
     this.#sign.textContent = r < 0 ? '−' : '';
     // O sinal encosta no primeiro dígito; a vírgula nunca sai do lugar.

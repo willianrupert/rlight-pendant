@@ -69,6 +69,10 @@ html[data-tone='alarm'] { background: var(--alarm); }
   line-height: 1.1;
 }
 .digits .sign { display: inline-block; width: 0.6em; text-align: right; }
+/* Antes da primeira leitura: um traço onde ficaria o último dígito inteiro, nada mais. */
+.digits.empty { position: relative; }
+.digits.empty > * { visibility: hidden; }
+.digits.empty::after { content: '—'; position: absolute; right: 1.56em; color: var(--fg-3); }
 .digits .slot { display: inline-block; height: 1.1em; overflow: hidden; width: 0.62em; text-align: center; }
 .digits .comma { display: inline-block; width: 0.32em; text-align: center; color: var(--fg-2); }
 .digits .dec { color: var(--fg-2); }
