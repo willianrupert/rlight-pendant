@@ -20,6 +20,7 @@
   import type { Odometer, ProbeProgress } from './lib/automations';
   import { destinationText, type SavedPin } from './lib/map-view';
   import { ScreenAwake } from './lib/wake';
+  import { LastSeenStore, browserStorage, lastSeenCaption, snapshotOf } from './lib/last-seen';
   import TableMap from './ui/TableMap.svelte';
   import { openDemoSocket } from '$demo';
 
@@ -31,6 +32,9 @@
   const tracker = new PendingTracker();
   const undo = new UndoWindow();
   const presence = new Presence();
+  // O último estado visto ao vivo: o app abre já mostrando, marcado como antigo,
+  // até chegar o de verdade. Só para os olhos (lib/last-seen.ts).
+  const lastSeen = new LastSeenStore(browserStorage());
   const fadeMs = prefersReducedMotion() ? 0 : 180;
   const axes: Axis[] = ['x', 'y', 'z'];
   const roots: Partial<Record<Axis, HTMLElement>> = {};
@@ -72,6 +76,7 @@
   let shown = $state<MachineState | null>(null);
   /** Um movimento pelo mapa em andamento: só ele transforma o mapa em Parar. */
   let mapMoveAt = $state<number | null>(null);
+  let remembered = $state(lastSeen.recall());
 
   const machine = $derived(st?.machine ?? null);
   const link = $derived(conn.link(now));
@@ -81,7 +86,10 @@
   const usingWork = $derived(!!machine?.wco);
   const pres = $derived(presentState({ state: shown, homed, alarmCode: conn.alarmCode }));
   const line = $derived(linkLine(link));
-  const axisNames = $derived(axes.filter((a) => !profile || profile.axes[a]));
+  const axisNames = $derived(axes.filter((a) => (profile ? !!profile.axes[a] : (remembered?.axes.includes(a) ?? true))));
+  // Nada ao vivo ainda: os números são os lembrados (apagados, com a idade embaixo).
+  const old = $derived(!machine && remembered ? remembered : null);
+  const oldCaption = $derived(old ? lastSeenCaption(old, performance.timeOrigin + now) : null);
   const ov = $derived(machine?.overrides ?? null);
 
   const hands = $derived(controlsVisible({ live, inControl, hasMachine: !!machine }));
@@ -263,9 +271,22 @@
     window.addEventListener('pageshow', back);
     document.addEventListener('selectstart', noSelect);
     for (const a of axes) if (roots[a]) telemetry.attach(a, roots[a]!);
+    if (remembered) telemetry.push(remembered.pos, performance.now());
+    const save = () => lastSeen.flush();
+    window.addEventListener('pagehide', save);
+    document.addEventListener('visibilitychange', save);
     conn.onState = (s, at) => {
       st = s;
       const m = s.machine;
+      if (m) {
+        // O lembrado sai na primeira leitura ao vivo; o passado não interpola o presente.
+        if (remembered) {
+          remembered = null;
+          telemetry.clear();
+        }
+        // Só o que a máquina disse ao vivo vira lembrança, com a hora em que foi visto.
+        if (s.link.mode === 'live') lastSeen.remember(snapshotOf(m, s.homed, profile, Date.now()));
+      }
       if (moveUndo && m) {
         if (m.state === 'Jog') moveSeen = true;
         else if (m.state === 'Idle' && moveSeen) {
@@ -382,9 +403,9 @@
 <main class:stale={!live} class:hands class:resizing>
   <header>
     <div class="title">
-      <span class="name">{profile?.name ?? 'RLight'}</span>
+      <span class="name">{profile?.name ?? old?.name ?? 'RLight'}</span>
       {#if demo}<span class="demo" title="Nenhuma máquina de verdade: o servidor e a CNC são simulados no navegador.">Demonstração · simulador</span>{/if}
-      <h1>{live ? pres.label : (linkTitle(link) ?? (machine ? 'Sem sinal' : pres.label))}</h1>
+      <h1>{live ? pres.label : (linkTitle(link) ?? (machine || old ? 'Sem sinal' : pres.label))}</h1>
     </div>
     {#if hands}
       <div class="quiet-row">
@@ -468,7 +489,11 @@
       </div>
     {/each}
     <p class="caption">
-      <span>{usingWork ? 'Coordenadas da peça' : 'Coordenadas da máquina'}</span>
+      {#if old}
+        <span class="old">{oldCaption}</span>
+      {:else}
+        <span>{usingWork ? 'Coordenadas da peça' : 'Coordenadas da máquina'}</span>
+      {/if}
       {#if canZero}<span class="hint">Segure um eixo para zerar</span>{/if}
     </p>
   </section>
@@ -752,6 +777,7 @@
   .caption span:first-child { color: var(--fg-2); }
   .caption .hint::before { content: '·'; margin-right: 0.5em; }
   main.stale .value { opacity: 0.35; }
+  .caption span.old { color: var(--fg-3); }
 
   .meters { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .meter { background: var(--panel); border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; transition: opacity 0.4s; border: 0; color: inherit; text-align: left; font: inherit; }
