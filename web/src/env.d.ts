@@ -10,3 +10,8 @@ declare module '$demo' {
   import type { OpenSocket } from './lib/connection';
   export const openDemoSocket: OpenSocket | null;
 }
+
+// O que o Vite injeta (só o que o app usa).
+interface ImportMeta {
+  readonly env: { readonly PROD: boolean; readonly BASE_URL: string };
+}

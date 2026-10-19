@@ -1,6 +1,7 @@
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
+import { serviceWorker } from './sw/plugin';
 
 // Em desenvolvimento, o app fala com o servidor do RLight pelo mesmo endereço
 // (/ws), como vai ser atrás do proxy no Proxmox (ADR-0001).
@@ -14,7 +15,8 @@ const at = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 
 export default defineConfig({
   base: process.env.VITE_BASE ?? '/',
-  plugins: [svelte()],
+  // O service worker (sw/) guarda a casca no aparelho: o app abre sem rede.
+  plugins: [svelte(), serviceWorker()],
   resolve: {
     alias: demo
       ? {
