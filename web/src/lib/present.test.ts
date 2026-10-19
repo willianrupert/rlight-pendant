@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { boardErrorText, formatMm, formatRpm, formatFeed, presentState, linkLine, splitMm } from './present';
+import { boardErrorText, formatMm, formatRpm, formatFeed, presentState, linkLine, linkTitle, splitMm } from './present';
 
 // DESIGN.md: palavras do ponto de vista de quem opera, vírgula decimal, ponto de milhar.
 
@@ -84,8 +84,26 @@ describe('linkLine: um indicador, não três', () => {
     expect(linkLine({ mode: 'no-signal', ageMs: null, showBack: false, failedHop: 'server' })).toBe('Procurando a máquina');
   });
 
-  it('idade longa em minutos', () => {
-    expect(linkLine({ mode: 'no-signal', ageMs: 125_000, showBack: false, failedHop: 'server' })).toBe('Sem sinal da máquina · há 2 min');
+  it('idade longa em minutos, enquanto ainda é uma queda curta', () => {
+    expect(linkLine({ mode: 'no-signal', ageMs: 125_000, showBack: false, failedHop: 'machine' })).toBe('Sem sinal da máquina · há 2 min');
+  });
+
+  it('a máquina calada há mais de 5 min: provavelmente desligada, e diz o que fazer', () => {
+    // Visto no iPhone: "Sem sinal da máquina · há 655 min" — contar minutos não ajuda.
+    const off = { mode: 'no-signal' as const, ageMs: 655 * 60_000, showBack: false, failedHop: 'machine' as const };
+    expect(linkLine(off)).toBe('Ligue o painel da CNC. Se já está ligado, confira o Wi-Fi da placa.');
+    expect(linkTitle(off)).toBe('Máquina desligada');
+  });
+
+  it('quem não responde é o servidor (o celular fora da rede): outra frase', () => {
+    expect(linkLine({ mode: 'no-signal', ageMs: 8_000, showBack: false, failedHop: 'server' })).toBe('Sem conexão com o servidor · há 8 s');
+    const long = { mode: 'no-signal' as const, ageMs: 6 * 60_000, showBack: false, failedHop: 'server' as const };
+    expect(linkLine(long)).toBe('Sem conexão com o servidor. Confira se o celular está na rede da oficina.');
+    expect(linkTitle(long)).toBeNull();
+  });
+
+  it('queda curta: o título continua o de sempre', () => {
+    expect(linkTitle({ mode: 'no-signal', ageMs: 60_000, showBack: false, failedHop: 'machine' })).toBeNull();
   });
 });
 

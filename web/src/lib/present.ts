@@ -91,7 +91,26 @@ export function presentState(input: { state: MachineState | null; homed: boolean
 export function linkLine(link: CombinedLink): string | null {
   if (link.mode === 'live') return link.showBack ? 'De volta' : null;
   if (link.ageMs === null) return 'Procurando a máquina';
-  const s = Math.floor(link.ageMs / 1000);
-  const age = s < 60 ? `${s} s` : `${Math.floor(s / 60)} min`;
-  return `Sem sinal da máquina · há ${age}`;
+  const long = link.ageMs >= LONG_SILENCE_MS;
+  // Quem não responde é o servidor: o problema está no celular ou na rede, não na máquina.
+  if (link.failedHop === 'server') {
+    return long ? 'Sem conexão com o servidor. Confira se o celular está na rede da oficina.' : `Sem conexão com o servidor · há ${age(link.ageMs)}`;
+  }
+  // Calada há muito tempo, a máquina quase sempre está desligada: contar minutos não ajuda.
+  if (long) return 'Ligue o painel da CNC. Se já está ligado, confira o Wi-Fi da placa.';
+  return `Sem sinal da máquina · há ${age(link.ageMs)}`;
+}
+
+/** O título quando a máquina está calada há muito tempo; null mantém o de sempre. */
+export function linkTitle(link: CombinedLink): string | null {
+  if (link.mode !== 'no-signal' || link.failedHop !== 'machine' || link.ageMs === null) return null;
+  return link.ageMs >= LONG_SILENCE_MS ? 'Máquina desligada' : null;
+}
+
+/** Depois disto sem sinal, deixa de ser uma queda e vira "desligada". */
+const LONG_SILENCE_MS = 5 * 60_000;
+
+function age(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min`;
 }

@@ -12,7 +12,7 @@
   import { HOLD_MS, holdProgress, idleHold, pressHold, type Hold } from './lib/hold';
   import type { TableLimits } from './lib/map-view';
   import { Presence } from './lib/presence';
-  import { boardErrorText, formatFeed, formatRpm, linkLine, presentState } from './lib/present';
+  import { boardErrorText, formatFeed, formatRpm, linkLine, linkTitle, presentState } from './lib/present';
   import HoldButton from './ui/HoldButton.svelte';
   import Ruler from './ui/Ruler.svelte';
   import SpindleSheet from './ui/SpindleSheet.svelte';
@@ -354,7 +354,7 @@
     <div class="title">
       <span class="name">{profile?.name ?? 'RLight'}</span>
       {#if demo}<span class="demo" title="Nenhuma máquina de verdade: o servidor e a CNC são simulados no navegador.">Demonstração · simulador</span>{/if}
-      <h1>{live || !machine ? pres.label : 'Sem sinal'}</h1>
+      <h1>{live || !machine ? pres.label : (linkTitle(link) ?? 'Sem sinal')}</h1>
     </div>
     {#if hands}
       <div class="quiet-row">
