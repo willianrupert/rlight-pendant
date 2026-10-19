@@ -5,6 +5,8 @@
   import type { Clicker } from '../lib/feel';
   import { formatDistance, formatDuration, parseThickness, probeLine, type Odometer, type ProbeProgress } from '../lib/automations';
   import HoldButton from './HoldButton.svelte';
+  import CalibrationCard from './CalibrationCard.svelte';
+  import type { SpindleProfile } from '@rlight/core';
   import type { SavedPin } from '../lib/map-view';
   import { formatMm } from '../lib/present';
 
@@ -24,6 +26,14 @@
     canGoToPoint: boolean;
     /** O zero da peça, para mostrar os pontos nas mesmas coordenadas do DRO. */
     offset: { x: number; y: number; z: number };
+    /** O spindle, para a calibração guiada da rotação. */
+    spindle: SpindleProfile | null;
+    canSpindleStart: boolean;
+    canSpindleAdjust: boolean;
+    canSpindleStop: boolean;
+    onspindlestart: (rpm: number) => void;
+    onspindlespeed: (rpm: number) => void;
+    onspindlestop: () => void;
     onsavepoint: (name: string) => void;
     ongopoint: (p: SavedPin) => void;
     ondeletepoint: (p: SavedPin) => void;
@@ -46,6 +56,13 @@
     canSavePoint,
     canGoToPoint,
     offset,
+    spindle,
+    canSpindleStart,
+    canSpindleAdjust,
+    canSpindleStop,
+    onspindlestart,
+    onspindlespeed,
+    onspindlestop,
     clicker,
     onprobe,
     onstop,
@@ -170,6 +187,22 @@
       {/if}
     </div>
   </section>
+
+  {#if spindle && spindle.speedMap.length > 1}
+    <section>
+      <h3>Spindle</h3>
+      <CalibrationCard
+        {spindle}
+        canStart={canSpindleStart}
+        canAdjust={canSpindleAdjust}
+        canStop={canSpindleStop}
+        {clicker}
+        onstart={onspindlestart}
+        onspeed={onspindlespeed}
+        onstop={onspindlestop}
+      />
+    </section>
+  {/if}
 
   {#if odometer}
     <section>

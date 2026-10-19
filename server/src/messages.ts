@@ -32,6 +32,9 @@ export type CommandRequest =
   | { command: 'deletePoint'; pointId: string }
   /** Volta para onde a máquina estava antes do último Ir ou ida a um ponto. */
   | { command: 'undoMove' }
+  /** Retomar: volta para onde a máquina estava antes de perder o homing, ou dispensa a oferta. */
+  | { command: 'resumePosition' }
+  | { command: 'dismissResume' }
   | { command: 'cancelJog' | 'unlock' | 'home' | 'softReset' | 'feedHold' | 'resume' };
 
 export type ClientMessage =
@@ -60,13 +63,15 @@ export type ServerMessage =
   | { type: 'odometer'; day: string; today: OdoTotals; total: OdoTotals }
   /** A placa recusou uma linha (error:n): qual, para a tela dizer o motivo. */
   | { type: 'boardError'; code: number; line: string }
+  /** Retomar: onde a máquina estava antes de perder o homing (null: não há oferta). */
+  | { type: 'resume'; pos: { x: number; y: number; z: number } | null }
   /** Os pontos salvos, para todas as telas: a cada conexão e a cada mudança. */
   | { type: 'points'; points: SavedPoint[] }
   /** O andamento da placa de toque, para todas as telas. */
   | { type: 'probe'; status: 'seeking' | 'measuring' | 'done' | 'failed'; reason?: string; zeroMachineZ?: number }
   | { type: 'invalid'; reason: string };
 
-const SIMPLE = new Set(['cancelJog', 'unlock', 'home', 'softReset', 'feedHold', 'resume', 'undoZero', 'spindleOff', 'undoMove']);
+const SIMPLE = new Set(['cancelJog', 'unlock', 'home', 'softReset', 'feedHold', 'resume', 'undoZero', 'spindleOff', 'undoMove', 'resumePosition', 'dismissResume']);
 const isAxis = (v: unknown): v is Axis => v === 'x' || v === 'y' || v === 'z';
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 

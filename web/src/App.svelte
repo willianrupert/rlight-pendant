@@ -12,7 +12,7 @@
   import { HOLD_MS, holdProgress, idleHold, pressHold, type Hold } from './lib/hold';
   import type { TableLimits } from './lib/map-view';
   import { Presence } from './lib/presence';
-  import { boardErrorText, formatFeed, formatRpm, linkLine, linkTitle, presentState } from './lib/present';
+  import { formatMm, boardErrorText, formatFeed, formatRpm, linkLine, linkTitle, presentState } from './lib/present';
   import HoldButton from './ui/HoldButton.svelte';
   import Ruler from './ui/Ruler.svelte';
   import SpindleSheet from './ui/SpindleSheet.svelte';
@@ -36,7 +36,7 @@
   const roots: Partial<Record<Axis, HTMLElement>> = {};
   const rows: Partial<Record<Axis, HTMLElement>> = {};
   const TRACKED = new Set<CommandName>(['unlock', 'home', 'feedHold', 'resume', 'softReset', 'cancelJog', 'spindleOn', 'spindleOff']);
-  const MOVES = new Set<CommandName>(['nudge', 'jogAxisTo', 'jogTo', 'goToPoint', 'undoMove']);
+  const MOVES = new Set<CommandName>(['nudge', 'jogAxisTo', 'jogTo', 'goToPoint', 'undoMove', 'resumePosition']);
 
   let st = $state<ServerState | null>(null);
   let profile = $state<MachineProfile | null>(null);
@@ -54,10 +54,14 @@
   let odometer = $state<Odometer | null>(null);
   /** Os pontos salvos (o Save X/Y/Z do Romney), do servidor. */
   let points = $state<SavedPin[]>([]);
+  /** Retomar: onde a máquina estava antes de desligar (ou de um alarme), oferecido depois do homing. */
+  let resumeOffer = $state<{ x: number; y: number; z: number } | null>(null);
   // O "Desfazer" de um Ir ou de uma ida a um ponto aparece quando a máquina chega,
   // nunca no meio do caminho (a volta não pode entrar na fila atrás da ida).
   let moveUndo: string | null = null;
   let moveSeen = false;
+  /** Um número curto para caber numa linha: sem os zeros decimais ("300", "−20,5"). */
+  const shortMm = (v: number) => formatMm(Math.round(v * 10) / 10).replace(/,?0+$/, '');
   function armMoveUndo(label: string) {
     moveUndo = label;
     moveSeen = false;
@@ -291,6 +295,7 @@
     };
     conn.onOdometer = (o) => (odometer = o);
     conn.onPoints = (p) => (points = p);
+    conn.onResume = (pos) => (resumeOffer = pos);
     conn.onProbe = (p) => {
       probe = p;
       if (p.status === 'failed') clicker.play('wall');
@@ -310,7 +315,7 @@
       if (outcome) pendingRev++;
       if (!result.ok) {
         flash(result.reason);
-        if (command === 'jogTo' || command === 'goToPoint') {
+        if (command === 'jogTo' || command === 'goToPoint' || command === 'resumePosition') {
           mapMoveAt = null;
           map?.clearTarget();
           moveUndo = null;
@@ -585,6 +590,28 @@
   </div>
 {/if}
 
+{#if resumeOffer && hands && !undoLabel}
+  <!-- Retomar de onde parou: oferecido depois do homing, quando a máquina estava em outro lugar. -->
+  <div class="toast resume" role="status">
+    <span>
+      Voltar para onde estava?
+      <small>{(['x', 'y', 'z'] as const).map((a) => `${a.toUpperCase()} ${shortMm(resumeOffer![a] - (machine?.wco?.[a] ?? 0))}`).join(' · ')}</small>
+    </span>
+    <button
+      disabled={!may('resumePosition')}
+      onclick={() => {
+        const pos = resumeOffer!;
+        clicker.play('confirm');
+        mapMoveAt = performance.now();
+        armMoveUndo('Onde estava');
+        map?.showTarget({ id: 'resume', name: 'Onde estava', ...pos });
+        send({ command: 'resumePosition' });
+      }}>Voltar</button
+    >
+    <button class="dismiss" aria-label="Dispensar" onclick={() => send({ command: 'dismissResume' })}>×</button>
+  </div>
+{/if}
+
 {#if automations && hands}
   <AutomationsSheet
     hasProbe={!!profile?.hasProbe}
@@ -608,6 +635,13 @@
       send({ command: 'goToPoint', pointId: p.id });
     }}
     ondeletepoint={(p) => send({ command: 'deletePoint', pointId: p.id })}
+    spindle={profile?.spindle ?? null}
+    canSpindleStart={may('spindleOn')}
+    canSpindleAdjust={may('spindleSpeed')}
+    canSpindleStop={may('spindleOff')}
+    onspindlestart={(rpm) => send({ command: 'spindleOn', rpm })}
+    onspindlespeed={(rpm) => send({ command: 'spindleSpeed', rpm })}
+    onspindlestop={() => send({ command: 'spindleOff' })}
     {clicker}
     onprobe={(thicknessMm) => {
       probe = null;
@@ -785,6 +819,11 @@
   }
   .toast span { flex: 1; font-size: 15px; }
   .toast button { border: 0; background: transparent; color: var(--acc); font: 600 17px var(--sans); min-height: 60px; min-width: 60px; padding: 0 14px; cursor: pointer; }
+  .toast.resume span { display: flex; flex-direction: column; gap: 2px; }
+  .toast.resume span { min-width: 0; }
+  .toast.resume small { font: 500 12px var(--mono); color: var(--fg-3); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .toast button:disabled { opacity: 0.45; }
+  .toast button.dismiss { color: var(--fg-3); min-width: 44px; padding: 0 10px; font-size: 22px; }
   .toast i { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--acc); opacity: 0.5; transform-origin: left; transition: transform 0.25s linear; }
   @keyframes rise { from { transform: translate(-50%, 120%); } }
   @keyframes drop { from { transform: translate(-50%, -8px); opacity: 0; } }

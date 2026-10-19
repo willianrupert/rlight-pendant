@@ -38,7 +38,7 @@ export type CommandRequest =
   | { command: 'probeZ'; thicknessMm: number }
   | { command: 'savePoint'; name: string }
   | { command: 'goToPoint' | 'deletePoint'; pointId: string }
-  | { command: 'undoMove' };
+  | { command: 'undoMove' | 'resumePosition' | 'dismissResume' };
 
 export type CommandName = CommandRequest['command'];
 
@@ -57,6 +57,7 @@ type ServerMessage =
   | { type: 'probe'; status: ProbeProgress['status']; reason?: string }
   | { type: 'boardError'; code: number; line: string }
   | { type: 'points'; points: SavedPin[] }
+  | { type: 'resume'; pos: { x: number; y: number; z: number } | null }
   | ({ type: 'odometer' } & Odometer);
 
 const BACKOFF_MS = [500, 1_000, 2_000, 5_000];
@@ -98,6 +99,8 @@ export class Connection {
   onControl: ((inControl: boolean, reason: string | null) => void) | null = null;
   /** Resposta a um comando, pelo id que `command` devolveu. */
   onResult: ((id: string, command: CommandName, result: CommandResult) => void) | null = null;
+  /** Retomar: onde a máquina estava antes de perder o homing (null: sem oferta). */
+  onResume: ((pos: { x: number; y: number; z: number } | null) => void) | null = null;
   /** Os pontos salvos (o Save X/Y/Z do Romney), a cada mudança. */
   onPoints: ((points: SavedPin[]) => void) | null = null;
   /** O hodômetro da máquina, a cada poucos segundos. */
@@ -284,6 +287,8 @@ export class Connection {
         this.profile = p.profile;
         this.limits = p.limits;
         this.onProfile?.(p.profile);
+      } else if (msg.type === 'resume') {
+        this.onResume?.((msg as { pos: { x: number; y: number; z: number } | null }).pos);
       } else if (msg.type === 'points') {
         this.onPoints?.((msg as { points: SavedPin[] }).points);
       } else if (msg.type === 'odometer') {

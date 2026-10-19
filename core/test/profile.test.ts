@@ -55,7 +55,11 @@ describe('profileFromConfig: a máquina de referência', () => {
   });
 
   it('o spindle: faixa e tempos de rampa', () => {
-    expect(p.spindle).toEqual({ type: '10V', minRpm: 0, minRunningRpm: 900, maxRpm: 18000, spinupMs: 5000, spindownMs: 10000 });
+    expect(p.spindle).toMatchObject({ type: '10V', minRpm: 0, minRunningRpm: 900, maxRpm: 18000, spinupMs: 5000, spindownMs: 10000 });
+    // A curva inteira, rpm → % de PWM, para a calibração guiada.
+    expect(p.spindle?.speedMap[0]).toEqual({ rpm: 0, percent: 0 });
+    expect(p.spindle?.speedMap[1]).toEqual({ rpm: 1800, percent: 10.25 });
+    expect(p.spindle?.speedMap.at(-1)).toEqual({ rpm: 18000, percent: 99.72 });
   });
 
   it('apalpador e cartão SD configurados', () => {

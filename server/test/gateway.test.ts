@@ -510,6 +510,34 @@ describe('gateway: mexer na máquina, de ponta a ponta', () => {
     expect(await b.command({ command: 'savePoint', name: 'x' })).toEqual({ type: 'result', id: 'r1', ok: false, reason: 'Outra tela está no controle' });
   });
 
+  it('desligou com a máquina parada; religou: depois do homing, oferece voltar, e volta', async () => {
+    // A máquina estava homed e parada em (120, 80, −20) antes de desligar.
+    const homing = fileHomingMemory(join(mkdtempSync(join(tmpdir(), 'rlight-')), 'homing.json'));
+    homing.write(true);
+    let saved = { pos: { x: 120, y: 80, z: -20 }, at: 0 };
+    const resume = { read: () => saved, write: (s: typeof saved) => void (saved = s) };
+    fake = new FakeFluidNC({ state: 'Alarm', mpos: { x: 0, y: 0, z: 0 }, homePos: { x: 0, y: 0, z: 0 }, homingMs: 600 });
+    const port = await fake.listen();
+    board = new Board({ host: '127.0.0.1', port, backoffMs: [20, 40, 80], deadAfterMs: 5_000 });
+    board.start();
+    gateway = new Gateway({ board, homingMemory: homing, resumeMemory: resume });
+    wsPort = await gateway.start();
+    const b = await browser();
+    await until(() => b.state()?.machine && b.of('profile')[0]);
+    expect(b.of('resume').at(-1)?.pos ?? null).toBeNull();
+    b.send({ type: 'takeControl' });
+    await until(() => b.state()?.control.inControl);
+    await b.command({ command: 'home' });
+    const offer = await until(() => b.of('resume').find((m) => m.pos !== null), { what: 'a oferta de voltar', timeoutMs: 5_000 });
+    expect(offer.pos).toEqual({ x: 120, y: 80, z: -20 });
+    expect(await b.command({ command: 'resumePosition' })).toMatchObject({ ok: true });
+    await until(() => b.of('resume').at(-1)?.pos === null, { what: 'a oferta usada' });
+    await until(() => {
+      const m = b.state()?.machine;
+      return m?.state === 'Idle' && m.mpos?.x === 120 && m.mpos?.y === 80 && m.mpos?.z === -20;
+    }, { what: 'de volta onde estava', timeoutMs: 10_000 });
+  }, 15_000);
+
   it('o alarme da placa chega a todas as telas', async () => {
     await setup();
     const a = await browser();

@@ -175,6 +175,21 @@ quando ela está a menos de 10 mm da superfície da peça (ou ao topo, sem zero 
 peça). `undoMove` volta, pelo mesmo caminho seguro, para onde a máquina estava
 antes do último `jogTo` ou `goToPoint` (até 2 minutos depois, uma vez).
 
+### Retomar de onde parou
+
+```json
+{ "type": "command", "id": "r14", "command": "resumePosition" }
+{ "type": "command", "id": "r15", "command": "dismissResume" }
+{ "type": "resume", "pos": { "x": 300, "y": 200, "z": -20 } }
+```
+
+O servidor grava a última posição em que a máquina ficou parada com o homing
+valendo (`RLIGHT_STATE_DIR/resume.json`). Quando o homing se perde (a placa
+voltou em alarme, ou um alarme perdeu a posição) e é refeito, ele manda `resume`
+com essa posição, se a máquina estiver longe dela; a oferta vale 15 minutos.
+`resumePosition` volta pelo mesmo caminho seguro de `goToPoint`;
+`dismissResume` dispensa. `resume` com `pos: null` diz que não há oferta.
+
 ### `command`
 
 Todo comando passa por `allowed()` do core antes de chegar à placa. Sem sinal,

@@ -13,6 +13,7 @@ import { ControlSession, noControlMemory, REASON_TAKEN, type ControlMemory } fro
 import { ProbeSequence, type ProbeStep } from './probe';
 import { Odometer, noOdometerMemory, type OdometerMemory } from './odometer';
 import { PointStore, noPointsMemory, type PointsMemory } from './points';
+import { ResumeTracker, noResumeMemory, type ResumeMemory } from './resume';
 import {
   parseClientMessage,
   PROTOCOL_VERSION,
@@ -48,6 +49,8 @@ export interface GatewayOptions {
   pingMs?: number;
   /** Onde guardar os pontos salvos. */
   pointsMemory?: PointsMemory;
+  /** Onde guardar a última posição parada, para retomar depois de desligar. */
+  resumeMemory?: ResumeMemory;
 }
 
 /** O hodômetro vai às telas a cada tanto, e é gravado a cada tanto. */
@@ -90,6 +93,10 @@ export class Gateway {
   private probe: ProbeSequence | null = null;
   private readonly odometer: Odometer;
   private readonly points: PointStore;
+  private readonly resume: ResumeTracker;
+  private readonly resumeMemory: ResumeMemory;
+  private resumeDirty = false;
+  private resumeSavedAt = 0;
   private readonly pointsMemory: PointsMemory;
   /** Onde a máquina estava antes do último Ir ou ida a um ponto (o "Desfazer"). */
   private undoFrom: { pos: { x: number; y: number; z: number }; at: number } | null = null;
@@ -116,6 +123,8 @@ export class Gateway {
     this.sawHoming = this.homingMemory.read();
     this.control = new ControlSession(options.controlGraceMs);
     this.controlMemory = options.controlMemory ?? noControlMemory;
+    this.resumeMemory = options.resumeMemory ?? noResumeMemory;
+    this.resume = new ResumeTracker(this.resumeMemory.read());
     this.pointsMemory = options.pointsMemory ?? noPointsMemory;
     this.points = new PointStore(this.pointsMemory.read());
     this.odometerMemory = options.odometerMemory ?? noOdometerMemory;
@@ -151,6 +160,8 @@ export class Gateway {
         this.odometer.onReport(snap.mpos, snap.spindleOn, snap.state, Date.now());
         this.odometerDirty = true;
         this.onStatus(snap.state);
+        // A última posição parada com o homing valendo: para retomar depois de desligar.
+        if (this.homed && snap.state === 'Idle' && snap.mpos && this.resume.onStill(snap.mpos, this.board.now())) this.resumeDirty = true;
       }),
       b.on('message', (m) => {
         if (m.kind === 'ok' || m.kind === 'error') this.flushDeferredSpindle();
@@ -179,6 +190,13 @@ export class Gateway {
   /** Manda o hodômetro às telas e o grava, cada um no seu ritmo. */
   private tickOdometer(): void {
     const now = Date.now();
+    // A posição de retomar também é gravada, no máximo a cada 5 s.
+    if (this.resumeDirty && now - this.resumeSavedAt >= 5_000) {
+      const s = this.resume.still;
+      if (s) this.resumeMemory.write(s);
+      this.resumeDirty = false;
+      this.resumeSavedAt = now;
+    }
     if (this.odometerDirty && now - this.odometerSentAt >= ODOMETER_SEND_MS) {
       this.odometerSentAt = now;
       this.broadcast({ type: 'odometer', ...this.odometer.snapshot });
@@ -214,6 +232,8 @@ export class Gateway {
   async close(): Promise<void> {
     if (this.pinger) clearInterval(this.pinger);
     this.odometerMemory.write(this.odometer.snapshot);
+    const still = this.resume.still;
+    if (still && this.resumeDirty) this.resumeMemory.write(still);
     if (this.heartbeat) clearInterval(this.heartbeat);
     for (const off of this.unsubscribe) off();
     for (const c of this.clients.values()) {
@@ -231,9 +251,17 @@ export class Gateway {
   // ── A placa ────────────────────────────────────────────────────────────────
 
   private setHomed(homed: boolean): void {
+    // Perder o homing (desligou, alarme) guarda onde a máquina estava, mesmo que já se soubesse.
+    if (!homed) this.resume.homingLost();
     if (homed === this.sawHoming) return;
     this.sawHoming = homed;
     this.homingMemory.write(homed);
+    if (homed) {
+      // O homing voltou: se a máquina está longe de onde estava, oferece voltar.
+      const mpos = this.board.snapshot?.mpos;
+      const pos = mpos ? this.resume.homingRegained(mpos, this.board.now()) : null;
+      if (pos) this.broadcast({ type: 'resume', pos });
+    }
   }
 
   private get homed(): boolean {
@@ -335,6 +363,7 @@ export class Gateway {
     this.send(client, { type: 'welcome', protocol: PROTOCOL_VERSION, clientId: client.id });
     this.send(client, { type: 'odometer', ...this.odometer.snapshot });
     this.send(client, { type: 'points', points: this.points.list });
+    this.send(client, { type: 'resume', pos: this.resume.offer(this.board.now())?.pos ?? null });
     this.sendProfile(client);
     this.schedule(client);
     this.updatePoll();
@@ -394,6 +423,16 @@ export class Gateway {
       this.send(client, reason ? { type: 'result', ...ids, ok: false, reason } : { type: 'result', ...ids, ok: true });
       return;
     }
+    if (req.command === 'dismissResume') {
+      if (!this.control.isController(client.id)) {
+        this.send(client, { type: 'result', ...ids, ok: false, reason: 'Outra tela está no controle' });
+        return;
+      }
+      this.resume.clearOffer();
+      this.broadcast({ type: 'resume', pos: null });
+      this.send(client, { type: 'result', ...ids, ok: true });
+      return;
+    }
     const plan = planCommand(req, {
       snapshot: this.board.snapshot,
       profile: this.board.profile,
@@ -407,6 +446,7 @@ export class Gateway {
       spindleDwelling: this.spindleDwelling(),
       findPoint: (pid) => this.points.get(pid),
       undoFrom: this.undoFrom,
+      resumeTo: this.resume.offer(this.board.now())?.pos ?? null,
     });
     if (!plan.ok) {
       this.send(client, { type: 'result', ...ids, ok: false, reason: plan.reason });
@@ -429,6 +469,10 @@ export class Gateway {
       this.undoFrom = { pos: { ...before.mpos }, at: this.board.now() };
     }
     if (plan.undo === 'clear') this.undoFrom = null;
+    if (req.command === 'resumePosition') {
+      this.resume.clearOffer();
+      this.broadcast({ type: 'resume', pos: null });
+    }
     if (plan.probe) {
       this.probe = plan.probe;
       this.broadcast({ type: 'probe', status: 'seeking' });

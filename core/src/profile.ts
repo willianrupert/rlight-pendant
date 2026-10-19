@@ -73,6 +73,8 @@ export interface SpindleProfile {
   maxRpm: number;
   spinupMs: number;
   spindownMs: number;
+  /** A curva do speed_map, rpm → % de PWM, na ordem da configuração. */
+  speedMap: { rpm: number; percent: number }[];
 }
 
 export interface MachineProfile {
@@ -127,6 +129,7 @@ function spindleProfile(cfg: ConfigMap): SpindleProfile | null {
     const s = cfg[type];
     const sec: ConfigMap = isMap(s) ? s : {};
     const rpms: number[] = [];
+    const speedMap: { rpm: number; percent: number }[] = [];
     let fromZero = false;
     if (typeof sec.speed_map === 'string') {
       for (const pair of sec.speed_map.split(/\s+/)) {
@@ -134,7 +137,9 @@ function spindleProfile(cfg: ConfigMap): SpindleProfile | null {
         const rpm = Number(r);
         if (!Number.isFinite(rpm)) continue;
         rpms.push(rpm);
-        if (rpm === 0 && parseFloat(pct ?? '') === 0) fromZero = true;
+        const percent = parseFloat(pct ?? '');
+        if (Number.isFinite(percent)) speedMap.push({ rpm, percent });
+        if (rpm === 0 && percent === 0) fromZero = true;
       }
     }
     const positive = rpms.filter((r) => r > 0);
@@ -146,6 +151,7 @@ function spindleProfile(cfg: ConfigMap): SpindleProfile | null {
       minRpm: rpms.length ? Math.min(...rpms) : 0,
       minRunningRpm,
       maxRpm,
+      speedMap,
       spinupMs: numOr(sec.spinup_ms, 0),
       spindownMs: numOr(sec.spindown_ms, 0),
     };

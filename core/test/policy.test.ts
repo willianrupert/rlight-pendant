@@ -7,8 +7,8 @@ const ctx = { link: 'live', inControl: true, homed: true } as const;
 
 // O que cada estado permite, com conexão viva e controle nas mãos.
 const TABLE: Record<MachineState, readonly Command[]> = {
-  Idle: ['home', 'softReset', 'jogTo', 'jogAxisTo', 'nudge', 'zero', 'undoZero', 'spindleOn', 'spindleOff', 'spindleSpeed', 'probeZ', 'goToPoint', 'undoMove'],
-  Jog: ['softReset', 'feedHold', 'cancelJog', 'jogTo', 'jogAxisTo', 'nudge', 'goToPoint', 'undoMove'],
+  Idle: ['home', 'softReset', 'jogTo', 'jogAxisTo', 'nudge', 'zero', 'undoZero', 'spindleOn', 'spindleOff', 'spindleSpeed', 'probeZ', 'goToPoint', 'undoMove', 'resumePosition'],
+  Jog: ['softReset', 'feedHold', 'cancelJog', 'jogTo', 'jogAxisTo', 'nudge', 'goToPoint', 'undoMove', 'resumePosition'],
   Run: ['softReset', 'feedHold', 'spindleSpeed'],
   Hold: ['softReset', 'resume', 'spindleOff'],
   Alarm: ['unlock', 'home', 'softReset'],

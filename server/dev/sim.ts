@@ -7,11 +7,16 @@ import { Board } from '../src/board';
 import { join } from 'node:path';
 import { fileControlMemory } from '../src/control';
 import { Gateway } from '../src/gateway';
+import { fileHomingMemory } from '../src/homing-memory';
+import { fileOdometerMemory } from '../src/odometer';
+import { filePointsMemory } from '../src/points';
+import { fileResumeMemory } from '../src/resume';
 import { FakeFluidNC } from '../test/fake-fluidnc';
 
 // O spin-up de 5 s é o da máquina de referência (spinup_ms): o M3 só responde depois dele.
+// RLIGHT_SIM_POWER_ON=1: a placa começa em alarme, como recém-ligada (must_home).
 const fake = new FakeFluidNC({
-  state: 'Idle',
+  state: process.env.RLIGHT_SIM_POWER_ON ? 'Alarm' : 'Idle',
   mpos: { x: 412.3, y: 118.05, z: -3.2 },
   homingMs: 3_000,
   spinupMs: Number(process.env.RLIGHT_SIM_SPINUP_MS ?? 5_000),
@@ -25,8 +30,16 @@ const board = new Board({ host: '127.0.0.1', port: boardPort });
 const stateDir = process.env.RLIGHT_STATE_DIR;
 const gateway = new Gateway({
   board,
-  // Como no servidor de verdade: o controle sobrevive a reiniciar o simulador.
-  ...(stateDir ? { controlMemory: fileControlMemory(join(stateDir, 'control.json')) } : {}),
+  // Como no servidor de verdade: o que precisa sobreviver a reinícios fica no RLIGHT_STATE_DIR.
+  ...(stateDir
+    ? {
+        controlMemory: fileControlMemory(join(stateDir, 'control.json')),
+        homingMemory: fileHomingMemory(join(stateDir, 'homing.json')),
+        odometerMemory: fileOdometerMemory(join(stateDir, 'odometer.json')),
+        pointsMemory: filePointsMemory(join(stateDir, 'points.json')),
+        resumeMemory: fileResumeMemory(join(stateDir, 'resume.json')),
+      }
+    : {}),
   host: process.env.RLIGHT_HOST ?? '0.0.0.0',
   port: Number(process.env.RLIGHT_PORT ?? 8787),
 });

@@ -79,6 +79,8 @@ export interface CommandContext {
   findPoint?: (id: string) => SavedPoint | null;
   /** Onde a máquina estava antes do último Ir ou ida a um ponto, e quando. */
   undoFrom?: { pos: Vec3; at: number } | null;
+  /** Retomar: onde a máquina estava antes de perder o homing, se há oferta. */
+  resumeTo?: Vec3 | null;
 }
 
 /** O offset anterior de cada eixo zerado, e quando o zero foi feito. */
@@ -132,7 +134,7 @@ export function planCommand(req: CommandRequest, ctx: CommandContext): Plan {
     return { ok: true, writes: [], commanded: {}, hitLimit: false, moves: false };
   }
   // Salvar e apagar pontos não falam com a placa: o gateway cuida (precisa da lista).
-  if (req.command === 'savePoint' || req.command === 'deletePoint') return refuse('Pedido de pontos fora do lugar');
+  if (req.command === 'savePoint' || req.command === 'deletePoint' || req.command === 'dismissResume') return refuse('Pedido fora do lugar');
   const decision = allowed(req.command, ctx.snapshot.state, {
     link: ctx.link,
     inControl: ctx.inControl,
@@ -229,6 +231,7 @@ export function planCommand(req: CommandRequest, ctx: CommandContext): Plan {
     case 'jogAxisTo':
     case 'goToPoint':
     case 'undoMove':
+    case 'resumePosition':
       break;
   }
 
@@ -262,9 +265,9 @@ export function planCommand(req: CommandRequest, ctx: CommandContext): Plan {
     };
   }
 
-  if (req.command === 'goToPoint') {
-    const p = ctx.findPoint?.(req.pointId);
-    if (!p) return refuse('Esse ponto não existe mais');
+  if (req.command === 'goToPoint' || req.command === 'resumePosition') {
+    const p = req.command === 'goToPoint' ? ctx.findPoint?.(req.pointId) : ctx.resumeTo;
+    if (!p) return refuse(req.command === 'goToPoint' ? 'Esse ponto não existe mais' : 'Não há para onde voltar');
     if (!limits.z) return refuse('O curso do Z ainda não é conhecido');
     const { target } = goTo({ x: p.x, y: p.y }, limits);
     const z = clampToLimits(limits, 'z', p.z).value;
