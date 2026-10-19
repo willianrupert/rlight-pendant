@@ -2,7 +2,7 @@
 // não move a máquina; soltar manda um único `jogTo`. O modelo do gesto é puro;
 // o desenho escreve direto em atributos do SVG num laço de rAF, fora do Svelte.
 
-import { ReportBuffer, displayValue, goTo, remainingMoveSeconds, type AxisLimits } from '@rlight/core';
+import { ReportBuffer, displayValue, goTo, liftForTravel, pointApproach, remainingMoveSeconds, type AxisLimits } from '@rlight/core';
 import type { MachineState } from '@rlight/core';
 import { heading, speedText, speedVisible, trailPx } from './motion-look';
 import { formatMm } from './present';
@@ -47,6 +47,8 @@ export class GhostModel {
    * destino que a máquina não vai mais buscar.
    */
   target: Point | null = null;
+  /** O Z de chegada, quando o alvo é um ponto salvo (a descida faz parte da viagem). */
+  targetZ: number | null = null;
   #targetAt = 0;
   #sawMoving = false;
   #from: Point = { x: 0, y: 0 };
@@ -119,8 +121,9 @@ export class GhostModel {
     return dest;
   }
 
-  setTarget(p: Point, now: number): void {
+  setTarget(p: Point, now: number, z: number | null = null): void {
     this.target = { ...p };
+    this.targetZ = z;
     this.#targetAt = now;
     this.#sawMoving = false;
   }
@@ -133,14 +136,15 @@ export class GhostModel {
    * A cada relatório: 'arrived' quando a máquina chegou e parou (o alvo esmaece),
    * 'stopped' quando parou em outro lugar ou nunca andou (o alvo some), null enquanto vai.
    */
-  track(real: Point, state: MachineState | null, now: number): 'arrived' | 'stopped' | null {
+  track(real: Point & { z?: number }, state: MachineState | null, now: number): 'arrived' | 'stopped' | null {
     const t = this.target;
     if (!t) return null;
     if (state === 'Jog') {
       this.#sawMoving = true;
       return null;
     }
-    if (Math.hypot(real.x - t.x, real.y - t.y) <= ARRIVED_MM && state === 'Idle') {
+    const zThere = this.targetZ === null || real.z === undefined || Math.abs(real.z - this.targetZ) <= ARRIVED_MM;
+    if (Math.hypot(real.x - t.x, real.y - t.y) <= ARRIVED_MM && zThere && state === 'Idle') {
       this.target = null;
       return 'arrived';
     }
@@ -229,6 +233,14 @@ export class MapView {
   /** O curso do Z e o zero da peça em coordenada de máquina, quando conhecidos. */
   zLimits: AxisLimits | null = null;
   zZero: number | null = null;
+  /** Os pontos salvos, como alfinetes na mesa. */
+  #pins: SVGGElement;
+  #points: SavedPin[] = [];
+  /** Um toque num alfinete escolhe o ponto (a prévia com o nome e o "Ir"). */
+  onPin: ((p: SavedPin) => void) | null = null;
+  /** O plano do alvo em curso: a subida antes de atravessar e a descida da volta a um ponto. */
+  #targetLift: number | null = null;
+  #targetDescent: { fastTo: number | null; slowTo: number } | null = null;
   readonly #bx = new ReportBuffer();
   readonly #by = new ReportBuffer();
   #limits: TableLimits;
@@ -284,7 +296,9 @@ export class MapView {
     this.#eta = document.createElementNS(NS, 'text');
     this.#eta.setAttribute('class', 'eta');
     this.#eta.style.display = 'none';
-    svg.append(grid, this.#targetLine, this.#line, this.#trail, this.#halo, this.#zring, this.#target, this.#eta, this.#real, this.#ghost, this.#speed);
+    this.#pins = document.createElementNS(NS, 'g');
+    this.#pins.setAttribute('class', 'pins');
+    svg.append(grid, this.#targetLine, this.#line, this.#trail, this.#halo, this.#zring, this.#pins, this.#target, this.#eta, this.#real, this.#ghost, this.#speed);
     this.setLimits(limits);
     svg.addEventListener('pointerdown', this.#down);
     svg.addEventListener('pointermove', this.#move);
@@ -433,6 +447,14 @@ export class MapView {
     const tap = this.#tapStart;
     this.#tapStart = null;
     if (tap && this.#shownReal && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) <= TAP_SLOP_PX) {
+      // Um toque num alfinete escolhe o ponto salvo, em vez de um ponto qualquer da mesa.
+      const pin = this.model.preview ? null : this.#pinAt(e);
+      if (pin) {
+        this.model.preview = { x: pin.x, y: pin.y };
+        this.onPin?.(pin);
+        this.onPreview?.(this.model.preview);
+        return;
+      }
       this.model.tap(this.#toTable(e), this.#shownReal);
       this.onPreview?.(this.model.preview);
       return;
@@ -455,18 +477,109 @@ export class MapView {
   };
 
   /** Um "Ir" saiu: o alvo fica na mesa até a máquina chegar. */
-  setTarget(p: Point): void {
+  /**
+   * Um "Ir" saiu: o alvo fica na mesa até a máquina chegar. Com `pointZ`, é a volta
+   * a um ponto salvo: sobe ao topo e desce no fim, como o servidor faz.
+   */
+  setTarget(p: Point, pointZ: number | null = null): void {
     if (this.#fadeTimer) clearTimeout(this.#fadeTimer);
     this.#fadeTimer = null;
     this.#target.classList.remove('arrived');
-    this.model.setTarget(p, performance.now());
+    const plan = this.#plan(pointZ);
+    this.#targetLift = plan.lift;
+    this.#targetDescent = plan.descent;
+    this.model.setTarget(p, performance.now(), pointZ);
   }
 
-  /** Quanto leva, saindo parado da posição mostrada agora, até `p`. */
-  etaTo(p: Point): number | null {
+  /** A subida e a descida de uma viagem, com a regra do servidor (core). */
+  #plan(pointZ: number | null): { lift: number | null; descent: { fastTo: number | null; slowTo: number } | null } {
+    const z = this.#lastZ();
+    const lim = this.zLimits;
+    if (z === null || !lim) return { lift: null, descent: null };
+    if (pointZ !== null) {
+      const a = pointApproach({ savedZ: pointZ, zMax: lim.max });
+      return { lift: z < a.top - 1e-6 ? a.top : null, descent: { fastTo: a.fastTo, slowTo: a.slowTo } };
+    }
+    return { lift: liftForTravel({ mposZ: z, wcoZ: this.zZero ?? lim.max, zMax: lim.max }), descent: null };
+  }
+
+  #lastZ(): number | null {
+    const zs = this.#bz.items;
+    return zs[zs.length - 1]?.value ?? null;
+  }
+
+  /** O "Ir" até `p` vai subir a fresa antes de atravessar? */
+  liftsBefore(p: Point | null = null, pointZ: number | null = null): boolean {
+    void p;
+    return this.#plan(pointZ).lift !== null;
+  }
+
+  /** Quanto leva, saindo parado da posição mostrada agora, até `p` (com a subida e a descida). */
+  etaTo(p: Point, pointZ: number | null = null): number | null {
     const r = this.#shownReal;
+    const z = this.#lastZ();
     if (!r || !this.motion) return null;
-    return remainingMoveSeconds({ distanceMm: Math.hypot(p.x - r.x, p.y - r.y), speedMmPerMin: 0, ...this.motion });
+    const plan = this.#plan(pointZ);
+    const zMotion = this.motion.z ?? this.motion;
+    const top = plan.lift ?? z ?? 0;
+    return plannedSeconds({
+      from: { x: r.x, y: r.y, z: z ?? 0 },
+      to: p,
+      lift: plan.lift,
+      descent: plan.descent ? { from: top, ...plan.descent } : null,
+      xy: this.motion,
+      z: zMotion,
+    });
+  }
+
+  /** Os pontos salvos viram alfinetes discretos na mesa, com o nome. */
+  set points(list: SavedPin[]) {
+    this.#points = list;
+    this.#pins.textContent = '';
+    for (const p of list) {
+      const g = document.createElementNS(NS, 'g');
+      g.setAttribute('class', 'pin');
+      g.dataset.x = String(p.x);
+      g.dataset.y = String(p.y);
+      const c = document.createElementNS(NS, 'circle');
+      c.setAttribute('r', '1');
+      const t = document.createElementNS(NS, 'text');
+      t.textContent = p.name;
+      g.append(c, t);
+      this.#pins.append(g);
+    }
+  }
+
+  #pinAt(e: PointerEvent): SavedPin | null {
+    const at = this.#toTable(e);
+    const k = Math.max(this.#mmPerPx().x, this.#mmPerPx().y);
+    let best: SavedPin | null = null;
+    let bestD = 22 * k; // um dedo: 22 px em volta do alfinete
+    for (const p of this.#points) {
+      const d = Math.hypot(p.x - at.x, p.y - at.y);
+      if (d < bestD) {
+        best = p;
+        bestD = d;
+      }
+    }
+    return best;
+  }
+
+  #drawPins(k: number): void {
+    const gs = this.#pins.children;
+    for (let i = 0; i < gs.length; i++) {
+      const g = gs[i] as SVGGElement;
+      const x = Number(g.dataset.x);
+      const y = Number(g.dataset.y);
+      const c = g.firstElementChild as SVGCircleElement;
+      const t = g.lastElementChild as SVGTextElement;
+      c.setAttribute('cx', String(x));
+      c.setAttribute('cy', String(-y));
+      c.setAttribute('r', String(4.5 * k));
+      t.setAttribute('x', String(x));
+      t.setAttribute('y', String(-y + 15 * k));
+      t.setAttribute('font-size', String(10 * k));
+    }
   }
 
   /** O "Ir" foi recusado ou a tela perdeu o controle: o alvo some. */
@@ -481,7 +594,7 @@ export class MapView {
     const ly = ys[ys.length - 1]?.value;
     const shown = this.model.target;
     if (shown && lx != null && ly != null) {
-      const r = this.model.track({ x: lx, y: ly }, this.state, now);
+      const r = this.model.track({ x: lx, y: ly, ...(this.#lastZ() !== null ? { z: this.#lastZ()! } : {}) }, this.state, now);
       if (r === 'arrived') {
         // Esmaece no lugar e só então sai.
         this.#target.classList.add('arrived');
@@ -504,11 +617,30 @@ export class MapView {
     }
     // Quanto falta: a distância que resta e a velocidade que a placa reporta agora.
     if (this.motion && rx != null && ry != null) {
-      const s = remainingMoveSeconds({
-        distanceMm: Math.hypot(t.x - rx, t.y - ry),
-        speedMmPerMin: this.state === 'Jog' ? this.feed : 0,
-        ...this.motion,
-      });
+      // Por fases: falta subir (o Z ainda abaixo da altura de travessia), falta
+      // atravessar (na velocidade de agora), falta descer (a volta a um ponto).
+      const z = this.#lastZ() ?? 0;
+      const zMotion = this.motion.z ?? this.motion;
+      const xyLeft = Math.hypot(t.x - rx, t.y - ry);
+      const lift = this.#targetLift;
+      const descent = this.#targetDescent;
+      const zTime = (d: number, max = zMotion.maxMmPerMin) =>
+        remainingMoveSeconds({ distanceMm: Math.abs(d), speedMmPerMin: 0, maxMmPerMin: max, accelMmPerS2: zMotion.accelMmPerS2 });
+      const descentFrom = (from: number) => {
+        if (!descent) return 0;
+        const fastEnd = descent.fastTo !== null && from > descent.fastTo ? descent.fastTo : from;
+        return (fastEnd < from ? zTime(from - fastEnd) : 0) + zTime(Math.max(0, fastEnd - descent.slowTo), Math.min(600, zMotion.maxMmPerMin));
+      };
+      let s: number;
+      if (xyLeft > 0.5) {
+        const lifting = lift !== null && z < lift - 0.05;
+        s =
+          (lifting ? zTime(lift - z) : 0) +
+          remainingMoveSeconds({ distanceMm: xyLeft, speedMmPerMin: !lifting && this.state === 'Jog' ? this.feed : 0, ...this.motion }) +
+          descentFrom(lift ?? z);
+      } else {
+        s = descentFrom(z);
+      }
       const text = formatEta(s);
       if (text !== this.#etaShown) {
         this.#etaShown = text;
@@ -577,6 +709,7 @@ export class MapView {
     }
     this.#drawMotion(now, rx ?? null, ry ?? null, k);
     this.#drawTarget(now, rx ?? null, ry ?? null, k);
+    this.#drawPins(k);
     const g = this.model.ghost ?? this.model.preview;
     if (g && rx != null && ry != null) {
       this.#ghost.style.display = '';
@@ -643,8 +776,48 @@ export function formatEta(s: number): string {
   return `${Math.floor(r / 60)} min ${String(r % 60).padStart(2, '0')} s`;
 }
 
-/** A velocidade e a aceleração de um "Ir" em X e Y, do perfil da placa. */
-export interface MapMotion {
+/** Um ponto salvo, como o mapa precisa dele. */
+export interface SavedPin {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  z: number;
+}
+
+/** A velocidade e a aceleração de um eixo (ou de X e Y juntos), do perfil da placa. */
+export interface AxisMotion {
   maxMmPerMin: number;
   accelMmPerS2: number;
+}
+
+/** Para o tempo de chegada: X e Y juntos e o Z. */
+export interface MapMotion extends AxisMotion {
+  z?: AxisMotion;
+}
+
+/**
+ * Quanto leva uma viagem planejada, saindo parado: a subida do Z (se houver), a
+ * travessia em X e Y, e a descida da volta a um ponto (rápida até 20 mm acima,
+ * os últimos 20 mm a 600 mm/min, como o Romney fazia).
+ */
+export function plannedSeconds(input: {
+  from: { x: number; y: number; z: number };
+  to: Point;
+  lift: number | null;
+  descent: { from: number; fastTo: number | null; slowTo: number } | null;
+  xy: AxisMotion;
+  z: AxisMotion;
+}): number {
+  const zTime = (d: number) => remainingMoveSeconds({ distanceMm: Math.abs(d), speedMmPerMin: 0, ...input.z });
+  let t = 0;
+  if (input.lift !== null) t += zTime(input.lift - input.from.z);
+  t += remainingMoveSeconds({ distanceMm: Math.hypot(input.to.x - input.from.x, input.to.y - input.from.y), speedMmPerMin: 0, ...input.xy });
+  const d = input.descent;
+  if (d) {
+    const fastEnd = d.fastTo ?? d.from;
+    if (d.fastTo !== null) t += zTime(d.from - d.fastTo);
+    t += remainingMoveSeconds({ distanceMm: Math.abs(fastEnd - d.slowTo), speedMmPerMin: 0, maxMmPerMin: Math.min(600, input.z.maxMmPerMin), accelMmPerS2: input.z.accelMmPerS2 });
+  }
+  return t;
 }

@@ -128,6 +128,33 @@ export function remainingMoveSeconds(input: {
   return (vp - v0) / a + vp / a + Math.max(0, d - ramps) / vmax;
 }
 
+/** Quanto acima da superfície da peça (Z0 da peça) a fresa atravessa a mesa. */
+export const TRAVEL_CLEARANCE_MM = 10;
+
+/**
+ * O "Ir" sobe a fresa antes de atravessar a mesa, se ela estiver baixa: até 10 mm
+ * acima da superfície da peça (o Z0 da peça), ou até o topo sem zero de peça.
+ * Devolve o Z de máquina para onde subir, ou null se já está acima. Evita o
+ * acidente clássico de arrastar a fresa pela peça.
+ */
+export function liftForTravel(input: { mposZ: number; wcoZ: number; zMax: number; clearanceMm?: number }): number | null {
+  const safe = roundMm(Math.min(input.zMax, input.wcoZ + (input.clearanceMm ?? TRAVEL_CLEARANCE_MM)));
+  return input.mposZ < safe - 1e-6 ? safe : null;
+}
+
+/** Os últimos milímetros da volta a um ponto salvo, em avanço lento (o Romney: 20 mm a F600). */
+export const POINT_APPROACH_MM = 20;
+export const POINT_APPROACH_FEED = 600;
+
+/**
+ * A volta a um ponto salvo, como o "Posicionar Job" do Romney no Mach3: sobe ao
+ * topo, vai em X e Y, desce rápido até 20 mm acima do Z salvo e devagar o resto.
+ */
+export function pointApproach(input: { savedZ: number; zMax: number }): { top: number; fastTo: number | null; slowTo: number } {
+  const above = roundMm(input.savedZ + POINT_APPROACH_MM);
+  return { top: input.zMax, fastTo: above < input.zMax ? above : null, slowTo: roundMm(input.savedZ) };
+}
+
 /** O fantasma do mapa: um destino em X e Y, recortado pelo curso. */
 export function goTo(
   point: { x: number; y: number },

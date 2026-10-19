@@ -7,6 +7,7 @@ import { Gateway } from './gateway';
 import { fileControlMemory } from './control';
 import { fileHomingMemory } from './homing-memory';
 import { fileOdometerMemory } from './odometer';
+import { filePointsMemory } from './points';
 
 const env = process.env;
 const board = new Board({
@@ -21,6 +22,7 @@ const gateway = new Gateway({
         homingMemory: fileHomingMemory(join(env.RLIGHT_STATE_DIR, 'homing.json')),
         controlMemory: fileControlMemory(join(env.RLIGHT_STATE_DIR, 'control.json')),
         odometerMemory: fileOdometerMemory(join(env.RLIGHT_STATE_DIR, 'odometer.json')),
+        pointsMemory: filePointsMemory(join(env.RLIGHT_STATE_DIR, 'points.json')),
       }
     : {}),
   // O fuso da oficina, para o "hoje" do hodômetro (o servidor roda em UTC).

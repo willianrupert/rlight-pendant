@@ -152,6 +152,29 @@ telas recebem o andamento:
 { "type": "probe", "status": "seeking" | "measuring" | "done" | "failed", "reason": "…", "zeroMachineZ": -50.25 }
 ```
 
+### Pontos salvos e desfazer (o Save X/Y/Z e o Posicionar Job do Romney)
+
+```json
+{ "type": "command", "id": "r10", "command": "savePoint", "name": "Canto" }
+{ "type": "command", "id": "r11", "command": "goToPoint", "pointId": "p1" }
+{ "type": "command", "id": "r12", "command": "deletePoint", "pointId": "p1" }
+{ "type": "command", "id": "r13", "command": "undoMove" }
+```
+
+`pointId`, não `id`: o `id` da mensagem é o do pedido. Salvar e apagar exigem o
+controle (e salvar, homing); a lista vai a todas as telas a cada conexão e a cada
+mudança, e fica gravada no servidor:
+
+```json
+{ "type": "points", "points": [{ "id": "p1", "name": "Canto", "x": 200, "y": 150, "z": -40 }] }
+```
+
+`goToPoint` sobe ao topo do Z, vai em X e Y, desce rápido até 20 mm acima do Z
+salvo e os últimos 20 mm a F600. `jogTo` sobe a fresa antes de atravessar a mesa
+quando ela está a menos de 10 mm da superfície da peça (ou ao topo, sem zero de
+peça). `undoMove` volta, pelo mesmo caminho seguro, para onde a máquina estava
+antes do último `jogTo` ou `goToPoint` (até 2 minutos depois, uma vez).
+
 ### `command`
 
 Todo comando passa por `allowed()` do core antes de chegar à placa. Sem sinal,

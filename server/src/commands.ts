@@ -9,8 +9,12 @@ import {
   formatJog,
   goTo,
   limitsOf,
+  liftForTravel,
   nudge,
   nudgeTo,
+  pointApproach,
+  POINT_APPROACH_FEED,
+  type Vec3,
   type Axis,
   type AxisValues,
   type LinkMode,
@@ -20,6 +24,10 @@ import {
 import { JOG_CANCEL, SOFT_RESET } from './board';
 import type { CommandRequest } from './messages';
 import { ProbeSequence } from './probe';
+import type { SavedPoint } from './points';
+
+/** O "Desfazer" de um Ir vale por esse tempo. */
+export const UNDO_MOVE_MS = 120_000;
 
 export interface MotionSettings {
   /** Avanço da régua. Limitado pelo máximo do eixo. */
@@ -67,6 +75,10 @@ export interface CommandContext {
    * placa não lê a próxima linha antes de ela acabar.
    */
   spindleDwelling?: boolean;
+  /** Os pontos salvos, para ir até um deles. */
+  findPoint?: (id: string) => SavedPoint | null;
+  /** Onde a máquina estava antes do último Ir ou ida a um ponto, e quando. */
+  undoFrom?: { pos: Vec3; at: number } | null;
 }
 
 /** O offset anterior de cada eixo zerado, e quando o zero foi feito. */
@@ -97,6 +109,8 @@ export type Plan =
       deferredLine?: string;
       /** A placa de toque começou: o gateway segue as fases pelos toques da placa. */
       probe?: ProbeSequence;
+      /** Um movimento que se pode desfazer começou ('record'), ou o desfazer foi usado ('clear'). */
+      undo?: 'record' | 'clear';
     }
   | { ok: false; reason: string };
 
@@ -117,6 +131,8 @@ export function planCommand(req: CommandRequest, ctx: CommandContext): Plan {
   if (req.command === 'cancelJog' && ctx.snapshot.state === 'Idle' && ctx.link === 'live' && ctx.inControl) {
     return { ok: true, writes: [], commanded: {}, hitLimit: false, moves: false };
   }
+  // Salvar e apagar pontos não falam com a placa: o gateway cuida (precisa da lista).
+  if (req.command === 'savePoint' || req.command === 'deletePoint') return refuse('Pedido de pontos fora do lugar');
   const decision = allowed(req.command, ctx.snapshot.state, {
     link: ctx.link,
     inControl: ctx.inControl,
@@ -211,6 +227,8 @@ export function planCommand(req: CommandRequest, ctx: CommandContext): Plan {
     case 'nudge':
     case 'jogTo':
     case 'jogAxisTo':
+    case 'goToPoint':
+    case 'undoMove':
       break;
   }
 
@@ -220,16 +238,67 @@ export function planCommand(req: CommandRequest, ctx: CommandContext): Plan {
   if (!mpos) return refuse('Posição desconhecida');
   const limits = limitsOf(profile);
 
+  const zFeed = feedFor(profile, ['z'], ctx.motion.jogToFeedMmPerMin);
+  const xyFeed = feedFor(profile, ['x', 'y'], ctx.motion.jogToFeedMmPerMin);
+  // Sem o offset da peça ainda, a superfície é tomada como o topo: sobe até lá.
+  const wcoZ = ctx.snapshot.wco?.z ?? limits.z?.max ?? 0;
+  const liftFrom = (z: number) => (limits.z ? liftForTravel({ mposZ: z, wcoZ, zMax: limits.z.max }) : null);
+
   if (req.command === 'jogTo') {
     const { target, hitLimit } = goTo({ x: req.x, y: req.y }, limits);
-    const feed = feedFor(profile, ['x', 'y'], ctx.motion.jogToFeedMmPerMin);
+    // A fresa baixa sobe antes de atravessar a mesa (core/liftForTravel); os dois
+    // jogs vão em sequência na fila da placa, e o Parar cancela os dois.
+    const lift = liftFrom(mpos.z);
+    const writes: BoardWrite[] = [];
+    if (lift !== null) writes.push({ line: formatJog({ z: lift }, zFeed) });
+    writes.push({ line: formatJog(target, xyFeed) });
     return {
       ok: true,
-      writes: [{ line: formatJog(target, feed) }],
-      commanded: { ...ctx.commanded, ...target },
+      writes,
+      commanded: { ...ctx.commanded, ...target, ...(lift !== null ? { z: lift } : {}) },
       hitLimit,
       moves: true,
+      undo: 'record',
     };
+  }
+
+  if (req.command === 'goToPoint') {
+    const p = ctx.findPoint?.(req.pointId);
+    if (!p) return refuse('Esse ponto não existe mais');
+    if (!limits.z) return refuse('O curso do Z ainda não é conhecido');
+    const { target } = goTo({ x: p.x, y: p.y }, limits);
+    const z = clampToLimits(limits, 'z', p.z).value;
+    // O "Posicionar Job" do Romney: sobe ao topo, X e Y, rápido até 20 mm acima, devagar o resto.
+    const a = pointApproach({ savedZ: z, zMax: limits.z.max });
+    const writes: BoardWrite[] = [];
+    if (mpos.z < a.top - 1e-6) writes.push({ line: formatJog({ z: a.top }, zFeed) });
+    writes.push({ line: formatJog(target, xyFeed) });
+    if (a.fastTo !== null) writes.push({ line: formatJog({ z: a.fastTo }, zFeed) });
+    if (a.slowTo < (a.fastTo ?? a.top) - 1e-6) writes.push({ line: formatJog({ z: a.slowTo }, Math.min(zFeed, POINT_APPROACH_FEED)) });
+    return { ok: true, writes, commanded: { ...ctx.commanded, ...target, z: a.slowTo }, hitLimit: false, moves: true, undo: 'record' };
+  }
+
+  if (req.command === 'undoMove') {
+    const u = ctx.undoFrom;
+    if (!u || ctx.now - u.at > UNDO_MOVE_MS) return refuse('Nada para desfazer');
+    const { target } = goTo({ x: u.pos.x, y: u.pos.y }, limits);
+    const z = limits.z ? clampToLimits(limits, 'z', u.pos.z).value : u.pos.z;
+    const crosses = Math.hypot(target.x - mpos.x, target.y - mpos.y) > 0.5;
+    const lift = crosses ? liftFrom(mpos.z) : null;
+    const high = lift ?? mpos.z;
+    const writes: BoardWrite[] = [];
+    if (lift !== null) writes.push({ line: formatJog({ z: lift }, zFeed) });
+    if (crosses) writes.push({ line: formatJog(target, xyFeed) });
+    if (z < high - 1e-6) {
+      // Descer de volta como na volta a um ponto: rápido até 20 mm acima, devagar o resto.
+      const a = pointApproach({ savedZ: z, zMax: high });
+      if (a.fastTo !== null) writes.push({ line: formatJog({ z: a.fastTo }, zFeed) });
+      writes.push({ line: formatJog({ z }, Math.min(zFeed, POINT_APPROACH_FEED)) });
+    } else if (z > high + 1e-6) {
+      writes.push({ line: formatJog({ z }, zFeed) });
+    }
+    if (!writes.length) return { ok: true, writes, commanded: ctx.commanded, hitLimit: false, moves: false, undo: 'clear' };
+    return { ok: true, writes, commanded: { ...ctx.commanded, ...target, z }, hitLimit: false, moves: true, undo: 'clear' };
   }
 
   if (req.command === 'jogAxisTo') {

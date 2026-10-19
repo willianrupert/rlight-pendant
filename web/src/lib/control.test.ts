@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MachineSnapshot, MachineState } from '@rlight/core';
-import { PendingTracker, UndoWindow, UNDO_WINDOW_MS, barSlots, canTakeControl, controlsVisible } from './control';
+import { MOVE_UNDO_MS, PendingTracker, UndoWindow, UNDO_WINDOW_MS, barSlots, canTakeControl, controlsVisible } from './control';
 
 const live = { link: 'live' as const, inControl: true, homed: true, canHome: true };
 
@@ -144,8 +144,14 @@ describe('pendente até a máquina confirmar', () => {
 
 describe('desfazer o zero', () => {
   it('vale 30 s e uma vez só', () => {
+    const m = new UndoWindow();
+    m.open('X 600,00 · Y 300,00', 1_000, MOVE_UNDO_MS, 'move');
+    expect(m.kind).toBe('move');
+    expect(m.durationMs).toBe(MOVE_UNDO_MS);
+    expect(m.active(1_000 + MOVE_UNDO_MS)).toBeNull();
     const u = new UndoWindow();
     u.open('X zerado', 1_000);
+    expect(u.kind).toBe('zero');
     expect(u.active(1_000 + UNDO_WINDOW_MS - 1)).toBe('X zerado');
     expect(u.take(2_000)).toBe(true);
     expect(u.take(2_001)).toBe(false);

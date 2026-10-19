@@ -477,6 +477,39 @@ describe('gateway: mexer na máquina, de ponta a ponta', () => {
     expect(odo.total.x).toBeCloseTo(3, 3);
   });
 
+  it('salva um ponto, vai até ele e desfaz a ida: tudo de ponta a ponta', async () => {
+    const memory = fileHomingMemory(join(mkdtempSync(join(tmpdir(), 'rlight-')), 'homing.json'));
+    memory.write(true);
+    await setup({ state: 'Idle', mpos: { x: 100, y: 200, z: 0 } }, undefined, memory);
+    const b = await browser();
+    const watcher = await browser();
+    await until(() => live(b.state()) && b.of('profile')[0] && b.state()?.machine?.wco);
+    expect(watcher.of('points')[0]).toEqual({ type: 'points', points: [] });
+    b.send({ type: 'takeControl' });
+    await until(() => b.state()?.control.inControl);
+    expect(await b.command({ command: 'savePoint', name: 'Canto' })).toMatchObject({ ok: true });
+    const list = await until(() => watcher.of('points').find((m) => m.points.length === 1), { what: 'a lista nova' });
+    expect(list.points[0]).toMatchObject({ name: 'Canto', x: 100, y: 200, z: 0 });
+    // Sai dali com o Ir, e volta ao ponto.
+    await b.command({ command: 'jogTo', x: 130, y: 210 });
+    await until(() => b.state()?.machine?.mpos?.x === 130 && b.state()?.machine?.state === 'Idle', { what: 'em 130', timeoutMs: 10_000 });
+    expect(await b.command({ command: 'goToPoint', pointId: list.points[0]!.id })).toMatchObject({ ok: true });
+    await until(() => b.state()?.machine?.mpos?.x === 100 && b.state()?.machine?.state === 'Idle', { what: 'de volta ao ponto', timeoutMs: 10_000 });
+    // Desfazer a ida ao ponto leva de volta a 130.
+    expect(await b.command({ command: 'undoMove' })).toMatchObject({ ok: true });
+    await until(() => b.state()?.machine?.mpos?.x === 130 && b.state()?.machine?.state === 'Idle', { what: 'desfeito', timeoutMs: 10_000 });
+    expect(await b.command({ command: 'undoMove' })).toMatchObject({ ok: false, reason: 'Nada para desfazer' });
+    expect(await b.command({ command: 'deletePoint', pointId: list.points[0]!.id })).toMatchObject({ ok: true });
+    await until(() => watcher.of('points').at(-1)?.points.length === 0, { what: 'apagado' });
+  }, 15_000);
+
+  it('quem só assiste não salva nem apaga pontos', async () => {
+    await setup({ state: 'Idle', mpos: { x: 100, y: 200, z: 0 } });
+    const b = await browser();
+    await until(() => live(b.state()) && b.of('profile')[0]);
+    expect(await b.command({ command: 'savePoint', name: 'x' })).toEqual({ type: 'result', id: 'r1', ok: false, reason: 'Outra tela está no controle' });
+  });
+
   it('o alarme da placa chega a todas as telas', async () => {
     await setup();
     const a = await browser();

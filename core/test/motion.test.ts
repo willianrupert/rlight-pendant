@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampToLimits, formatJog, goTo, leadForStep, nudge, nudgeTo, remainingMoveSeconds, resync, zBarrier, type MachineLimits } from '../src/motion';
+import { clampToLimits, formatJog, goTo, leadForStep, liftForTravel, nudge, nudgeTo, pointApproach, remainingMoveSeconds, resync, zBarrier, type MachineLimits } from '../src/motion';
 
 // ADR-0002: todo movimento manual é absoluto, tem destino e respeita o curso.
 // Os limites vêm da placa (ADR-0008); aqui usamos um perfil de exemplo.
@@ -182,5 +182,36 @@ describe('remainingMoveSeconds: quanto falta, com as rampas da máquina', () => 
 
   it('chegou: zero', () => {
     expect(remainingMoveSeconds({ ...m, distanceMm: 0, speedMmPerMin: 0 })).toBe(0);
+  });
+});
+
+describe('liftForTravel: o Ir sobe a fresa antes de atravessar a mesa', () => {
+  // Z de máquina de −158 (fundo) a 0 (topo). Peça zerada em −70 (wco.z = −70).
+  it('fresa baixa, perto da peça: sobe até 10 mm acima da superfície', () => {
+    expect(liftForTravel({ mposZ: -68, wcoZ: -70, zMax: 0 })).toBe(-60);
+  });
+
+  it('já acima da altura segura: não sobe', () => {
+    expect(liftForTravel({ mposZ: -40, wcoZ: -70, zMax: 0 })).toBeNull();
+  });
+
+  it('sem zero de peça (wco.z = 0, a superfície é o topo): sobe até o topo', () => {
+    expect(liftForTravel({ mposZ: -30, wcoZ: 0, zMax: 0 })).toBe(0);
+    expect(liftForTravel({ mposZ: 0, wcoZ: 0, zMax: 0 })).toBeNull();
+  });
+
+  it('a altura segura nunca passa do topo do curso', () => {
+    expect(liftForTravel({ mposZ: -20, wcoZ: -3, zMax: 0 })).toBe(0);
+  });
+});
+
+describe('pointApproach: voltar a um ponto salvo, como o "Posicionar Job" do Romney', () => {
+  // G53 Z0; G53 X Y; G0 até 20 mm acima; os últimos 20 mm em F600.
+  it('desce rápido até 20 mm acima do Z salvo e devagar o resto', () => {
+    expect(pointApproach({ savedZ: -68, zMax: 0 })).toEqual({ top: 0, fastTo: -48, slowTo: -68 });
+  });
+
+  it('Z salvo perto do topo: só a parte lenta', () => {
+    expect(pointApproach({ savedZ: -12, zMax: 0 })).toEqual({ top: 0, fastTo: null, slowTo: -12 });
   });
 });

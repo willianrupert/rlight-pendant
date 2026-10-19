@@ -4,7 +4,7 @@
   // Movendo, o mapa fica limpo e não aceita gestos: o Parar é o da barra.
   import { onDestroy, onMount } from 'svelte';
   import type { AxisLimits, MachineState, Vec3 } from '@rlight/core';
-  import { MapView, destinationText, mapPad, type MapMotion, type Point, type TableLimits } from '../lib/map-view';
+  import { MapView, destinationText, formatEta, mapPad, type MapMotion, type Point, type SavedPin, type TableLimits } from '../lib/map-view';
   import HoldButton from './HoldButton.svelte';
 
   interface Props {
@@ -27,11 +27,16 @@
     onjog: (p: Point) => void;
     /** Velocidade e aceleração do "Ir", para o tempo de chegada. */
     motion: MapMotion | null;
+    /** Os pontos salvos, alfinetes na mesa; um toque escolhe, o "Ir" vai como o Romney. */
+    points: SavedPin[];
+    onpoint: (p: SavedPin) => void;
     ongrab: () => void;
     onhome: () => void;
   }
 
-  let { limits, ghost, moving, frozen, offset, needsHoming, homingPending, machineState, feed, zLimits, zZero, onjog, ongrab, onhome, motion }: Props = $props();
+  let { limits, ghost, moving, frozen, offset, needsHoming, homingPending, machineState, feed, zLimits, zZero, onjog, ongrab, onhome, motion, points, onpoint }: Props = $props();
+  /** O ponto salvo escolhido por um toque no alfinete, enquanto a prévia dele está aberta. */
+  let chosen = $state<SavedPin | null>(null);
   let gauge: HTMLElement;
 
   let svg: SVGSVGElement;
@@ -48,6 +53,11 @@
     view?.clear();
   }
 
+  /** Uma ida a um ponto que saiu de fora do mapa (Automações): o alvo aparece na mesa. */
+  export function showTarget(p: SavedPin): void {
+    view?.setTarget({ x: p.x, y: p.y }, p.z);
+  }
+
   /** O "Ir" foi recusado: o alvo some do mapa. */
   export function clearTarget(): void {
     view?.clearTarget();
@@ -59,8 +69,10 @@
     view.onGhost = (p) => (dest = p);
     view.onRelease = (p) => onjog(p);
     view.onGrab = () => ongrab();
+    view.onPin = (p) => (chosen = p);
     view.onPreview = (p) => {
       preview = p;
+      if (!p) chosen = null;
       if (p) {
         ongrab();
         const at = view!.toScreen(p);
@@ -96,9 +108,16 @@
 
   function go() {
     const p = view?.model.go();
+    const pin = chosen;
     preview = null;
     pill = null;
-    if (p) {
+    chosen = null;
+    if (!p) return;
+    if (pin) {
+      // A volta a um ponto salvo: sobe ao topo, vai, e desce até o Z dele.
+      view?.setTarget(p, pin.z);
+      onpoint(pin);
+    } else {
       view?.setTarget(p);
       onjog(p);
     }
@@ -109,6 +128,19 @@
     view.zLimits = zLimits;
     view.zZero = zZero;
   });
+
+  $effect(() => {
+    if (view) view.points = points;
+  });
+
+  /** A legenda do destino: o nome do ponto ou as coordenadas, a subida se houver, e quanto leva. */
+  function caption(p: Point): string {
+    const eta = view?.etaTo(p, chosen?.z ?? null) ?? null;
+    const t = eta === null ? '' : formatEta(eta);
+    const head = chosen ? chosen.name : destinationText(p, offset);
+    const lift = !chosen && view?.liftsBefore(p) ? ' · sobe antes' : '';
+    return `${head}${lift}${t ? ` · ${t}` : ''}`;
+  }
 
   const aspect = $derived((limits.x.max - limits.x.min + 2 * mapPad(limits)) / Math.max(1, limits.y.max - limits.y.min + 2 * mapPad(limits)));
 </script>
@@ -137,7 +169,7 @@
     <p class="caption" class:dest={!!(dest || preview)}>
       <span>
         {#if dest || preview}
-          {destinationText((dest ?? preview)!, offset, view?.etaTo((dest ?? preview)!) ?? null)}
+          {caption((dest ?? preview)!)}
         {:else}
           Arraste o ponto, ou toque na mesa
         {/if}
@@ -177,6 +209,9 @@
   /* O alvo em curso: anel vazado na cor de destaque, o caminho que falta tracejado. */
   .map :global(.target circle) { fill: none; stroke: var(--acc); stroke-width: 2; vector-effect: non-scaling-stroke; opacity: 0.9; transition: opacity 0.26s ease, transform 0.26s ease; transform-box: fill-box; transform-origin: center; }
   .map :global(.target.arrived circle) { opacity: 0; transform: scale(1.6); }
+  /* Os pontos salvos: alfinetes discretos, para não competir com o alvo azul. */
+  .map :global(.pin circle) { fill: var(--fg-2); stroke: var(--bg-idle, #0d0f12); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+  .map :global(.pin text) { fill: var(--fg-3); font-family: var(--sans); font-weight: 600; text-anchor: middle; }
   .map :global(.eta) { fill: var(--acc); font-family: var(--mono); font-weight: 600; font-variant-numeric: tabular-nums; }
   .map :global(.target-path) { stroke: var(--acc); stroke-width: 1.5; stroke-dasharray: 3 5; vector-effect: non-scaling-stroke; opacity: 0.55; }
   .map :global(.path) { stroke: var(--acc); stroke-width: 2; stroke-dasharray: 4 5; vector-effect: non-scaling-stroke; opacity: 0.8; }

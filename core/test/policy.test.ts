@@ -7,8 +7,8 @@ const ctx = { link: 'live', inControl: true, homed: true } as const;
 
 // O que cada estado permite, com conexão viva e controle nas mãos.
 const TABLE: Record<MachineState, readonly Command[]> = {
-  Idle: ['home', 'softReset', 'jogTo', 'jogAxisTo', 'nudge', 'zero', 'undoZero', 'spindleOn', 'spindleOff', 'spindleSpeed', 'probeZ'],
-  Jog: ['softReset', 'feedHold', 'cancelJog', 'jogTo', 'jogAxisTo', 'nudge'],
+  Idle: ['home', 'softReset', 'jogTo', 'jogAxisTo', 'nudge', 'zero', 'undoZero', 'spindleOn', 'spindleOff', 'spindleSpeed', 'probeZ', 'goToPoint', 'undoMove'],
+  Jog: ['softReset', 'feedHold', 'cancelJog', 'jogTo', 'jogAxisTo', 'nudge', 'goToPoint', 'undoMove'],
   Run: ['softReset', 'feedHold', 'spindleSpeed'],
   Hold: ['softReset', 'resume', 'spindleOff'],
   Alarm: ['unlock', 'home', 'softReset'],
@@ -52,6 +52,12 @@ describe('regras que valem para todos os estados', () => {
       reason: 'Faça o homing para mover pelo mapa',
     });
     expect(allowed('nudge', 'Idle', { ...ctx, homed: false }).ok).toBe(true);
+  });
+
+  it('ir a um ponto salvo e desfazer um movimento exigem homing, como o Ir', () => {
+    expect(allowed('goToPoint', 'Idle', { ...ctx, homed: false })).toEqual({ ok: false, reason: 'Faça o homing para ir a um ponto salvo' });
+    expect(allowed('undoMove', 'Idle', { ...ctx, homed: false })).toEqual({ ok: false, reason: 'Faça o homing para desfazer o movimento' });
+    expect(allowed('goToPoint', 'Idle', ctx).ok).toBe(true);
   });
 
   it('a placa de toque exige homing: a descida é limitada pelo fundo do curso do Z', () => {

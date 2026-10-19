@@ -6,7 +6,7 @@
   import { fade } from 'svelte/transition';
   import { allowed, type Axis, type Command, type MachineProfile, type MachineState } from '@rlight/core';
   import { Connection, serverUrl, type CommandName, type CommandRequest, type ServerState } from './lib/connection';
-  import { PENDING_LABELS, PendingTracker, UNDO_WINDOW_MS, UndoWindow, barSlots, canTakeControl, controlsVisible, type Slot } from './lib/control';
+  import { MOVE_UNDO_MS, PENDING_LABELS, PendingTracker, UndoWindow, barSlots, canTakeControl, controlsVisible, type Slot } from './lib/control';
   import { Telemetry } from './lib/dro';
   import { Clicker, prefersReducedMotion } from './lib/feel';
   import { HOLD_MS, holdProgress, idleHold, pressHold, type Hold } from './lib/hold';
@@ -18,6 +18,7 @@
   import SpindleSheet from './ui/SpindleSheet.svelte';
   import AutomationsSheet from './ui/AutomationsSheet.svelte';
   import type { Odometer, ProbeProgress } from './lib/automations';
+  import { destinationText, type SavedPin } from './lib/map-view';
   import { ScreenAwake } from './lib/wake';
   import TableMap from './ui/TableMap.svelte';
   import { openDemoSocket } from '$demo';
@@ -35,7 +36,7 @@
   const roots: Partial<Record<Axis, HTMLElement>> = {};
   const rows: Partial<Record<Axis, HTMLElement>> = {};
   const TRACKED = new Set<CommandName>(['unlock', 'home', 'feedHold', 'resume', 'softReset', 'cancelJog', 'spindleOn', 'spindleOff']);
-  const MOVES = new Set<CommandName>(['nudge', 'jogAxisTo', 'jogTo']);
+  const MOVES = new Set<CommandName>(['nudge', 'jogAxisTo', 'jogTo', 'goToPoint', 'undoMove']);
 
   let st = $state<ServerState | null>(null);
   let profile = $state<MachineProfile | null>(null);
@@ -51,6 +52,16 @@
   let automations = $state(false);
   let probe = $state<ProbeProgress | null>(null);
   let odometer = $state<Odometer | null>(null);
+  /** Os pontos salvos (o Save X/Y/Z do Romney), do servidor. */
+  let points = $state<SavedPin[]>([]);
+  // O "Desfazer" de um Ir ou de uma ida a um ponto aparece quando a máquina chega,
+  // nunca no meio do caminho (a volta não pode entrar na fila atrás da ida).
+  let moveUndo: string | null = null;
+  let moveSeen = false;
+  function armMoveUndo(label: string) {
+    moveUndo = label;
+    moveSeen = false;
+  }
   let ruler: ReturnType<typeof Ruler> | null = $state(null);
   let map: ReturnType<typeof TableMap> | null = $state(null);
   /** O estado que a tela mostra: o real, com histerese entre repouso e movimento. */
@@ -86,7 +97,12 @@
     const x = profile?.axes.x;
     const y = profile?.axes.y;
     if (!x || !y || !(x.maxRateMmPerMin > 0 && y.maxRateMmPerMin > 0)) return null;
-    return { maxMmPerMin: Math.min(x.maxRateMmPerMin, y.maxRateMmPerMin), accelMmPerS2: Math.min(x.accelMmPerS2, y.accelMmPerS2) };
+    const z = profile?.axes.z;
+    return {
+      maxMmPerMin: Math.min(x.maxRateMmPerMin, y.maxRateMmPerMin),
+      accelMmPerS2: Math.min(x.accelMmPerS2, y.accelMmPerS2),
+      ...(z && z.maxRateMmPerMin > 0 ? { z: { maxMmPerMin: z.maxRateMmPerMin, accelMmPerS2: z.accelMmPerS2 } } : {}),
+    };
   });
   const showMap = $derived(hands && !!table && !!shown && ['Idle', 'Jog'].includes(shown));
   const ghost = $derived(hands && shows('jogTo') && shown === 'Idle');
@@ -246,6 +262,13 @@
     conn.onState = (s, at) => {
       st = s;
       const m = s.machine;
+      if (moveUndo && m) {
+        if (m.state === 'Jog') moveSeen = true;
+        else if (m.state === 'Idle' && moveSeen) {
+          undo.open(moveUndo, performance.now(), MOVE_UNDO_MS, 'move');
+          moveUndo = null;
+        } else if (m.state !== 'Idle') moveUndo = null;
+      }
       shown = presence.update(m?.state ?? null, at);
       // O movimento do mapa acabou quando a máquina para (ou nunca chegou a andar).
       if (mapMoveAt !== null && m?.state !== 'Jog' && at - mapMoveAt > 1_000) mapMoveAt = null;
@@ -267,6 +290,7 @@
       if (inControl) flash(boardErrorText(code), 4_000);
     };
     conn.onOdometer = (o) => (odometer = o);
+    conn.onPoints = (p) => (points = p);
     conn.onProbe = (p) => {
       probe = p;
       if (p.status === 'failed') clicker.play('wall');
@@ -286,9 +310,10 @@
       if (outcome) pendingRev++;
       if (!result.ok) {
         flash(result.reason);
-        if (command === 'jogTo') {
+        if (command === 'jogTo' || command === 'goToPoint') {
           mapMoveAt = null;
           map?.clearTarget();
+          moveUndo = null;
         }
         if (MOVES.has(command)) ruler?.abort();
         return;
@@ -394,7 +419,15 @@
       onjog={(p) => {
         clicker.play('confirm');
         mapMoveAt = performance.now();
+        armMoveUndo(destinationText(p, machine?.wco ?? { x: 0, y: 0 }));
         send({ command: 'jogTo', x: p.x, y: p.y });
+      }}
+      {points}
+      onpoint={(p) => {
+        clicker.play('confirm');
+        mapMoveAt = performance.now();
+        armMoveUndo(p.name);
+        send({ command: 'goToPoint', pointId: p.id });
       }}
       ongrab={() => clicker.wake()}
     />
@@ -543,11 +576,12 @@
     <span>{undoLabel}</span>
     <button
       onclick={() => {
-        if (undo.take(performance.now())) send({ command: 'undoZero' });
+        const kind = undo.kind;
+        if (undo.take(performance.now())) send(kind === 'move' ? { command: 'undoMove' } : { command: 'undoZero' });
         now = performance.now();
       }}>Desfazer</button
     >
-    <i style:transform="scaleX({undo.remainingMs(now) / UNDO_WINDOW_MS})" aria-hidden="true"></i>
+    <i style:transform="scaleX({undo.remainingMs(now) / undo.durationMs})" aria-hidden="true"></i>
   </div>
 {/if}
 
@@ -560,6 +594,20 @@
     canStop={may('feedHold')}
     {sound}
     {odometer}
+    {points}
+    canSavePoint={inControl && homed && live}
+    canGoToPoint={may('goToPoint')}
+    offset={machine?.wco ?? { x: 0, y: 0, z: 0 }}
+    onsavepoint={(name) => send({ command: 'savePoint', name })}
+    ongopoint={(p) => {
+      automations = false;
+      clicker.play('confirm');
+      mapMoveAt = performance.now();
+      armMoveUndo(p.name);
+      map?.showTarget(p);
+      send({ command: 'goToPoint', pointId: p.id });
+    }}
+    ondeletepoint={(p) => send({ command: 'deletePoint', pointId: p.id })}
     {clicker}
     onprobe={(thicknessMm) => {
       probe = null;

@@ -12,6 +12,7 @@ import { DEFAULT_MOTION, planCommand, type MotionSettings, type ZeroMemory } fro
 import { ControlSession, noControlMemory, REASON_TAKEN, type ControlMemory } from './control';
 import { ProbeSequence, type ProbeStep } from './probe';
 import { Odometer, noOdometerMemory, type OdometerMemory } from './odometer';
+import { PointStore, noPointsMemory, type PointsMemory } from './points';
 import {
   parseClientMessage,
   PROTOCOL_VERSION,
@@ -45,6 +46,8 @@ export interface GatewayOptions {
    * reservado e a tela retoma ao voltar.
    */
   pingMs?: number;
+  /** Onde guardar os pontos salvos. */
+  pointsMemory?: PointsMemory;
 }
 
 /** O hodômetro vai às telas a cada tanto, e é gravado a cada tanto. */
@@ -86,6 +89,10 @@ export class Gateway {
   /** A placa de toque em andamento: cada [PRB] da placa decide a próxima fase. */
   private probe: ProbeSequence | null = null;
   private readonly odometer: Odometer;
+  private readonly points: PointStore;
+  private readonly pointsMemory: PointsMemory;
+  /** Onde a máquina estava antes do último Ir ou ida a um ponto (o "Desfazer"). */
+  private undoFrom: { pos: { x: number; y: number; z: number }; at: number } | null = null;
   private readonly odometerMemory: OdometerMemory;
   private odometerSentAt = -Infinity;
   private odometerSavedAt = Date.now();
@@ -109,6 +116,8 @@ export class Gateway {
     this.sawHoming = this.homingMemory.read();
     this.control = new ControlSession(options.controlGraceMs);
     this.controlMemory = options.controlMemory ?? noControlMemory;
+    this.pointsMemory = options.pointsMemory ?? noPointsMemory;
+    this.points = new PointStore(this.pointsMemory.read());
     this.odometerMemory = options.odometerMemory ?? noOdometerMemory;
     this.odometer = new Odometer(this.odometerMemory.read(), options.timeZone ?? 'America/Sao_Paulo');
     const saved = this.controlMemory.read();
@@ -246,6 +255,23 @@ export class Gateway {
     this.scheduleAll();
   }
 
+  /** Salvar ou apagar um ponto. Devolve o motivo da recusa, ou null. */
+  private pointCommand(client: Client, req: Extract<CommandRequest, { command: 'savePoint' | 'deletePoint' }>): string | null {
+    if (!this.control.isController(client.id)) return 'Outra tela está no controle';
+    if (req.command === 'deletePoint') {
+      if (!this.points.remove(req.pointId)) return 'Esse ponto não existe mais';
+    } else {
+      const mpos = this.board.snapshot?.mpos;
+      if (!mpos || this.board.view().mode !== 'live') return 'Sem sinal da máquina';
+      // Sem homing, a posição de máquina não quer dizer nada para voltar depois.
+      if (!this.homed) return 'Faça o homing para salvar pontos';
+      if (!this.points.add(req.name, mpos)) return 'Já há pontos demais; apague um antes';
+    }
+    this.pointsMemory.write(this.points.list);
+    this.broadcast({ type: 'points', points: this.points.list });
+    return null;
+  }
+
   /** A próxima fase da placa de toque: manda as linhas e conta para todas as telas. */
   private probeStep(step: ProbeStep): void {
     for (const line of step.lines) this.board.send(line);
@@ -308,6 +334,7 @@ export class Gateway {
     ws.on('error', () => {});
     this.send(client, { type: 'welcome', protocol: PROTOCOL_VERSION, clientId: client.id });
     this.send(client, { type: 'odometer', ...this.odometer.snapshot });
+    this.send(client, { type: 'points', points: this.points.list });
     this.sendProfile(client);
     this.schedule(client);
     this.updatePoll();
@@ -362,6 +389,11 @@ export class Gateway {
 
   private runCommand(client: Client, id: string | undefined, req: CommandRequest): void {
     const ids = id === undefined ? {} : { id };
+    if (req.command === 'savePoint' || req.command === 'deletePoint') {
+      const reason = this.pointCommand(client, req);
+      this.send(client, reason ? { type: 'result', ...ids, ok: false, reason } : { type: 'result', ...ids, ok: true });
+      return;
+    }
     const plan = planCommand(req, {
       snapshot: this.board.snapshot,
       profile: this.board.profile,
@@ -373,6 +405,8 @@ export class Gateway {
       now: this.board.now(),
       lastZero: this.lastZero,
       spindleDwelling: this.spindleDwelling(),
+      findPoint: (pid) => this.points.get(pid),
+      undoFrom: this.undoFrom,
     });
     if (!plan.ok) {
       this.send(client, { type: 'result', ...ids, ok: false, reason: plan.reason });
@@ -388,6 +422,13 @@ export class Gateway {
       if ('line' in w && /^(M3|M5|S)/.test(w.line)) this.spindleLine = this.board.lastLine;
     }
     if (plan.deferredLine !== undefined) this.deferredSpindle = plan.deferredLine;
+    // O "Desfazer" lembra de onde a máquina saiu: só no começo de um movimento, com
+    // ela parada; um Ir encadeado no meio de outro mantém o ponto de partida.
+    const before = this.board.snapshot;
+    if (plan.undo === 'record' && before?.mpos && (before.state === 'Idle' || !this.undoFrom)) {
+      this.undoFrom = { pos: { ...before.mpos }, at: this.board.now() };
+    }
+    if (plan.undo === 'clear') this.undoFrom = null;
     if (plan.probe) {
       this.probe = plan.probe;
       this.broadcast({ type: 'probe', status: 'seeking' });
