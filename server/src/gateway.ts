@@ -96,6 +96,7 @@ export class Gateway {
   private prevState: MachineState | null = null;
   private heartbeat: NodeJS.Timeout | null = null;
   private pinger: NodeJS.Timeout | null = null;
+  private startedAt = 0;
   private readonly unsubscribe: (() => void)[] = [];
   private readonly board: Board;
   private readonly motion: MotionSettings;
@@ -156,6 +157,7 @@ export class Gateway {
     this.wss = wss;
     wss.on('connection', (ws) => this.accept(ws));
     await new Promise<void>((resolve) => wss.once('listening', resolve));
+    this.startedAt = this.board.now();
     this.pinger = setInterval(() => this.pingAll(), this.options.pingMs ?? 10_000);
     this.heartbeat = setInterval(() => {
       this.scheduleAll();
@@ -255,6 +257,17 @@ export class Gateway {
     });
     if (step.status === 'done' || step.status === 'failed') this.probe = null;
     this.updatePoll();
+  }
+
+  /**
+   * O trecho até a placa. Sem nunca ter ouvido a placa desde que ligou, o servidor
+   * conta o tempo desde que começou a procurar: assim a tela chega a "Máquina
+   * desligada" mesmo depois de reiniciar com a máquina desligada.
+   */
+  private machineView(): LinkView {
+    const v = this.board.view();
+    if (v.mode === 'no-signal' && v.ageMs === null) return { ...v, ageMs: this.board.now() - this.startedAt };
+    return v;
   }
 
   private spindleDwelling(): boolean {
@@ -435,7 +448,7 @@ export class Gateway {
     this.send(client, {
       type: 'state',
       machine: this.board.snapshot,
-      link: combineLinks({ server: SERVER_HOP, machine: this.board.view() }),
+      link: combineLinks({ server: SERVER_HOP, machine: this.machineView() }),
       commanded: this.commanded,
       homed: this.homed,
       control: { inControl: this.control.isController(client.id), controlled: this.control.controlled(this.board.now()) },

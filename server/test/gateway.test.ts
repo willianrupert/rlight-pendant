@@ -489,6 +489,23 @@ describe('gateway: mexer na máquina, de ponta a ponta', () => {
 });
 
 describe('gateway: a conexão vai cair (ADR-0007)', () => {
+  it('servidor que nunca ouviu a placa (ligou com ela desligada): conta o tempo desde que começou a procurar', async () => {
+    // Sem isto a tela ficava em "Procurando a máquina" para sempre e nunca chegava
+    // a "Máquina desligada" depois de uma publicação noturna.
+    fake = new FakeFluidNC({ state: 'Idle' });
+    const port = await fake.listen();
+    fake.refuseConnections();
+    board = new Board({ host: '127.0.0.1', port, backoffMs: [20, 40, 80], deadAfterMs: 5_000 });
+    board.start();
+    gateway = new Gateway({ board });
+    wsPort = await gateway.start();
+    await sleep(300);
+    const b = await browser();
+    const s = await until(() => b.state(), { what: 'um estado' });
+    expect(s.link).toMatchObject({ mode: 'no-signal', failedHop: 'machine' });
+    expect(s.link.ageMs).toBeGreaterThanOrEqual(250);
+  });
+
   it('a queda aparece como sem sinal no trecho da máquina, e a tela volta sozinha', async () => {
     await setup();
     const b = await browser();

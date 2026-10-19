@@ -354,7 +354,7 @@
     <div class="title">
       <span class="name">{profile?.name ?? 'RLight'}</span>
       {#if demo}<span class="demo" title="Nenhuma máquina de verdade: o servidor e a CNC são simulados no navegador.">Demonstração · simulador</span>{/if}
-      <h1>{live || !machine ? pres.label : (linkTitle(link) ?? 'Sem sinal')}</h1>
+      <h1>{live ? pres.label : (linkTitle(link) ?? (machine ? 'Sem sinal' : pres.label))}</h1>
     </div>
     {#if hands}
       <div class="quiet-row">
