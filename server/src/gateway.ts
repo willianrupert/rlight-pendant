@@ -14,6 +14,8 @@ import { ProbeSequence, type ProbeStep } from './probe';
 import { Odometer, noOdometerMemory, type OdometerMemory } from './odometer';
 import { PointStore, noPointsMemory, type PointsMemory } from './points';
 import { ResumeTracker, noResumeMemory, type ResumeMemory } from './resume';
+import { AlertWatcher, TEST_ALERT, type Alert } from './alerts';
+import { PushStore, noDeviceMemory, type DeviceMemory, type Push } from './push';
 import {
   parseClientMessage,
   PROTOCOL_VERSION,
@@ -51,6 +53,10 @@ export interface GatewayOptions {
   pointsMemory?: PointsMemory;
   /** Onde guardar a última posição parada, para retomar depois de desligar. */
   resumeMemory?: ResumeMemory;
+  /** Os avisos no celular (Web Push). Sem isto, o servidor não avisa ninguém. */
+  push?: Push;
+  /** Onde guardar os aparelhos que pediram avisos. */
+  pushDevices?: DeviceMemory;
 }
 
 /** O hodômetro vai às telas a cada tanto, e é gravado a cada tanto. */
@@ -73,6 +79,8 @@ interface Client {
   alive: boolean;
   lastStateAt: number;
   timer: NodeJS.Timeout | null;
+  /** O aparelho desta tela, quando ela está à vista: ele não precisa de aviso. */
+  watching: string | null;
 }
 
 export class Gateway {
@@ -98,6 +106,9 @@ export class Gateway {
   private resumeDirty = false;
   private resumeSavedAt = 0;
   private readonly pointsMemory: PointsMemory;
+  private readonly alerts = new AlertWatcher();
+  private readonly pushDevices: DeviceMemory;
+  private readonly pushStore: PushStore;
   /** Onde a máquina estava antes do último Ir ou ida a um ponto (o "Desfazer"). */
   private undoFrom: { pos: { x: number; y: number; z: number }; at: number } | null = null;
   private readonly odometerMemory: OdometerMemory;
@@ -125,6 +136,8 @@ export class Gateway {
     this.controlMemory = options.controlMemory ?? noControlMemory;
     this.resumeMemory = options.resumeMemory ?? noResumeMemory;
     this.resume = new ResumeTracker(this.resumeMemory.read());
+    this.pushDevices = options.pushDevices ?? noDeviceMemory;
+    this.pushStore = new PushStore(this.pushDevices.read());
     this.pointsMemory = options.pointsMemory ?? noPointsMemory;
     this.points = new PointStore(this.pointsMemory.read());
     this.odometerMemory = options.odometerMemory ?? noOdometerMemory;
@@ -171,6 +184,8 @@ export class Gateway {
         this.commanded = {};
         if (!alarmKeepsHoming(m.code)) this.setHomed(false);
         this.broadcast({ type: 'alarm', code: m.code });
+        const alert = this.alerts.onAlarm(m.code, this.board.now());
+        if (alert) this.notify(alert);
       }),
     );
     const wss = new WebSocketServer({ port: this.options.port ?? 0, host: this.options.host ?? '127.0.0.1' });
@@ -182,6 +197,7 @@ export class Gateway {
     this.heartbeat = setInterval(() => {
       this.scheduleAll();
       this.tickOdometer();
+      this.watchForAlerts();
     }, this.options.heartbeatMs ?? 250);
     this.updatePoll();
     return (wss.address() as AddressInfo).port;
@@ -205,6 +221,30 @@ export class Gateway {
       this.odometerSavedAt = now;
       this.odometerDirty = false;
       this.odometerMemory.write(this.odometer.snapshot);
+    }
+  }
+
+  /** Uma olhada na máquina, para avisar o celular do que precisa de alguém. */
+  private watchForAlerts(): void {
+    if (!this.options.push) return;
+    const snap = this.board.snapshot;
+    const seen = { live: this.board.view().mode === 'live', state: snap?.state ?? null, spindleOn: snap?.spindleOn ?? false };
+    for (const alert of this.alerts.observe(seen, this.board.now())) this.notify(alert);
+  }
+
+  /**
+   * Manda o aviso aos aparelhos, menos os que estão com o app à vista (já veem a
+   * máquina). Um aparelho que desistiu dos avisos é esquecido.
+   */
+  private notify(alert: Alert, only?: string): void {
+    const push = this.options.push;
+    if (!push) return;
+    const watched = new Set([...this.clients.values()].filter((c) => c.alive && c.watching).map((c) => c.watching));
+    const devices = this.pushStore.list.filter((d) => (only ? d.endpoint === only : !watched.has(d.endpoint)));
+    for (const d of devices) {
+      void push.send(d, alert).then(({ gone }) => {
+        if (gone && this.pushStore.remove(d.endpoint)) this.pushDevices.write(this.pushStore.list);
+      });
     }
   }
 
@@ -354,13 +394,14 @@ export class Gateway {
   // ── As telas ───────────────────────────────────────────────────────────────
 
   private accept(ws: WebSocket): void {
-    const client: Client = { id: `c${this.nextId++}`, ws, alive: true, lastStateAt: -Infinity, timer: null };
+    const client: Client = { id: `c${this.nextId++}`, ws, alive: true, lastStateAt: -Infinity, timer: null, watching: null };
     this.clients.set(client.id, client);
     ws.on('message', (data) => this.onMessage(client, data.toString()));
     ws.on('pong', () => (client.alive = true));
     ws.on('close', () => this.drop(client));
     ws.on('error', () => {});
     this.send(client, { type: 'welcome', protocol: PROTOCOL_VERSION, clientId: client.id });
+    if (this.options.push) this.send(client, { type: 'pushKey', publicKey: this.options.push.publicKey });
     this.send(client, { type: 'odometer', ...this.odometer.snapshot });
     this.send(client, { type: 'points', points: this.points.list });
     this.send(client, { type: 'resume', pos: this.resume.offer(this.board.now())?.pos ?? null });
@@ -388,6 +429,24 @@ export class Gateway {
   }
 
   private handle(client: Client, msg: ClientMessage): void {
+    if (msg.type === 'watching') {
+      client.watching = msg.endpoint;
+      return;
+    }
+    if (msg.type === 'pushSubscribe') {
+      const had = this.pushStore.list.some((d) => d.endpoint === msg.subscription.endpoint);
+      const ok = !!this.options.push && this.pushStore.add(msg.subscription);
+      if (ok) this.pushDevices.write(this.pushStore.list);
+      this.send(client, { type: 'push', subscribed: ok });
+      // Ligou agora: um aviso de prova, para quem ligou ver que chega.
+      if (ok && !had) this.notify(TEST_ALERT, msg.subscription.endpoint);
+      return;
+    }
+    if (msg.type === 'pushUnsubscribe') {
+      if (this.pushStore.remove(msg.endpoint)) this.pushDevices.write(this.pushStore.list);
+      this.send(client, { type: 'push', subscribed: false });
+      return;
+    }
     if (msg.type === 'takeControl') {
       const { previous } = this.control.take(client.id, msg.token);
       const prev = previous ? this.clients.get(previous) : undefined;

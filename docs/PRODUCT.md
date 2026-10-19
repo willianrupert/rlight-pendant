@@ -99,6 +99,12 @@ celular fechado no meio, e o tempo estimado erra menos de 10 %.
   o mapa nunca mostra um destino que a máquina não vai mais buscar.
   *(Pedido do usuário, 17/10/2026.)*
 
+- ✅ *Feito em 19/10/2026.* **Avisos no celular.** O servidor, que vê a máquina o
+  tempo todo, avisa pelo Web Push (o app instalado recebe mesmo fechado): alarme,
+  spindle esquecido girando, máquina fora do ar no meio do trabalho. Ligado em
+  Automações; o ícone do app mostra 1 em alarme. E telas de abertura no tema
+  escuro, para o app não abrir num flash branco.
+
 ### Roteiro do ecossistema (18/10/2026)
 
 Em ordem. Cada passo usa o que o anterior deixou pronto.

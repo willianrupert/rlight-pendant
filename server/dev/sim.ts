@@ -11,6 +11,8 @@ import { fileHomingMemory } from '../src/homing-memory';
 import { fileOdometerMemory } from '../src/odometer';
 import { filePointsMemory } from '../src/points';
 import { fileResumeMemory } from '../src/resume';
+import { noDeviceMemory } from '../src/push';
+import { filePushState, newVapidKeys, webPush } from '../src/push-send';
 import { FakeFluidNC } from '../test/fake-fluidnc';
 
 // O spin-up de 5 s é o da máquina de referência (spinup_ms): o M3 só responde depois dele.
@@ -28,8 +30,12 @@ const boardPort = await fake.listen(Number(process.env.RLIGHT_SIM_PORT ?? 0));
 
 const board = new Board({ host: '127.0.0.1', port: boardPort });
 const stateDir = process.env.RLIGHT_STATE_DIR;
+// Os avisos de verdade, também no simulador (chegam no celular se o app instalado apontar para cá).
+const pushState = stateDir ? filePushState(join(stateDir, 'push.json')) : { vapid: newVapidKeys(), devices: noDeviceMemory };
 const gateway = new Gateway({
   board,
+  push: webPush(pushState.vapid, process.env.RLIGHT_PUSH_SUBJECT ?? 'https://localhost'),
+  pushDevices: pushState.devices,
   // Como no servidor de verdade: o que precisa sobreviver a reinícios fica no RLIGHT_STATE_DIR.
   ...(stateDir
     ? {

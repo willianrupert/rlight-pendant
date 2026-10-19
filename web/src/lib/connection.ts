@@ -58,6 +58,8 @@ type ServerMessage =
   | { type: 'boardError'; code: number; line: string }
   | { type: 'points'; points: SavedPin[] }
   | { type: 'resume'; pos: { x: number; y: number; z: number } | null }
+  | { type: 'pushKey'; publicKey: string }
+  | { type: 'push'; subscribed: boolean }
   | ({ type: 'odometer' } & Odometer);
 
 const BACKOFF_MS = [500, 1_000, 2_000, 5_000];
@@ -109,6 +111,10 @@ export class Connection {
   onBoardError: ((code: number, line: string) => void) | null = null;
   /** O andamento da placa de toque (Automações), para todas as telas. */
   onProbe: ((p: ProbeProgress) => void) | null = null;
+  /** A chave dos avisos no celular, a cada conexão (só se o servidor manda avisos). */
+  onPushKey: ((publicKey: string) => void) | null = null;
+  /** A resposta a uma inscrição dos avisos. */
+  onPush: ((subscribed: boolean) => void) | null = null;
   /** O servidor fechou: os comandos sem resposta não vão ter resposta. */
   onClose: (() => void) | null = null;
 
@@ -203,6 +209,20 @@ export class Connection {
 
   takeControl(): boolean {
     return this.#send({ type: 'takeControl', token: this.#token });
+  }
+
+  /** Avisos no celular: este aparelho quer receber (a inscrição do navegador). */
+  pushSubscribe(subscription: { endpoint: string; keys: { p256dh: string; auth: string } }): boolean {
+    return this.#send({ type: 'pushSubscribe', subscription });
+  }
+
+  pushUnsubscribe(endpoint: string): boolean {
+    return this.#send({ type: 'pushUnsubscribe', endpoint });
+  }
+
+  /** O app está à vista neste aparelho (endpoint) ou não (null): à vista, sem aviso. */
+  watching(endpoint: string | null): boolean {
+    return this.#send({ type: 'watching', endpoint });
   }
 
   releaseControl(): boolean {
@@ -300,6 +320,10 @@ export class Connection {
       } else if (msg.type === 'probe') {
         const p = msg as { status: ProbeProgress['status']; reason?: string };
         this.onProbe?.(p.reason ? { status: p.status, reason: p.reason } : { status: p.status });
+      } else if (msg.type === 'pushKey') {
+        this.onPushKey?.((msg as { publicKey: string }).publicKey);
+      } else if (msg.type === 'push') {
+        this.onPush?.((msg as { subscribed: boolean }).subscribed);
       } else if (msg.type === 'alarm') {
         this.alarmCode = (msg as { code: number }).code;
       } else if (msg.type === 'control') {

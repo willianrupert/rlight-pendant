@@ -5,6 +5,7 @@
 
 /// <reference lib="webworker" />
 import { cacheName, cachesToKeep, routeFor } from '../src/lib/sw-routes';
+import { alertFromPush } from '../src/lib/alerts';
 
 declare const __SHELL__: { version: string; files: string[] };
 
@@ -58,3 +59,30 @@ async function fromShell(key: string, req: Request): Promise<Response> {
 async function unredirect(r: Response): Promise<Response> {
   return new Response(await r.blob(), { status: r.status, statusText: r.statusText, headers: r.headers });
 }
+
+// Os avisos no celular (server/src/alerts.ts). Cada aviso vira uma notificação,
+// sempre: o iPhone corta os avisos de quem recebe e não mostra.
+sw.addEventListener('push', (event) => {
+  const alert = alertFromPush(event.data?.text());
+  const nav = sw.navigator as WorkerNavigator & { setAppBadge?: (n: number) => Promise<void> };
+  event.waitUntil(
+    Promise.all([
+      // A mesma etiqueta substitui o aviso anterior do mesmo tipo: um alarme, não uma pilha.
+      sw.registration.showNotification(alert.title, { body: alert.body, tag: alert.kind, icon: new URL('icons/icon-192.png', scope()).href }),
+      alert.badge > 0 ? nav.setAppBadge?.(alert.badge).catch(() => {}) : undefined,
+    ]),
+  );
+});
+
+// Tocar no aviso abre o app (ou traz o que já está aberto).
+sw.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    (async () => {
+      const open = await sw.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const app = open[0];
+      if (app) await app.focus();
+      else await sw.clients.openWindow(scope().href);
+    })(),
+  );
+});

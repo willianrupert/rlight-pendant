@@ -9,6 +9,7 @@
   import type { SpindleProfile } from '@rlight/core';
   import type { SavedPin } from '../lib/map-view';
   import { formatMm } from '../lib/present';
+  import type { NotifyStatus } from '../lib/alerts';
 
   interface Props {
     hasProbe: boolean;
@@ -41,6 +42,10 @@
     onprobe: (thicknessMm: number) => void;
     onstop: () => void;
     onsound: (on: boolean) => void;
+    /** Os avisos no celular neste aparelho. */
+    notify: NotifyStatus;
+    /** Liga ou desliga; devolve se ficou ligado. */
+    onnotify: (on: boolean) => Promise<boolean>;
     onclose: () => void;
   }
 
@@ -67,6 +72,8 @@
     onprobe,
     onstop,
     onsound,
+    notify,
+    onnotify,
     onsavepoint,
     ongopoint,
     ondeletepoint,
@@ -227,6 +234,38 @@
       <p class="muted">As receitas do Romney (aplainar, furos, círculos, texto) vão morar aqui.</p>
     </div>
   </section>
+
+  {#if notify !== 'unavailable'}
+    <section>
+      <h3>Avisos</h3>
+      <div class="card">
+        {#if notify === 'on' || notify === 'off'}
+          <label class="row">
+            <span>Avisar no celular</span>
+            <input
+              type="checkbox"
+              {...{ switch: true }}
+              checked={notify === 'on'}
+              onchange={async (e) => {
+                const el = e.currentTarget as HTMLInputElement;
+                el.checked = await onnotify(el.checked);
+              }}
+            />
+          </label>
+          <p class="muted small">
+            Alarme, spindle girando esquecido, ou a máquina saindo do ar no meio do trabalho. Chega com o app fechado; com ele
+            aberto, não precisa.
+          </p>
+        {:else if notify === 'install'}
+          <p class="muted">Para receber avisos, abra o app pela tela de início: no Safari, Compartilhar → Adicionar à Tela de Início.</p>
+        {:else if notify === 'blocked'}
+          <p class="muted">Os avisos foram recusados neste aparelho. Para ligar: Ajustes → Notificações → CNC.</p>
+        {:else}
+          <p class="muted">Este navegador não recebe avisos.</p>
+        {/if}
+      </div>
+    </section>
+  {/if}
 
   <section>
     <h3>Ajustes</h3>
