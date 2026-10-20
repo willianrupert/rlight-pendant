@@ -57,6 +57,10 @@ input, textarea, [contenteditable] {
 html[data-tone='moving'] { background: var(--moving); }
 html[data-tone='hold'] { background: var(--hold); }
 html[data-tone='alarm'] { background: var(--alarm); }
+/* Com uma folha aberta, a faixa sob a barra de gestos é da folha: no iPhone
+   instalado, nada fixo alcança essa faixa, só o fundo do html. Sem isto, ela
+   ficava na cor do estado (vermelha no alarme) embaixo da folha cinza. */
+html:has(.sheet) { background: var(--sheet); transition: none; }
 
 /* Os dígitos que rolam (lib/dro.ts) */
 .digits {
