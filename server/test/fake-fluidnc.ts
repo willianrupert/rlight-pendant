@@ -53,6 +53,8 @@ export interface FakeOptions {
   plateZ?: number;
   /** Teto da duração de um G38.2 simulado, para os testes não esperarem a descida real. */
   probeMaxMs?: number;
+  /** O MAC que a placa diz no $I (a gravação tem zeros). */
+  mac?: string;
 }
 
 const fmt = (v: number) => (Object.is(v, -0) ? 0 : v).toFixed(3);
@@ -106,6 +108,7 @@ export class FakeFluidNC {
     this.spindownMs = options.spindownMs ?? this.spinupMs;
     this.plateZ = options.plateZ;
     this.probeMaxMs = options.probeMaxMs ?? 400;
+    if (options.mac) this.blocks.info = this.blocks.info.map((l) => l.replace(/MAC=[0-9A-Fa-f:-]+/, `MAC=${options.mac}`));
     this.ticker = setInterval(() => this.step(this.tickMs), this.tickMs);
   }
 

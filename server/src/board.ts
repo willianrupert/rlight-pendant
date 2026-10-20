@@ -27,6 +27,7 @@ export const JOG_CANCEL = 0x85;
 export const SOFT_RESET = 0x18;
 
 export interface BoardOptions {
+  /** Muda com setHost, quando a placa é achada em outro endereço. */
   host: string;
   port: number;
   backoffMs?: readonly number[];
@@ -59,6 +60,8 @@ export class Board {
   profile: MachineProfile | null = null;
   /** Quantas vezes a conexão foi estabelecida. */
   sessions = 0;
+  /** O MAC que a placa diz no $I: o que a reconhece se o IP mudar (discover.ts). */
+  mac: string | null = null;
 
   private link: LinkState = initialLink();
   private sock: net.Socket | null = null;
@@ -87,6 +90,7 @@ export class Board {
   readonly now: () => number;
 
   constructor(private readonly options: BoardOptions) {
+    this.options = { ...options };
     this.backoffMs = options.backoffMs ?? DEFAULT_BACKOFF_MS;
     this.deadAfterMs = options.deadAfterMs ?? 5_000;
     this.pollHz = options.pollHz ?? 1;
@@ -120,6 +124,31 @@ export class Board {
 
   get isConnected(): boolean {
     return this.connected;
+  }
+
+  get host(): string {
+    return this.options.host;
+  }
+
+  /** O endereço mudou (o roteador deu outro IP): larga a conexão e tenta o novo já. */
+  setHost(host: string): void {
+    if (host === this.options.host) return;
+    this.options.host = host;
+    this.attempt = 0;
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    this.retryTimer = null;
+    // A conexão velha sai sem agendar nova tentativa nela: a próxima é no endereço novo, agora.
+    const old = this.sock;
+    this.sock = null;
+    if (old) {
+      const was = this.connected;
+      this.connected = false;
+      this.configLines = null;
+      this.stopPolling();
+      old.destroy();
+      if (was) this.emit('disconnected');
+    }
+    if (!this.stopped) this.connect();
   }
 
   /** Ao vivo ou sem sinal, pela idade do último relatório (ADR-0007). */
@@ -254,6 +283,8 @@ export class Board {
 
   private onLine(line: string): void {
     this.lastLineAt = this.now();
+    const mac = /MAC=([0-9A-Fa-f]{2}(?:[:-][0-9A-Fa-f]{2}){5})/.exec(line)?.[1];
+    if (mac) this.mac = mac.replace(/-/g, ':').toUpperCase();
     // Uma linha de verdade: a conexão funciona, o próximo intervalo volta ao menor.
     this.attempt = 0;
     const message = parseLine(line);
