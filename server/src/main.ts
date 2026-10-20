@@ -11,13 +11,29 @@ import { filePointsMemory } from './points';
 import { fileResumeMemory } from './resume';
 import { noDeviceMemory } from './push';
 import { JobStore } from './jobs';
+import { BoardFinder, fileKnownBoardMemory, noKnownBoardMemory, scanForBoard, type KnownBoardMemory } from './discover';
 import { filePushState, newVapidKeys, webPush } from './push-send';
 
 const env = process.env;
-const board = new Board({
-  host: env.RLIGHT_BOARD_HOST ?? '192.168.1.50',
-  port: Number(env.RLIGHT_BOARD_PORT ?? 23),
+// O endereço da placa: o da configuração, ou o que o servidor achou sozinho
+// quando o roteador mudou o IP dela (discover.ts). Mudar à mão no rlight.env vence.
+const configuredHost = env.RLIGHT_BOARD_HOST ?? '192.168.1.50';
+const boardPort = Number(env.RLIGHT_BOARD_PORT ?? 23);
+const saved = env.RLIGHT_STATE_DIR ? fileKnownBoardMemory(join(env.RLIGHT_STATE_DIR, 'board.json')) : noKnownBoardMemory;
+const known: KnownBoardMemory = {
+  read: () => {
+    const k = saved.read();
+    return k && k.configured === configuredHost ? k : null;
+  },
+  write: (k) => saved.write({ ...k, configured: configuredHost }),
+};
+const board = new Board({ host: known.read()?.host ?? configuredHost, port: boardPort });
+const finder = new BoardFinder({
+  board,
+  memory: known,
+  scan: (hosts, mac) => scanForBoard(hosts, mac, boardPort),
 });
+setInterval(() => void finder.tick(), 5_000);
 // Os avisos no celular: as chaves nascem no primeiro uso, no RLIGHT_STATE_DIR.
 // Sem ele (desenvolvimento), valem até o servidor reiniciar.
 const pushState = env.RLIGHT_STATE_DIR
@@ -48,7 +64,7 @@ const gateway = new Gateway({
   port: Number(env.RLIGHT_PORT ?? 8787),
 });
 
-board.on('connected', () => console.log('placa: conectada'));
+board.on('connected', () => console.log(`placa: conectada em ${board.host}`));
 board.on('disconnected', () => console.log('placa: caiu, tentando de novo'));
 board.start();
 const port = await gateway.start();
