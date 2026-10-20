@@ -10,6 +10,7 @@
   import type { SavedPin } from '../lib/map-view';
   import { formatMm } from '../lib/present';
   import type { NotifyStatus } from '../lib/alerts';
+  import { formatBytes, GCODE_ACCEPT, type JobInfo } from '../lib/jobs';
 
   interface Props {
     hasProbe: boolean;
@@ -42,6 +43,11 @@
     onprobe: (thicknessMm: number) => void;
     onstop: () => void;
     onsound: (on: boolean) => void;
+    /** A biblioteca de trabalhos (v2). */
+    jobs: JobInfo[];
+    /** Um arquivo escolhido (o seletor do iPhone, ou arrastado no Mac). */
+    onjobfile: (file: File) => void;
+    onjobopen: (job: JobInfo) => void;
     /** Os avisos no celular neste aparelho. */
     notify: NotifyStatus;
     /** Liga ou desliga; devolve se ficou ligado. */
@@ -74,6 +80,9 @@
     onsound,
     notify,
     onnotify,
+    jobs,
+    onjobfile,
+    onjobopen,
     onsavepoint,
     ongopoint,
     ondeletepoint,
@@ -94,6 +103,14 @@
   const running = $derived(probe?.status === 'seeking' || probe?.status === 'measuring');
   const line = $derived(probeLine(probe));
 
+  let dragging = $state(false);
+  const added = (ms: number) => new Date(ms).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' });
+
+  function pick(files: FileList | null | undefined) {
+    const f = files?.[0];
+    if (f) onjobfile(f);
+  }
+
   function measure() {
     if (thickness === null) return;
     try {
@@ -106,11 +123,61 @@
 </script>
 
 <div class="scrim" onclick={onclose} role="presentation"></div>
-<div class="sheet" role="dialog" aria-modal="true" aria-label="Automações">
+<div
+  class="sheet"
+  class:dragging
+  role="dialog"
+  aria-modal="true"
+  aria-label="Automações"
+  tabindex="-1"
+  ondragover={(e) => {
+    // No Mac: arrastar o arquivo do Fusion para cá também guarda o trabalho.
+    if (!e.dataTransfer?.types.includes('Files')) return;
+    e.preventDefault();
+    dragging = true;
+  }}
+  ondragleave={() => (dragging = false)}
+  ondrop={(e) => {
+    e.preventDefault();
+    dragging = false;
+    pick(e.dataTransfer?.files);
+  }}
+>
   <header>
     <h2>Automações</h2>
     <button class="close" onclick={onclose}>Fechar</button>
   </header>
+
+  <section>
+    <h3>Trabalhos</h3>
+    <div class="card">
+      {#if jobs.length}
+        <ul class="jobs">
+          {#each jobs as j (j.id)}
+            <li>
+              <button class="job" onclick={() => onjobopen(j)}>
+                <span class="pinfo">
+                  <strong>{j.name}</strong>
+                  <span>{formatBytes(j.bytes)} · {added(j.addedAt)}</span>
+                </span>
+                <span class="chev" aria-hidden="true">›</span>
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {:else}
+        <p class="muted">Mande o G-code do Fusion: ele é conferido contra a máquina e aparece na mesa antes de qualquer coisa.</p>
+      {/if}
+      <label class="pick">
+        <input type="file" accept={GCODE_ACCEPT} onchange={(e) => {
+          const el = e.currentTarget as HTMLInputElement;
+          pick(el.files);
+          el.value = '';
+        }} />
+        Abrir arquivo…
+      </label>
+    </div>
+  </section>
 
   <section>
     <h3>Placa de toque</h3>
@@ -332,6 +399,13 @@
   .pinfo span { font: 500 12px var(--mono); color: var(--fg-3); font-variant-numeric: tabular-nums; }
   .go { border: 0; border-radius: 999px; background: var(--acc); color: var(--acc-ink); font: 700 15px var(--sans); min-width: 56px; min-height: 40px; cursor: pointer; }
   .go:disabled { opacity: 0.45; }
+  .jobs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+  .jobs li + li { border-top: 1px solid var(--line); }
+  .job { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 56px; border: 0; background: transparent; color: var(--fg); text-align: left; padding: 0; cursor: pointer; font: inherit; }
+  .chev { font-size: 22px; color: var(--fg-3); }
+  .pick { display: flex; align-items: center; justify-content: center; min-height: 48px; border-radius: 14px; background: var(--panel-2); color: var(--acc); font: 600 16px var(--sans); cursor: pointer; }
+  .pick input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  .sheet.dragging { outline: 2px dashed var(--acc); outline-offset: -8px; }
   .odo { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
   .odo div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .odo small { font-size: 12px; color: var(--fg-3); }

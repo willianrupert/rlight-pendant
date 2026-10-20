@@ -10,6 +10,7 @@ import { fileOdometerMemory } from './odometer';
 import { filePointsMemory } from './points';
 import { fileResumeMemory } from './resume';
 import { noDeviceMemory } from './push';
+import { JobStore } from './jobs';
 import { filePushState, newVapidKeys, webPush } from './push-send';
 
 const env = process.env;
@@ -29,6 +30,8 @@ const gateway = new Gateway({
   board,
   push: webPush(pushState.vapid, pushSubject),
   pushDevices: pushState.devices,
+  // Os trabalhos (v2): os arquivos de G-code ficam em RLIGHT_STATE_DIR/jobs.
+  jobs: new JobStore(env.RLIGHT_STATE_DIR ? join(env.RLIGHT_STATE_DIR, 'jobs') : null),
   // RLIGHT_STATE_DIR: onde o servidor guarda o que precisa sobreviver a reinícios.
   ...(env.RLIGHT_STATE_DIR
     ? {

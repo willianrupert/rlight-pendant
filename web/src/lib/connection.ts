@@ -5,6 +5,7 @@
 
 import type { SavedPin } from './map-view';
 import type { Odometer, ProbeProgress } from './automations';
+import type { JobDetail, JobInfo } from './jobs';
 import {
   combineLinks,
   initialLink,
@@ -38,6 +39,7 @@ export type CommandRequest =
   | { command: 'probeZ'; thicknessMm: number }
   | { command: 'savePoint'; name: string }
   | { command: 'goToPoint' | 'deletePoint'; pointId: string }
+  | { command: 'frameJob'; jobId: string }
   | { command: 'undoMove' | 'resumePosition' | 'dismissResume' };
 
 export type CommandName = CommandRequest['command'];
@@ -59,6 +61,9 @@ type ServerMessage =
   | { type: 'points'; points: SavedPin[] }
   | { type: 'resume'; pos: { x: number; y: number; z: number } | null }
   | { type: 'pushKey'; publicKey: string }
+  | { type: 'jobs'; jobs: JobInfo[] }
+  | { type: 'jobAdded'; ok: boolean; jobId?: string; reason?: string }
+  | { type: 'job'; job?: JobDetail; jobId?: string; reason?: string }
   | { type: 'push'; subscribed: boolean }
   | ({ type: 'odometer' } & Odometer);
 
@@ -111,6 +116,12 @@ export class Connection {
   onBoardError: ((code: number, line: string) => void) | null = null;
   /** O andamento da placa de toque (Automações), para todas as telas. */
   onProbe: ((p: ProbeProgress) => void) | null = null;
+  /** A biblioteca de trabalhos, a cada conexão e a cada mudança. */
+  onJobs: ((jobs: JobInfo[]) => void) | null = null;
+  /** A resposta a `uploadJob`: o id do trabalho guardado, ou o motivo. */
+  onJobAdded: ((r: { ok: true; jobId: string } | { ok: false; reason: string }) => void) | null = null;
+  /** Um trabalho aberto, conferido contra a máquina agora; ou por que não abriu. */
+  onJob: ((r: { ok: true; job: JobDetail } | { ok: false; jobId: string; reason: string }) => void) | null = null;
   /** A chave dos avisos no celular, a cada conexão (só se o servidor manda avisos). */
   onPushKey: ((publicKey: string) => void) | null = null;
   /** A resposta a uma inscrição dos avisos. */
@@ -209,6 +220,20 @@ export class Connection {
 
   takeControl(): boolean {
     return this.#send({ type: 'takeControl', token: this.#token });
+  }
+
+  /** Guarda um arquivo de G-code na biblioteca do servidor. */
+  uploadJob(name: string, text: string): boolean {
+    return this.#send({ type: 'jobUpload', name, text });
+  }
+
+  /** Pede o trabalho conferido contra a máquina como ela está agora. */
+  openJob(jobId: string): boolean {
+    return this.#send({ type: 'jobOpen', jobId });
+  }
+
+  deleteJob(jobId: string): boolean {
+    return this.#send({ type: 'jobDelete', jobId });
   }
 
   /** Avisos no celular: este aparelho quer receber (a inscrição do navegador). */
@@ -320,6 +345,14 @@ export class Connection {
       } else if (msg.type === 'probe') {
         const p = msg as { status: ProbeProgress['status']; reason?: string };
         this.onProbe?.(p.reason ? { status: p.status, reason: p.reason } : { status: p.status });
+      } else if (msg.type === 'jobs') {
+        this.onJobs?.((msg as { jobs: JobInfo[] }).jobs);
+      } else if (msg.type === 'jobAdded') {
+        const a = msg as { ok: boolean; jobId?: string; reason?: string };
+        this.onJobAdded?.(a.ok && a.jobId ? { ok: true, jobId: a.jobId } : { ok: false, reason: a.reason ?? 'O servidor não guardou o arquivo' });
+      } else if (msg.type === 'job') {
+        const j = msg as { job?: JobDetail; jobId?: string; reason?: string };
+        this.onJob?.(j.job ? { ok: true, job: j.job } : { ok: false, jobId: j.jobId ?? '', reason: j.reason ?? 'O trabalho não abriu' });
       } else if (msg.type === 'pushKey') {
         this.onPushKey?.((msg as { publicKey: string }).publicKey);
       } else if (msg.type === 'push') {

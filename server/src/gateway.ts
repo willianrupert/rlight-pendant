@@ -16,6 +16,7 @@ import { PointStore, noPointsMemory, type PointsMemory } from './points';
 import { ResumeTracker, noResumeMemory, type ResumeMemory } from './resume';
 import { AlertWatcher, TEST_ALERT, type Alert } from './alerts';
 import { PushStore, noDeviceMemory, type DeviceMemory, type Push } from './push';
+import { inspectJob, JobStore, type JobDetail } from './jobs';
 import {
   parseClientMessage,
   PROTOCOL_VERSION,
@@ -57,6 +58,8 @@ export interface GatewayOptions {
   push?: Push;
   /** Onde guardar os aparelhos que pediram avisos. */
   pushDevices?: DeviceMemory;
+  /** A biblioteca de trabalhos (v2). Sem isto, uma só na memória. */
+  jobs?: JobStore;
 }
 
 /** O hodômetro vai às telas a cada tanto, e é gravado a cada tanto. */
@@ -109,6 +112,9 @@ export class Gateway {
   private readonly alerts = new AlertWatcher();
   private readonly pushDevices: DeviceMemory;
   private readonly pushStore: PushStore;
+  private readonly jobs: JobStore;
+  /** A última conferência, para não ler o arquivo de novo a cada pedido igual. */
+  private jobCache: { key: string; detail: JobDetail } | null = null;
   /** Onde a máquina estava antes do último Ir ou ida a um ponto (o "Desfazer"). */
   private undoFrom: { pos: { x: number; y: number; z: number }; at: number } | null = null;
   private readonly odometerMemory: OdometerMemory;
@@ -138,6 +144,7 @@ export class Gateway {
     this.resume = new ResumeTracker(this.resumeMemory.read());
     this.pushDevices = options.pushDevices ?? noDeviceMemory;
     this.pushStore = new PushStore(this.pushDevices.read());
+    this.jobs = options.jobs ?? new JobStore(null);
     this.pointsMemory = options.pointsMemory ?? noPointsMemory;
     this.points = new PointStore(this.pointsMemory.read());
     this.odometerMemory = options.odometerMemory ?? noOdometerMemory;
@@ -323,6 +330,35 @@ export class Gateway {
     this.scheduleAll();
   }
 
+  /**
+   * Um trabalho conferido contra a máquina como ela está agora (zero da peça,
+   * homing, perfil). A mesma conferência é reaproveitada enquanto nada muda.
+   */
+  private inspect(jobId: string): { detail: JobDetail } | { reason: string } {
+    const job = this.jobs.get(jobId);
+    const text = job ? this.jobs.text(jobId) : null;
+    if (!job || text === null) return { reason: 'Esse trabalho não existe mais' };
+    const profile = this.board.profile;
+    if (!profile) return { reason: 'Lendo a configuração da máquina' };
+    const wco = this.board.snapshot?.wco ?? null;
+    const key = JSON.stringify([jobId, wco, this.homed, profile]);
+    if (this.jobCache?.key === key) return { detail: this.jobCache.detail };
+    const detail = inspectJob(job, text, { profile, workOffset: wco, homed: this.homed });
+    this.jobCache = { key, detail };
+    return { detail };
+  }
+
+  /** O retângulo do trabalho na mesa, para o "Contornar no ar", ou por que não dá. */
+  private jobBox(jobId: string): { box: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } } } | { reason: string } | null {
+    const r = this.inspect(jobId);
+    if ('reason' in r) return r.reason === 'Esse trabalho não existe mais' ? null : r;
+    const d = r.detail;
+    if (d.problems.some((p) => p.code === 'out-of-travel')) return { reason: 'O trabalho passa do curso da máquina; confira o zero da peça' };
+    if (!d.workOffset) return { reason: 'Ainda não sei o zero da peça; tente de novo em instantes' };
+    if (!d.bounds.machine) return { reason: d.bounds.work ? 'Faça o homing para contornar o trabalho' : 'Esse trabalho não move nada' };
+    return { box: d.bounds.machine };
+  }
+
   /** Salvar ou apagar um ponto. Devolve o motivo da recusa, ou null. */
   private pointCommand(client: Client, req: Extract<CommandRequest, { command: 'savePoint' | 'deletePoint' }>): string | null {
     if (!this.control.isController(client.id)) return 'Outra tela está no controle';
@@ -404,6 +440,7 @@ export class Gateway {
     if (this.options.push) this.send(client, { type: 'pushKey', publicKey: this.options.push.publicKey });
     this.send(client, { type: 'odometer', ...this.odometer.snapshot });
     this.send(client, { type: 'points', points: this.points.list });
+    this.send(client, { type: 'jobs', jobs: this.jobs.list });
     this.send(client, { type: 'resume', pos: this.resume.offer(this.board.now())?.pos ?? null });
     this.sendProfile(client);
     this.schedule(client);
@@ -440,6 +477,21 @@ export class Gateway {
       this.send(client, { type: 'push', subscribed: ok });
       // Ligou agora: um aviso de prova, para quem ligou ver que chega.
       if (ok && !had) this.notify(TEST_ALERT, msg.subscription.endpoint);
+      return;
+    }
+    if (msg.type === 'jobUpload') {
+      const r = this.jobs.add(msg.name, msg.text, Date.now());
+      this.send(client, r.ok ? { type: 'jobAdded', ok: true, jobId: r.job.id } : { type: 'jobAdded', ok: false, reason: r.reason });
+      if (r.ok) this.broadcast({ type: 'jobs', jobs: this.jobs.list });
+      return;
+    }
+    if (msg.type === 'jobOpen') {
+      const r = this.inspect(msg.jobId);
+      this.send(client, 'detail' in r ? { type: 'job', job: r.detail } : { type: 'job', jobId: msg.jobId, reason: r.reason });
+      return;
+    }
+    if (msg.type === 'jobDelete') {
+      if (this.jobs.remove(msg.jobId)) this.broadcast({ type: 'jobs', jobs: this.jobs.list });
       return;
     }
     if (msg.type === 'pushUnsubscribe') {
@@ -506,6 +558,7 @@ export class Gateway {
       findPoint: (pid) => this.points.get(pid),
       undoFrom: this.undoFrom,
       resumeTo: this.resume.offer(this.board.now())?.pos ?? null,
+      findJobBox: (jid) => this.jobBox(jid),
     });
     if (!plan.ok) {
       this.send(client, { type: 'result', ...ids, ok: false, reason: plan.reason });

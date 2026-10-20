@@ -12,6 +12,7 @@ import type {
 
 import type { OdoTotals } from './odometer';
 import type { PushSubscriptionJSON } from './push';
+import type { JobDetail, JobInfo } from './jobs';
 import type { SavedPoint } from './points';
 
 export const PROTOCOL_VERSION = 1;
@@ -36,6 +37,8 @@ export type CommandRequest =
   /** Retomar: volta para onde a máquina estava antes de perder o homing, ou dispensa a oferta. */
   | { command: 'resumePosition' }
   | { command: 'dismissResume' }
+  /** Contornar no ar: percorre o retângulo do trabalho na altura segura, para conferir o enquadramento. */
+  | { command: 'frameJob'; jobId: string }
   | { command: 'cancelJog' | 'unlock' | 'home' | 'softReset' | 'feedHold' | 'resume' };
 
 export type ClientMessage =
@@ -47,6 +50,10 @@ export type ClientMessage =
   | { type: 'pushUnsubscribe'; endpoint: string }
   /** A tela deste aparelho está à vista (endpoint) ou não (null): à vista, ele não recebe aviso. */
   | { type: 'watching'; endpoint: string | null }
+  /** Os trabalhos: guardar um arquivo de G-code, abrir um (conferido agora), apagar. */
+  | { type: 'jobUpload'; name: string; text: string }
+  | { type: 'jobOpen'; jobId: string }
+  | { type: 'jobDelete'; jobId: string }
   | ({ type: 'command'; id?: string } & CommandRequest);
 
 export type ServerMessage =
@@ -79,6 +86,14 @@ export type ServerMessage =
   | { type: 'pushKey'; publicKey: string }
   /** A resposta a pushSubscribe/pushUnsubscribe: se este aparelho recebe avisos agora. */
   | { type: 'push'; subscribed: boolean }
+  /** A biblioteca de trabalhos, para todas as telas: a cada conexão e a cada mudança. */
+  | { type: 'jobs'; jobs: JobInfo[] }
+  /** A resposta a jobUpload, só para quem mandou. */
+  | { type: 'jobAdded'; ok: true; jobId: string }
+  | { type: 'jobAdded'; ok: false; reason: string }
+  /** Um trabalho aberto, conferido contra a máquina como ela está agora. */
+  | { type: 'job'; job: JobDetail }
+  | { type: 'job'; jobId: string; reason: string }
   | { type: 'invalid'; reason: string };
 
 const SIMPLE = new Set(['cancelJog', 'unlock', 'home', 'softReset', 'feedHold', 'resume', 'undoZero', 'spindleOff', 'undoMove', 'resumePosition', 'dismissResume']);
@@ -97,6 +112,14 @@ export function parseClientMessage(raw: string): ClientMessage | { invalid: stri
   const o = m as Record<string, unknown>;
   if (o.type === 'releaseControl') return { type: o.type };
   const endpoint = typeof o.endpoint === 'string' && o.endpoint.length <= 1024 ? o.endpoint : undefined;
+  if (o.type === 'jobUpload') {
+    if (typeof o.name !== 'string' || typeof o.text !== 'string') return { invalid: 'Arquivo inválido' };
+    return { type: o.type, name: o.name, text: o.text };
+  }
+  if (o.type === 'jobOpen' || o.type === 'jobDelete') {
+    if (typeof o.jobId !== 'string' || !o.jobId) return { invalid: 'Trabalho inválido' };
+    return { type: o.type, jobId: o.jobId };
+  }
   if (o.type === 'pushUnsubscribe') return endpoint ? { type: o.type, endpoint } : { invalid: 'Endereço inválido' };
   if (o.type === 'watching') {
     if (o.endpoint === null) return { type: o.type, endpoint: null };
@@ -135,6 +158,10 @@ export function parseClientMessage(raw: string): ClientMessage | { invalid: stri
     return o.command === 'goToPoint'
       ? { type: 'command', ...id, command: 'goToPoint', pointId: o.pointId }
       : { type: 'command', ...id, command: 'deletePoint', pointId: o.pointId };
+  }
+  if (o.command === 'frameJob') {
+    if (typeof o.jobId !== 'string' || !o.jobId) return { invalid: 'Trabalho inválido' };
+    return { type: 'command', ...id, command: 'frameJob', jobId: o.jobId };
   }
   if (o.command === 'probeZ') {
     if (!isNum(o.thicknessMm)) return { invalid: 'Espessura inválida' };

@@ -15,6 +15,7 @@ import {
   pointApproach,
   POINT_APPROACH_FEED,
   type Vec3,
+  type Box,
   type Axis,
   type AxisValues,
   type LinkMode,
@@ -81,6 +82,8 @@ export interface CommandContext {
   undoFrom?: { pos: Vec3; at: number } | null;
   /** Retomar: onde a máquina estava antes de perder o homing, se há oferta. */
   resumeTo?: Vec3 | null;
+  /** O retângulo de um trabalho na mesa (coordenadas de máquina), ou por que não dá para contornar. */
+  findJobBox?: (jobId: string) => { box: Box } | { reason: string } | null;
 }
 
 /** O offset anterior de cada eixo zerado, e quando o zero foi feito. */
@@ -232,6 +235,7 @@ export function planCommand(req: CommandRequest, ctx: CommandContext): Plan {
     case 'goToPoint':
     case 'undoMove':
     case 'resumePosition':
+    case 'frameJob':
       break;
   }
 
@@ -279,6 +283,28 @@ export function planCommand(req: CommandRequest, ctx: CommandContext): Plan {
     if (a.fastTo !== null) writes.push({ line: formatJog({ z: a.fastTo }, zFeed) });
     if (a.slowTo < (a.fastTo ?? a.top) - 1e-6) writes.push({ line: formatJog({ z: a.slowTo }, Math.min(zFeed, POINT_APPROACH_FEED)) });
     return { ok: true, writes, commanded: { ...ctx.commanded, ...target, z: a.slowTo }, hitLimit: false, moves: true, undo: 'record' };
+  }
+
+  if (req.command === 'frameJob') {
+    const found = ctx.findJobBox?.(req.jobId);
+    if (!found) return refuse('Esse trabalho não existe mais');
+    if ('reason' in found) return refuse(found.reason);
+    const { min, max } = found.box;
+    // O teste de enquadramento do Romney: sobe à altura segura e percorre o
+    // retângulo do trabalho, voltando ao primeiro canto. Tudo na fila da placa; o
+    // Parar cancela o que falta (0x85).
+    const lift = liftFrom(mpos.z);
+    const corners = [
+      { x: min.x, y: min.y },
+      { x: max.x, y: min.y },
+      { x: max.x, y: max.y },
+      { x: min.x, y: max.y },
+      { x: min.x, y: min.y },
+    ].map((c) => goTo(c, limits).target);
+    const writes: BoardWrite[] = [];
+    if (lift !== null) writes.push({ line: formatJog({ z: lift }, zFeed) });
+    for (const c of corners) writes.push({ line: formatJog(c, xyFeed) });
+    return { ok: true, writes, commanded: { ...ctx.commanded, ...corners[0]!, ...(lift !== null ? { z: lift } : {}) }, hitLimit: false, moves: true, undo: 'record' };
   }
 
   if (req.command === 'undoMove') {

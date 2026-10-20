@@ -98,8 +98,11 @@ spin-up do FluidNC.
 
 **Automações, fora da tela de controle.** A placa de toque zera o Z sozinha: desce
 rápido até encostar, recua, mede de novo devagar e zera pela espessura da placa.
-É ali que vão morar as [receitas](docs/RECEITAS.md) do Romney Rupert, o CAM
-conversacional que ele escreveu no Mach3.
+Os trabalhos do Fusion chegam pelo seletor de arquivos do iPhone, são conferidos
+contra o zero da peça e o curso, aparecem na mesa com os furos e o tempo
+estimado, e podem ser **contornados no ar** para conferir o enquadramento no
+material. É ali que vão morar as [receitas](docs/RECEITAS.md) do Romney Rupert, o
+CAM conversacional que ele escreveu no Mach3.
 
 </td>
 <td valign="top">
