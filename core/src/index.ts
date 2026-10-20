@@ -7,3 +7,4 @@ export * from './protocol';
 export * from './profile';
 export * from './gcode';
 export * from './alarms';
+export * from './job';

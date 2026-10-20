@@ -26,6 +26,7 @@ export const COMMANDS = [
   'goToPoint',
   'undoMove',
   'resumePosition',
+  'frameJob',
 ] as const;
 export type Command = (typeof COMMANDS)[number];
 
@@ -40,7 +41,7 @@ export interface PolicyContext {
 export type Decision = { ok: true } | { ok: false; reason: string };
 
 const PERMITTED: Record<MachineState, readonly Command[]> = {
-  Idle: ['home', 'softReset', 'jogTo', 'jogAxisTo', 'nudge', 'zero', 'undoZero', 'spindleOn', 'spindleOff', 'spindleSpeed', 'probeZ', 'goToPoint', 'undoMove', 'resumePosition'],
+  Idle: ['home', 'softReset', 'jogTo', 'jogAxisTo', 'nudge', 'zero', 'undoZero', 'spindleOn', 'spindleOff', 'spindleSpeed', 'probeZ', 'goToPoint', 'undoMove', 'resumePosition', 'frameJob'],
   Jog: ['softReset', 'feedHold', 'cancelJog', 'jogTo', 'jogAxisTo', 'nudge', 'goToPoint', 'undoMove', 'resumePosition'],
   Run: ['softReset', 'feedHold', 'spindleSpeed'],
   Hold: ['softReset', 'resume', 'spindleOff'],
@@ -77,5 +78,6 @@ export function allowed(command: Command, state: MachineState, ctx: PolicyContex
   if (command === 'goToPoint' && !ctx.homed) return { ok: false, reason: 'Faça o homing para ir a um ponto salvo' };
   if (command === 'undoMove' && !ctx.homed) return { ok: false, reason: 'Faça o homing para desfazer o movimento' };
   if (command === 'resumePosition' && !ctx.homed) return { ok: false, reason: 'Faça o homing para voltar para onde estava' };
+  if (command === 'frameJob' && !ctx.homed) return { ok: false, reason: 'Faça o homing para contornar o trabalho' };
   return { ok: true };
 }

@@ -190,6 +190,39 @@ com essa posição, se a máquina estiver longe dela; a oferta vale 15 minutos.
 `resumePosition` volta pelo mesmo caminho seguro de `goToPoint`;
 `dismissResume` dispensa. `resume` com `pos: null` diz que não há oferta.
 
+### Trabalhos (v2)
+
+```json
+{ "type": "jobUpload", "name": "tampa.nc", "text": "G21 G90\n…" }
+{ "type": "jobAdded", "ok": true, "jobId": "9f2c4e1a0b7d3c55" }
+{ "type": "jobs", "jobs": [{ "id": "9f2c4e1a0b7d3c55", "name": "tampa.nc", "bytes": 48213, "addedAt": 1792487672381 }] }
+{ "type": "jobOpen", "jobId": "9f2c4e1a0b7d3c55" }
+{ "type": "job", "job": { "id": "…", "bounds": { "work": …, "machine": … }, "maxDepthMm": 6, "estimatedS": 95, "problems": [], "preview": { "cuts": [[…]], "rapids": [[…]], "holes": […] } } }
+{ "type": "jobDelete", "jobId": "9f2c4e1a0b7d3c55" }
+{ "type": "command", "id": "r16", "command": "frameJob", "jobId": "9f2c4e1a0b7d3c55" }
+```
+
+A tela manda o arquivo inteiro numa mensagem (`jobUpload`, até 8 MB); o
+servidor guarda em `RLIGHT_STATE_DIR/jobs/` (até 40 trabalhos; cheio, o mais
+antigo sai) e responde `jobAdded` só a quem mandou. `jobs` vai a todas as telas
+a cada conexão e a cada mudança.
+
+`jobOpen` devolve `job`: o arquivo lido e conferido pelo core contra a máquina
+**como ela está agora** (zero da peça, homing, perfil): limites do percurso em
+coordenadas da peça e da máquina, profundidade, tempo estimado com as rampas da
+máquina, ferramentas, rotações, problemas (bloqueios antes dos avisos) e a
+prévia para o mapa (linhas de corte e de rápidos emagrecidas até 6.000 pontos, e
+os furos). Sem homing, `bounds.machine` é `null` e o curso não é conferido. A tela
+pede de novo quando o zero ou o homing mudam. Se não abre, `job` traz `jobId` e
+`reason`.
+
+`frameJob` (Contornar no ar, o teste de enquadramento do Romney) exige homing e a
+máquina parada: sobe à altura segura (10 mm acima da peça, como o Ir) e percorre
+o retângulo do trabalho, voltando ao primeiro canto. São jogs na fila da placa:
+o Parar cancela o que falta. Recusado se o trabalho passa do curso.
+
+Cortar ainda não existe: vai rodar do cartão SD da placa ([ADR-0006](../docs/adr/0006-trabalhos-rodam-do-sd.md)).
+
 ### Avisos no celular (Web Push)
 
 ```json

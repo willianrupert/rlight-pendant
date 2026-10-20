@@ -17,6 +17,8 @@
   import Ruler from './ui/Ruler.svelte';
   import SpindleSheet from './ui/SpindleSheet.svelte';
   import AutomationsSheet from './ui/AutomationsSheet.svelte';
+  import JobSheet from './ui/JobSheet.svelte';
+  import { MAX_UPLOAD_BYTES, type JobDetail, type JobInfo } from './lib/jobs';
   import type { Odometer, ProbeProgress } from './lib/automations';
   import { destinationText, type SavedPin } from './lib/map-view';
   import { ScreenAwake } from './lib/wake';
@@ -56,6 +58,10 @@
   let sound = $state(clicker.sound);
   // A tela de Automações (placa de toque, receitas): fora da tela de controle.
   let automations = $state(false);
+  // Os trabalhos (v2): a biblioteca do servidor e o trabalho aberto, conferido agora.
+  let jobs = $state<JobInfo[]>([]);
+  let job = $state<JobDetail | null>(null);
+  let openJobId = $state<string | null>(null);
   let probe = $state<ProbeProgress | null>(null);
   let odometer = $state<Odometer | null>(null);
   /** Os pontos salvos (o Save X/Y/Z do Romney), do servidor. */
@@ -68,6 +74,29 @@
   let moveSeen = false;
   /** Um número curto para caber numa linha: sem os zeros decimais ("300", "−20,5"). */
   const shortMm = (v: number) => formatMm(Math.round(v * 10) / 10).replace(/,?0+$/, '');
+  /** Abre a folha; o pedido sai pelo efeito abaixo, e de novo se o zero mudar. */
+  function openJob(id: string) {
+    openJobId = id;
+    job = null;
+  }
+
+  function closeJob() {
+    openJobId = null;
+    job = null;
+  }
+
+  async function addJobFile(file: File) {
+    if (file.size > MAX_UPLOAD_BYTES) return flash('O arquivo passa de 8 MB', 4_000);
+    const text = await file.text();
+    if (!conn.uploadJob(file.name, text)) flash('Sem conexão com o servidor', 3_000);
+  }
+
+  // O zero ou o homing mudaram com o trabalho aberto: a conferência é refeita.
+  const jobKey = $derived(openJobId ? JSON.stringify([openJobId, homed, machine?.wco ?? null]) : null);
+  $effect(() => {
+    if (jobKey && openJobId) conn.openJob(openJobId);
+  });
+
   function armMoveUndo(label: string) {
     moveUndo = label;
     moveSeen = false;
@@ -324,6 +353,22 @@
       if (inControl) flash(boardErrorText(code), 4_000);
     };
     conn.onOdometer = (o) => (odometer = o);
+    conn.onJobs = (list) => {
+      jobs = list;
+      // Apagado (aqui ou em outra tela): a folha dele fecha.
+      if (openJobId && !list.some((j) => j.id === openJobId)) closeJob();
+    };
+    conn.onJobAdded = (r) => {
+      if (!r.ok) return flash(r.reason, 4_000);
+      openJob(r.jobId);
+    };
+    conn.onJob = (r) => {
+      if (!r.ok) {
+        if (r.jobId === openJobId) closeJob();
+        return flash(r.reason, 4_000);
+      }
+      if (r.job.id === openJobId) job = r.job;
+    };
     conn.onPoints = (p) => (points = p);
     conn.onResume = (pos) => (resumeOffer = pos);
     conn.onProbe = (p) => {
@@ -683,12 +728,39 @@
     }}
     onstop={() => send({ command: 'feedHold' })}
     onsound={(on) => (sound = clicker.sound = on)}
+    {jobs}
+    onjobfile={addJobFile}
+    onjobopen={(j) => openJob(j.id)}
     {notify}
     onnotify={async (on) => {
       await (on ? pushDevice.enable() : pushDevice.disable());
       return notify === 'on';
     }}
     onclose={() => (automations = false)}
+  />
+{/if}
+
+{#if automations && hands && openJobId && job}
+  <JobSheet
+    {job}
+    {limits}
+    mpos={machine?.mpos ?? null}
+    canFrame={may('frameJob')}
+    hasSd={!!profile?.hasSd}
+    {clicker}
+    onframe={() => {
+      const id = openJobId!;
+      closeJob();
+      automations = false;
+      mapMoveAt = performance.now();
+      armMoveUndo('Antes do contorno');
+      send({ command: 'frameJob', jobId: id });
+    }}
+    ondelete={() => {
+      conn.deleteJob(openJobId!);
+      closeJob();
+    }}
+    onclose={closeJob}
   />
 {/if}
 

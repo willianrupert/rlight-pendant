@@ -86,6 +86,13 @@ zerar, testar o spindle) acontece sem abrir o notebook.
 - Web Push: pronto, pausado, alarme.
 - Biblioteca com "repetir" e tempo real versus estimado.
 
+**Feito em 20/10/2026, sem o cartão SD:** a biblioteca de trabalhos no servidor
+(o seletor de arquivos do iPhone, ou arrastar no Mac, em Automações); a análise e
+a conferência contra o zero da peça e o curso; a prévia na mesa, com os furos e o
+zero; o tempo estimado; e o **Contornar no ar**. Falta, com o cartão: o envio
+verificado ao SD (depois do spike S4), cortar, a tela de trabalho e a biblioteca
+com "repetir".
+
 **Pronto quando:** uma peça real vai do Fusion à máquina e termina, com o
 celular fechado no meio, e o tempo estimado erra menos de 10 %.
 

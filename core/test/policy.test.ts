@@ -7,7 +7,7 @@ const ctx = { link: 'live', inControl: true, homed: true } as const;
 
 // O que cada estado permite, com conexão viva e controle nas mãos.
 const TABLE: Record<MachineState, readonly Command[]> = {
-  Idle: ['home', 'softReset', 'jogTo', 'jogAxisTo', 'nudge', 'zero', 'undoZero', 'spindleOn', 'spindleOff', 'spindleSpeed', 'probeZ', 'goToPoint', 'undoMove', 'resumePosition'],
+  Idle: ['home', 'softReset', 'jogTo', 'jogAxisTo', 'nudge', 'zero', 'undoZero', 'spindleOn', 'spindleOff', 'spindleSpeed', 'probeZ', 'goToPoint', 'undoMove', 'resumePosition', 'frameJob'],
   Jog: ['softReset', 'feedHold', 'cancelJog', 'jogTo', 'jogAxisTo', 'nudge', 'goToPoint', 'undoMove', 'resumePosition'],
   Run: ['softReset', 'feedHold', 'spindleSpeed'],
   Hold: ['softReset', 'resume', 'spindleOff'],
@@ -58,6 +58,10 @@ describe('regras que valem para todos os estados', () => {
     expect(allowed('goToPoint', 'Idle', { ...ctx, homed: false })).toEqual({ ok: false, reason: 'Faça o homing para ir a um ponto salvo' });
     expect(allowed('undoMove', 'Idle', { ...ctx, homed: false })).toEqual({ ok: false, reason: 'Faça o homing para desfazer o movimento' });
     expect(allowed('goToPoint', 'Idle', ctx).ok).toBe(true);
+    // Contornar no ar percorre a mesa em coordenada de máquina: só com homing, e só parada.
+    expect(allowed('frameJob', 'Idle', { ...ctx, homed: false })).toEqual({ ok: false, reason: 'Faça o homing para contornar o trabalho' });
+    expect(allowed('frameJob', 'Idle', ctx).ok).toBe(true);
+    expect(allowed('frameJob', 'Jog', ctx).ok).toBe(false);
   });
 
   it('a placa de toque exige homing: a descida é limitada pelo fundo do curso do Z', () => {

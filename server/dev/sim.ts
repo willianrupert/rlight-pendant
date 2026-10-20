@@ -12,6 +12,7 @@ import { fileOdometerMemory } from '../src/odometer';
 import { filePointsMemory } from '../src/points';
 import { fileResumeMemory } from '../src/resume';
 import { noDeviceMemory } from '../src/push';
+import { JobStore } from '../src/jobs';
 import { filePushState, newVapidKeys, webPush } from '../src/push-send';
 import { FakeFluidNC } from '../test/fake-fluidnc';
 
@@ -36,6 +37,7 @@ const gateway = new Gateway({
   board,
   push: webPush(pushState.vapid, process.env.RLIGHT_PUSH_SUBJECT ?? 'https://localhost'),
   pushDevices: pushState.devices,
+  jobs: new JobStore(stateDir ? join(stateDir, 'jobs') : null),
   // Como no servidor de verdade: o que precisa sobreviver a reinícios fica no RLIGHT_STATE_DIR.
   ...(stateDir
     ? {
