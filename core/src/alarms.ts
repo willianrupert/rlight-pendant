@@ -11,7 +11,8 @@ const ALARMS: Record<number, string> = {
   6: 'O homing foi interrompido.',
   7: 'O homing parou porque a porta abriu.',
   8: 'O homing não conseguiu se afastar do fim de curso.',
-  9: 'O homing não encontrou o fim de curso.',
+  // Com os motores desligados a placa conta os passos, nada anda e a chave nunca chega.
+  9: 'O homing não encontrou o fim de curso. Confira se os motores estão ligados.',
 };
 
 export function alarmCause(code: number): string {

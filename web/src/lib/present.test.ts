@@ -52,6 +52,12 @@ describe('presentState: o estado é a interface', () => {
     );
   });
 
+  it('homing que não achou a chave lembra dos motores: a placa conta passos com eles desligados', () => {
+    expect(presentState({ state: 'Alarm', homed: false, alarmCode: 9 }).detail).toBe(
+      'O homing não encontrou o fim de curso. Confira se os motores estão ligados. Faça o homing para continuar.',
+    );
+  });
+
   it('alarme sem código com o homing valendo: a placa foi resetada (ex.: desligar no spin-up)', () => {
     expect(presentState({ state: 'Alarm', homed: true }).detail).toBe('A placa foi resetada e está travada. Desbloqueie para continuar.');
   });
